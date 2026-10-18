@@ -1,0 +1,87 @@
+# Tag vX.Y.Z (npm run release) → signed installers for macOS + Windows →
+# a release in this private repo → installers, signatures and the update manifest
+# mirrored to the public feed repo that the app's auto-updater reads.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FEED_REPO: alshell7/daybloom-releases
+  FEED_BASE: https://raw.githubusercontent.com/alshell7/daybloom-releases/main
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: windows-latest
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Daybloom v__VERSION__
+          releaseBody: Signed builds for macOS (Apple silicon + Intel) and Windows. Installed apps update themselves.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}
+
+  publish:
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download this release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          gh release download "v$VERSION" -R "$GITHUB_REPOSITORY" -D out
+          ls -la out
+      - name: Point the update manifest at the public feed
+        run: node .github/scripts/public-feed.mjs out "$FEED_BASE" "$VERSION"
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.RELEASES_DEPLOY_KEY }}
+      - name: Publish to the feed repo (latest release only, history kept small)
+        run: |
+          git clone --depth 1 "git@github.com:$FEED_REPO.git" feed
+          cd feed
+          git checkout --orphan next
+          git rm -rq --cached . 2>/dev/null || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp ../out/* .
+          git add -A
+          git -c user.name="daybloom-release" -c user.email="releases@users.noreply.github.com" commit -qm "Daybloom v$VERSION"
+          git push -f origin next:main

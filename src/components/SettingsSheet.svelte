@@ -219,8 +219,8 @@
       <div class="row">
         <span>Finish</span>
         <div class="finishes small">
-          <button class="finish auto" class:on={s.widget.finish === 'auto'} onclick={() => (settings.value.widget.finish = 'auto')} aria-label="Auto">
-            <span style:background={FINISHES.glacier.face}></span><span style:background={FINISHES.ink.face}></span>
+          <button class="finish auto" class:on={s.widget.finish === 'auto'} onclick={() => (settings.value.widget.finish = 'auto')} aria-label="Match the theme" title="Match the theme">
+            <span style:background={FINISHES[view.theme.finish].face}></span><span style:background={FINISHES[view.theme.finish].bezel}></span>
           </button>
           {#each Object.values(FINISHES) as f (f.id)}
             <button class="finish" class:on={s.widget.finish === f.id} style:--face={f.face} style:--bezel={f.bezel} style:--signal={f.signal} onclick={() => (settings.value.widget.finish = f.id as FinishId)} aria-label={f.name}><i></i></button>

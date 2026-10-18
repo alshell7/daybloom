@@ -8,3 +8,7 @@ src-tauri/gen
 .env.*
 
 !.env.example
+
+# signing keys never live in the repo
+*.key
+*.key.password
