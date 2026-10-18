@@ -54,9 +54,26 @@
     await win.setSize(new LogicalSize(next, next));
   }
 
+  // Windows' native move loop swallows the mouse-up, so a drag started on press would eat every
+  // click (and the double-click that opens the planner). Off macOS the drag waits until the
+  // pointer has really moved; macOS keeps dragging from the press.
+  const dragOnMove = platform.os !== 'mac';
+  let press: { x: number; y: number } | null = null;
+
   function onDown(e: PointerEvent) {
     if (e.button !== 0 || (e.target as HTMLElement).closest('.tools')) return;
-    platform.startDrag();
+    if (dragOnMove) press = { x: e.screenX, y: e.screenY };
+    else platform.startDrag();
+  }
+
+  function onMove(e: PointerEvent) {
+    if (!press) return;
+    if (!(e.buttons & 1)) {
+      press = null;
+    } else if (Math.hypot(e.screenX - press.x, e.screenY - press.y) >= 4) {
+      press = null;
+      platform.startDrag();
+    }
   }
 </script>
 
@@ -64,6 +81,8 @@
   class="widget"
   role="presentation"
   onpointerdown={onDown}
+  onpointermove={onMove}
+  onpointerup={() => (press = null)}
   ondblclick={() => platform.showMain()}
   title={`${PRESETS[presetId].name} · double-click to open Daybloom`}
 >
