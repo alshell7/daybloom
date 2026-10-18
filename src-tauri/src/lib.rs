@@ -15,7 +15,21 @@ pub(crate) fn show_main(app: &AppHandle) {
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+        #[cfg(windows)]
+        set_webview_visible(&w, true);
     }
+}
+
+/// WebView2 keeps rendering, and reports `document.visibilityState = "visible"`, after its
+/// window is hidden or minimised, so the planner tells it (WKWebView follows its window by
+/// itself). A hidden page pauses its animations and the clock drops to a 5 s tick; the
+/// windows' `additionalBrowserArgs` turn off Chromium's IntensiveWakeUpThrottling, which would
+/// otherwise stretch that tick to a minute (late notifications) after 5 minutes hidden.
+#[cfg(windows)]
+fn set_webview_visible(w: &tauri::WebviewWindow, visible: bool) {
+    let _ = w.with_webview(move |webview| unsafe {
+        let _ = webview.controller().SetIsVisible(visible);
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -49,6 +63,21 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } if window.label() != widget::LABEL => {
                 api.prevent_close();
                 let _ = window.hide();
+                #[cfg(windows)]
+                if let Some(w) = window.app_handle().get_webview_window(window.label()) {
+                    set_webview_visible(&w, false);
+                }
+            }
+            // Minimise / restore from the taskbar.
+            #[cfg(windows)]
+            WindowEvent::Resized(_) if window.label() == MAIN => {
+                if let Some(w) = window.app_handle().get_webview_window(MAIN) {
+                    if w.is_minimized().unwrap_or(false) {
+                        set_webview_visible(&w, false);
+                    } else if w.is_visible().unwrap_or(false) {
+                        set_webview_visible(&w, true);
+                    }
+                }
             }
             WindowEvent::Destroyed if window.label() == widget::LABEL => {
                 widget::changed(window.app_handle());

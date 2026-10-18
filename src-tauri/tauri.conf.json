@@ -22,7 +22,8 @@
         "center": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "visible": true
+        "visible": true,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling"
       },
       {
         "label": "widget",
@@ -44,7 +45,8 @@
         "visibleOnAllWorkspaces": true,
         "focus": false,
         "acceptFirstMouse": true,
-        "create": false
+        "create": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling"
       }
     ],
     "security": {
