@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- Daybloom menu-bar / tray template glyph: dial ring, one planned block, one hand. -->
+  <g fill="none" stroke="#000" stroke-linecap="round">
+    <circle cx="16" cy="16" r="12.25" stroke-width="2.25"/>
+    <path d="M18.73 4.06A12.25 12.25 0 0 1 28.16 17.52" stroke-width="5.5"/>
+    <line x1="16" y1="16" x2="8.64" y2="11.75" stroke-width="2.75"/>
+  </g>
+  <circle cx="16" cy="16" r="2.4" fill="#000"/>
+</svg>

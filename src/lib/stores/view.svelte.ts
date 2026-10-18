@@ -1,0 +1,181 @@
+import { blocksInRange, floatingBlocks, nowState, parseBlockKey } from '../engine/blocks';
+import { addDays, DAY, HOUR, startOfDayMs, todayISO } from '../engine/time';
+import type { Block, CalendarEvent, ISODate, Minutes, Task } from '../engine/types';
+import { PRESETS, resolveFinish, type PresetId } from '../presets';
+import { THEME_BY_ID } from '../themes';
+import { clock } from './clock.svelte';
+import { settings } from './settings.svelte';
+import { taskFile } from './tasks.svelte';
+import { timer } from './timer.svelte';
+
+export type Sheet =
+  | null
+  | { kind: 'edit'; key: string }
+  | { kind: 'new'; date: ISODate | null; start: Minutes | null; duration: Minutes }
+  | { kind: 'settings'; section?: string };
+
+export interface Spark {
+  id: number;
+  x: number;
+  y: number;
+  color: string;
+  big?: boolean;
+  label?: string;
+}
+
+function media(q: string) {
+  return typeof matchMedia !== 'undefined' ? matchMedia(q) : null;
+}
+
+class View {
+  date = $state<ISODate>(todayISO());
+  selected = $state<string | null>(null);
+  sheet = $state<Sheet>(null);
+  focus = $state(false);
+  events = $state<CalendarEvent[]>([]);
+  sparks = $state<Spark[]>([]);
+  toast = $state<null | { id: number; text: string; ms: number; action?: { label: string; run: () => void } }>(null);
+  /** Key of the block currently in its heads-up window (drives the dial pulse). */
+  headsUpKey = $state<string | null>(null);
+  /** Bumped when the whole day completes — the dial plays its lume sweep. */
+  dayCompleteAt = $state(0);
+  /** A block being dragged in the rail: the dial previews it live. */
+  railPreview = $state<null | { key: string; startMs: number; endMs: number }>(null);
+  /** Direction of the last day change (for the dial's turn animation). */
+  dayDir = $state<1 | -1>(1);
+  /** Breathing guide start time (0 = off). Four 16-second cycles. */
+  breatheAt = $state(0);
+  breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < 64_000);
+
+  systemDark = $state(media('(prefers-color-scheme: dark)')?.matches ?? false);
+  systemReduced = $state(media('(prefers-reduced-motion: reduce)')?.matches ?? false);
+
+  constructor() {
+    media('(prefers-color-scheme: dark)')?.addEventListener('change', (e) => (this.systemDark = e.matches));
+    media('(prefers-reduced-motion: reduce)')?.addEventListener('change', (e) => (this.systemReduced = e.matches));
+  }
+
+  today = $derived.by(() => {
+    clock.zone;
+    return todayISO(clock.minute);
+  });
+  isToday = $derived(this.date === this.today);
+
+  dark = $derived(
+    settings.value.theme === 'system' ? this.systemDark : settings.value.theme === 'dark',
+  );
+  reducedMotion = $derived(
+    settings.value.motion === 'system' ? this.systemReduced : settings.value.motion === 'calm',
+  );
+  hour12 = $derived(
+    settings.value.clock === 'auto'
+      ? (() => {
+          try {
+            return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? false;
+          } catch {
+            return false;
+          }
+        })()
+      : settings.value.clock === '12',
+  );
+
+  theme = $derived(this.dark ? (THEME_BY_ID[settings.value.darkTheme] ?? THEME_BY_ID.midnight) : (THEME_BY_ID[settings.value.lightTheme] ?? THEME_BY_ID.fog));
+  finish = $derived(resolveFinish(settings.value.finish, this.theme));
+
+  /** Every timed block from yesterday to +2 days around the selected date: enough for any dial window. */
+  pool = $derived.by(() => {
+    clock.zone;
+    const anchor = this.isToday ? this.today : this.date;
+    const from = startOfDayMs(addDays(anchor, -1));
+    const to = startOfDayMs(addDays(anchor, 2));
+    return blocksInRange(taskFile.value.tasks, this.events, from, to, this.finish.dark);
+  });
+
+  /** Timed blocks that belong to the selected day (shown in the rail). */
+  dayBlocks = $derived.by(() => {
+    const s = startOfDayMs(this.date);
+    const e = startOfDayMs(addDays(this.date, 1));
+    // Starts today, or spills in from last night.
+    return this.pool.filter((b) => b.startMs < e && b.endMs > s);
+  });
+
+  floating = $derived.by(() => {
+    clock.zone;
+    return floatingBlocks(taskFile.value.tasks, this.events, this.date, this.finish.dark);
+  });
+
+  later = $derived(taskFile.value.tasks.filter((t) => t.date === null));
+
+  /** Today's blocks for now/next — independent of which day is being browsed. */
+  todayBlocks = $derived.by(() => {
+    clock.zone;
+    if (this.isToday) return this.pool;
+    const from = startOfDayMs(addDays(this.today, -1));
+    return blocksInRange(taskFile.value.tasks, this.events, from, from + 3 * DAY, this.finish.dark);
+  });
+
+  now = $derived(nowState(this.todayBlocks, clock.now));
+
+  timerBlocks = $derived(timer.active ? timer.blocks(clock.minute, this.finish.dark) : []);
+
+  /** Day tallies for the selected date (timed + anytime tasks; calendar events don't count). */
+  tally = $derived.by(() => {
+    const own = [...this.dayBlocks, ...this.floating].filter((b) => b.kind === 'task' && b.date === this.date);
+    return { done: own.filter((b) => b.done).length, total: own.length };
+  });
+
+  dialFor(presetId: PresetId) {
+    const p = PRESETS[presetId];
+    return p.window(clock.now, this.date, this.isToday);
+  }
+
+  blockByKey(key: string | null): Block | null {
+    if (!key) return null;
+    return (
+      this.pool.find((b) => b.key === key) ??
+      this.floating.find((b) => b.key === key) ??
+      this.timerBlocks.find((b) => b.key === key) ??
+      null
+    );
+  }
+
+  taskForKey(key: string | null): { task: Task; date: ISODate } | null {
+    const p = key ? parseBlockKey(key) : null;
+    if (!p) return null;
+    const task = taskFile.value.tasks.find((t) => t.id === p.taskId);
+    return task ? { task, date: p.date } : null;
+  }
+
+  goToday() {
+    this.setDate(this.today);
+  }
+
+  shiftDay(n: number) {
+    this.setDate(addDays(this.date, n));
+  }
+
+  setDate(d: ISODate) {
+    if (d === this.date) return;
+    this.dayDir = d > this.date ? 1 : -1;
+    this.date = d;
+  }
+
+  spark(x: number, y: number, color: string, big = false, label?: string) {
+    const id = Math.random();
+    this.sparks.push({ id, x, y, color, big, label });
+    setTimeout(() => {
+      const i = this.sparks.findIndex((s) => s.id === id);
+      if (i >= 0) this.sparks.splice(i, 1);
+    }, 1400);
+  }
+
+  say(text: string, action?: { label: string; run: () => void }, ms = 5000) {
+    const id = Math.random();
+    this.toast = { id, text, ms, action };
+    setTimeout(() => {
+      if (this.toast?.id === id) this.toast = null;
+    }, ms);
+  }
+}
+
+export const view = new View();

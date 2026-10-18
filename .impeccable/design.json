@@ -1,0 +1,1710 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T20:28:38.592Z",
+  "title": "Design System: Daybloom",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Fog Desk",
+        "canonical": "#eceff3",
+        "oklch": "oklch(95.1% 0.006 255.5)",
+        "tonalRamp": [
+          "#090b0e",
+          "#232528",
+          "#404245",
+          "#5f6165",
+          "#808286",
+          "#a2a5a9",
+          "#c6c9cd",
+          "#eceff3"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Rail Paper",
+        "canonical": "#f7f8fa",
+        "oklch": "oklch(97.9% 0.003 264.5)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Lifted White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "sunken": {
+        "role": "neutral",
+        "displayName": "Pressed Fog",
+        "canonical": "#e2e6ec",
+        "oklch": "oklch(92.4% 0.009 258.3)",
+        "tonalRamp": [
+          "#090b0f",
+          "#22252a",
+          "#3f4247",
+          "#5e6167",
+          "#7f8388",
+          "#a1a5ab",
+          "#c5c9cf",
+          "#ebeff5"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgb(21 28 42 / 0.09)",
+        "oklch": "oklch(22.7% 0.029 263.7)",
+        "tonalRamp": [
+          "#050b17",
+          "#1e2534",
+          "#3a4252",
+          "#596172",
+          "#798395",
+          "#9ca5b8",
+          "#bfc9dd",
+          "#e6efff"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Firm Hairline",
+        "canonical": "rgb(21 28 42 / 0.16)",
+        "oklch": "oklch(22.7% 0.029 263.7)",
+        "tonalRamp": [
+          "#050b17",
+          "#1e2534",
+          "#3a4252",
+          "#596172",
+          "#798395",
+          "#9ca5b8",
+          "#bfc9dd",
+          "#e6efff"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#151c2a",
+        "oklch": "oklch(22.7% 0.029 263.7)",
+        "tonalRamp": [
+          "#050b17",
+          "#1e2534",
+          "#3a4252",
+          "#596172",
+          "#798395",
+          "#9ca5b8",
+          "#bfc9dd",
+          "#e6efff"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Slate Ink",
+        "canonical": "#485365",
+        "oklch": "oklch(44.0% 0.033 260.2)",
+        "tonalRamp": [
+          "#040b19",
+          "#1c2535",
+          "#384254",
+          "#566274",
+          "#778397",
+          "#99a6ba",
+          "#bdcadf",
+          "#e5efff"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Pencil Grey",
+        "canonical": "#5f6a7b",
+        "oklch": "oklch(52.1% 0.030 259.0)",
+        "tonalRamp": [
+          "#040b18",
+          "#1c2534",
+          "#384352",
+          "#576273",
+          "#788395",
+          "#9aa6b8",
+          "#becadd",
+          "#e5efff"
+        ]
+      },
+      "ink-inverse": {
+        "role": "neutral",
+        "displayName": "Ink Inverse (Rail Paper)",
+        "canonical": "#f7f8fa",
+        "oklch": "oklch(97.9% 0.003 264.5)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "signal": {
+        "role": "secondary",
+        "displayName": "Signal Orange",
+        "canonical": "#f2551d",
+        "oklch": "oklch(65.6% 0.203 37.7)",
+        "tonalRamp": [
+          "#1c0300",
+          "#460f00",
+          "#762000",
+          "#a93200",
+          "#e04500",
+          "#ff764b",
+          "#ffb49d",
+          "#ffe9e2"
+        ]
+      },
+      "lume": {
+        "role": "tertiary",
+        "displayName": "Lume Green",
+        "canonical": "#2fae7b",
+        "oklch": "oklch(67.0% 0.133 161.6)",
+        "tonalRamp": [
+          "#000f07",
+          "#002e1c",
+          "#004f34",
+          "#00744d",
+          "#049a69",
+          "#44be8a",
+          "#6ee4ae",
+          "#c2ffdf"
+        ]
+      },
+      "focus-ring": {
+        "role": "neutral",
+        "displayName": "Focus Ring Blue",
+        "canonical": "#3d6fe3",
+        "oklch": "oklch(57.2% 0.185 263.9)",
+        "tonalRamp": [
+          "#000036",
+          "#00126e",
+          "#0931a2",
+          "#2756c8",
+          "#477aef",
+          "#76a2ff",
+          "#aec9ff",
+          "#e6efff"
+        ]
+      },
+      "danger": {
+        "role": "neutral",
+        "displayName": "Delete Red",
+        "canonical": "#c4372b",
+        "oklch": "oklch(54.8% 0.180 29.1)",
+        "tonalRamp": [
+          "#1f0000",
+          "#4d0000",
+          "#810000",
+          "#b12119",
+          "#d94b3d",
+          "#ff7462",
+          "#ffb3a7",
+          "#ffe9e5"
+        ]
+      },
+      "ground-dark": {
+        "role": "neutral",
+        "displayName": "Midnight Desk",
+        "canonical": "#0d121c",
+        "oklch": "oklch(18.2% 0.022 263.8)",
+        "tonalRamp": [
+          "#070b15",
+          "#202530",
+          "#3c424e",
+          "#5b616e",
+          "#7c8390",
+          "#9ea5b3",
+          "#c2c9d8",
+          "#e7effe"
+        ]
+      },
+      "surface-dark": {
+        "role": "neutral",
+        "displayName": "Midnight Rail",
+        "canonical": "#131a27",
+        "oklch": "oklch(21.7% 0.028 262.4)",
+        "tonalRamp": [
+          "#050b17",
+          "#1e2533",
+          "#3a4251",
+          "#596271",
+          "#798394",
+          "#9ca5b7",
+          "#c0cadc",
+          "#e6efff"
+        ]
+      },
+      "raised-dark": {
+        "role": "neutral",
+        "displayName": "Midnight Raised",
+        "canonical": "#1a2232",
+        "oklch": "oklch(25.2% 0.033 263.7)",
+        "tonalRamp": [
+          "#050b19",
+          "#1d2535",
+          "#394254",
+          "#586174",
+          "#788397",
+          "#9ba5ba",
+          "#becadf",
+          "#e6efff"
+        ]
+      },
+      "sunken-dark": {
+        "role": "neutral",
+        "displayName": "Midnight Well",
+        "canonical": "#0a0e16",
+        "oklch": "oklch(16.4% 0.018 263.9)",
+        "tonalRamp": [
+          "#070b13",
+          "#21252e",
+          "#3d424c",
+          "#5c616c",
+          "#7d828e",
+          "#9fa5b1",
+          "#c3c9d5",
+          "#e8effb"
+        ]
+      },
+      "line-dark": {
+        "role": "neutral",
+        "displayName": "Midnight Hairline",
+        "canonical": "rgb(233 237 243 / 0.08)",
+        "oklch": "oklch(94.5% 0.009 258.3)",
+        "tonalRamp": [
+          "#090b0f",
+          "#22252a",
+          "#3f4247",
+          "#5e6167",
+          "#7f8388",
+          "#a2a5ab",
+          "#c5c9cf",
+          "#ebeff5"
+        ]
+      },
+      "line-strong-dark": {
+        "role": "neutral",
+        "displayName": "Midnight Firm Hairline",
+        "canonical": "rgb(233 237 243 / 0.15)",
+        "oklch": "oklch(94.5% 0.009 258.3)",
+        "tonalRamp": [
+          "#090b0f",
+          "#22252a",
+          "#3f4247",
+          "#5e6167",
+          "#7f8388",
+          "#a2a5ab",
+          "#c5c9cf",
+          "#ebeff5"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Moon Ink",
+        "canonical": "#e9edf3",
+        "oklch": "oklch(94.5% 0.009 258.3)",
+        "tonalRamp": [
+          "#090b0f",
+          "#22252a",
+          "#3f4247",
+          "#5e6167",
+          "#7f8388",
+          "#a2a5ab",
+          "#c5c9cf",
+          "#ebeff5"
+        ]
+      },
+      "ink-2-dark": {
+        "role": "neutral",
+        "displayName": "Moon Ink 2",
+        "canonical": "#b0b9c7",
+        "oklch": "oklch(78.3% 0.022 259.2)",
+        "tonalRamp": [
+          "#060b15",
+          "#1f2530",
+          "#3b424e",
+          "#5a626e",
+          "#7a8390",
+          "#9da6b3",
+          "#c1cad8",
+          "#e6effe"
+        ]
+      },
+      "ink-3-dark": {
+        "role": "neutral",
+        "displayName": "Moon Ink 3",
+        "canonical": "#8f9aab",
+        "oklch": "oklch(68.3% 0.028 259.0)",
+        "tonalRamp": [
+          "#050b17",
+          "#1d2533",
+          "#394351",
+          "#586272",
+          "#788394",
+          "#9ba6b7",
+          "#becadc",
+          "#e5efff"
+        ]
+      },
+      "signal-dark": {
+        "role": "secondary",
+        "displayName": "Signal Orange (dark)",
+        "canonical": "#ff7440",
+        "oklch": "oklch(71.8% 0.182 40.0)",
+        "tonalRamp": [
+          "#1b0300",
+          "#451200",
+          "#732400",
+          "#a63700",
+          "#d85013",
+          "#ff7644",
+          "#ffb59b",
+          "#ffe9e2"
+        ]
+      },
+      "lume-dark": {
+        "role": "tertiary",
+        "displayName": "Lume Mint (dark)",
+        "canonical": "#8ef0c1",
+        "oklch": "oklch(88.2% 0.115 162.0)",
+        "tonalRamp": [
+          "#000f07",
+          "#002e1c",
+          "#004f34",
+          "#00744e",
+          "#30976d",
+          "#59bb8f",
+          "#7fe1b2",
+          "#c2ffdf"
+        ]
+      },
+      "focus-ring-dark": {
+        "role": "neutral",
+        "displayName": "Focus Ring Blue (dark)",
+        "canonical": "#7598ff",
+        "oklch": "oklch(70.0% 0.156 268.1)",
+        "tonalRamp": [
+          "#020035",
+          "#0b0e6f",
+          "#203593",
+          "#3c58b9",
+          "#5a7bdf",
+          "#7ea0ff",
+          "#b2c8ff",
+          "#e8eeff"
+        ]
+      },
+      "danger-dark": {
+        "role": "neutral",
+        "displayName": "Delete Red (dark)",
+        "canonical": "#ff7a6b",
+        "oklch": "oklch(73.2% 0.165 28.3)",
+        "tonalRamp": [
+          "#1f0000",
+          "#4d0001",
+          "#810004",
+          "#ab2c24",
+          "#d35246",
+          "#fb7768",
+          "#ffb3a8",
+          "#ffe9e5"
+        ]
+      },
+      "category-focus": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "canonical": "#3D6FE3",
+        "oklch": "oklch(57.2% 0.185 263.9)",
+        "tonalRamp": [
+          "#000036",
+          "#00126e",
+          "#0931a2",
+          "#2756c8",
+          "#477aef",
+          "#76a2ff",
+          "#aec9ff",
+          "#e6efff"
+        ]
+      },
+      "category-focus-dark": {
+        "role": "primary",
+        "displayName": "Focus Blue (lifted)",
+        "canonical": "#7598FF",
+        "oklch": "oklch(70.0% 0.156 268.1)",
+        "tonalRamp": [
+          "#020035",
+          "#0b0e6f",
+          "#203593",
+          "#3c58b9",
+          "#5a7bdf",
+          "#7ea0ff",
+          "#b2c8ff",
+          "#e8eeff"
+        ]
+      },
+      "category-care": {
+        "role": "primary",
+        "displayName": "Care Green",
+        "canonical": "#25976A",
+        "oklch": "oklch(60.3% 0.121 161.7)",
+        "tonalRamp": [
+          "#000f07",
+          "#002e1c",
+          "#004f34",
+          "#00744d",
+          "#27986b",
+          "#53bc8d",
+          "#79e2b1",
+          "#c2ffdf"
+        ]
+      },
+      "category-care-dark": {
+        "role": "primary",
+        "displayName": "Care Green (lifted)",
+        "canonical": "#4FD39A",
+        "oklch": "oklch(78.0% 0.143 161.5)",
+        "tonalRamp": [
+          "#000f07",
+          "#002e1c",
+          "#004f33",
+          "#00744d",
+          "#009a68",
+          "#37c088",
+          "#64e6ac",
+          "#c2ffdf"
+        ]
+      },
+      "category-routine": {
+        "role": "primary",
+        "displayName": "Routine Amber",
+        "canonical": "#D99A06",
+        "oklch": "oklch(72.9% 0.150 79.1)",
+        "tonalRamp": [
+          "#120900",
+          "#332100",
+          "#583c00",
+          "#805900",
+          "#aa7800",
+          "#d79800",
+          "#fdbc44",
+          "#ffecce"
+        ]
+      },
+      "category-routine-dark": {
+        "role": "primary",
+        "displayName": "Routine Amber (lifted)",
+        "canonical": "#FFC94A",
+        "oklch": "oklch(86.2% 0.151 85.0)",
+        "tonalRamp": [
+          "#110a00",
+          "#312200",
+          "#553e00",
+          "#7b5c00",
+          "#a47b00",
+          "#cf9c00",
+          "#f6c03f",
+          "#ffedc7"
+        ]
+      },
+      "category-people": {
+        "role": "primary",
+        "displayName": "People Pink",
+        "canonical": "#DB4F94",
+        "oklch": "oklch(63.5% 0.187 353.2)",
+        "tonalRamp": [
+          "#1d000d",
+          "#490029",
+          "#7a0049",
+          "#a91a6a",
+          "#d1468b",
+          "#fa6baf",
+          "#ffadcf",
+          "#ffe7f0"
+        ]
+      },
+      "category-people-dark": {
+        "role": "primary",
+        "displayName": "People Pink (lifted)",
+        "canonical": "#FF86BF",
+        "oklch": "oklch(77.0% 0.159 351.9)",
+        "tonalRamp": [
+          "#1d000e",
+          "#48002b",
+          "#79004b",
+          "#a02f6b",
+          "#c6538c",
+          "#ee77b0",
+          "#ffadd0",
+          "#ffe7f0"
+        ]
+      },
+      "category-rest": {
+        "role": "primary",
+        "displayName": "Rest Lilac",
+        "canonical": "#8670E6",
+        "oklch": "oklch(62.2% 0.172 289.0)",
+        "tonalRamp": [
+          "#0d002c",
+          "#290067",
+          "#452395",
+          "#6248ba",
+          "#826be1",
+          "#a392ff",
+          "#c7c0ff",
+          "#edecff"
+        ]
+      },
+      "category-rest-dark": {
+        "role": "primary",
+        "displayName": "Rest Lilac (lifted)",
+        "canonical": "#B4A2FF",
+        "oklch": "oklch(76.4% 0.132 291.9)",
+        "tonalRamp": [
+          "#0f002b",
+          "#2a0a5e",
+          "#462f81",
+          "#6450a5",
+          "#8572ca",
+          "#a795f1",
+          "#cabfff",
+          "#eeecff"
+        ]
+      },
+      "category-learn": {
+        "role": "primary",
+        "displayName": "Learn Teal",
+        "canonical": "#138FA6",
+        "oklch": "oklch(59.9% 0.102 214.9)",
+        "tonalRamp": [
+          "#000e12",
+          "#002b33",
+          "#004b58",
+          "#006d80",
+          "#1891a8",
+          "#4ab5cd",
+          "#72daf3",
+          "#d2f6ff"
+        ]
+      },
+      "category-learn-dark": {
+        "role": "primary",
+        "displayName": "Learn Teal (lifted)",
+        "canonical": "#4FD3E6",
+        "oklch": "oklch(80.3% 0.116 208.6)",
+        "tonalRamp": [
+          "#000e11",
+          "#002b31",
+          "#004b54",
+          "#006e7b",
+          "#0093a3",
+          "#2ab9cb",
+          "#5cdef1",
+          "#ccf8ff"
+        ]
+      },
+      "category-move": {
+        "role": "primary",
+        "displayName": "Move Orange",
+        "canonical": "#EA6A2A",
+        "oklch": "oklch(67.1% 0.175 43.8)",
+        "tonalRamp": [
+          "#1a0400",
+          "#421500",
+          "#702800",
+          "#a13e00",
+          "#d35507",
+          "#fc7a3d",
+          "#ffb596",
+          "#ffe9e0"
+        ]
+      },
+      "category-move-dark": {
+        "role": "primary",
+        "displayName": "Move Orange (lifted)",
+        "canonical": "#FF9B5E",
+        "oklch": "oklch(78.1% 0.142 50.8)",
+        "tonalRamp": [
+          "#180500",
+          "#3e1900",
+          "#6a2f00",
+          "#984600",
+          "#c36523",
+          "#ea884b",
+          "#ffb68c",
+          "#ffeade"
+        ]
+      },
+      "glacier-face": {
+        "role": "neutral",
+        "displayName": "Glacier Face",
+        "canonical": "#F7F8FA",
+        "oklch": "oklch(97.9% 0.003 264.5)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#242526",
+          "#414243",
+          "#606163",
+          "#818284",
+          "#a4a5a7",
+          "#c8c9cb",
+          "#edeef0"
+        ]
+      },
+      "glacier-bezel": {
+        "role": "neutral",
+        "displayName": "Glacier Bezel",
+        "canonical": "#E3E8EE",
+        "oklch": "oklch(92.9% 0.010 252.8)",
+        "tonalRamp": [
+          "#080b0f",
+          "#22252a",
+          "#3e4247",
+          "#5d6267",
+          "#7e8388",
+          "#a1a5ab",
+          "#c5cacf",
+          "#eaeff5"
+        ]
+      },
+      "glacier-track": {
+        "role": "neutral",
+        "displayName": "Glacier Track",
+        "canonical": "#8F9AAA",
+        "oklch": "oklch(68.3% 0.027 257.7)",
+        "tonalRamp": [
+          "#050b16",
+          "#1d2632",
+          "#394350",
+          "#586271",
+          "#798393",
+          "#9ba6b6",
+          "#bfcadb",
+          "#e5efff"
+        ]
+      },
+      "glacier-lume": {
+        "role": "tertiary",
+        "displayName": "Glacier Lume",
+        "canonical": "#3FBF8A",
+        "oklch": "oklch(72.1% 0.137 161.8)",
+        "tonalRamp": [
+          "#000f07",
+          "#002e1c",
+          "#004f34",
+          "#00744e",
+          "#009a69",
+          "#3fbf8a",
+          "#6ae5ad",
+          "#c2ffdf"
+        ]
+      },
+      "glacier-rim": {
+        "role": "neutral",
+        "displayName": "Glacier Rim",
+        "canonical": "#CBD3DC",
+        "oklch": "oklch(86.3% 0.015 251.2)",
+        "tonalRamp": [
+          "#070c11",
+          "#20262c",
+          "#3c434a",
+          "#5b626a",
+          "#7c838b",
+          "#9ea6af",
+          "#c2cad3",
+          "#e7eff9"
+        ]
+      },
+      "ink-finish-face": {
+        "role": "neutral",
+        "displayName": "Ink Face",
+        "canonical": "#141B29",
+        "oklch": "oklch(22.2% 0.029 263.7)",
+        "tonalRamp": [
+          "#050b18",
+          "#1e2534",
+          "#3a4252",
+          "#596172",
+          "#798395",
+          "#9ca5b8",
+          "#bfc9dd",
+          "#e6efff"
+        ]
+      },
+      "ink-finish-bezel": {
+        "role": "neutral",
+        "displayName": "Ink Bezel",
+        "canonical": "#1D2637",
+        "oklch": "oklch(26.8% 0.034 262.7)",
+        "tonalRamp": [
+          "#040b1a",
+          "#1c2536",
+          "#384255",
+          "#576275",
+          "#778398",
+          "#9aa6bb",
+          "#bdcae0",
+          "#e6efff"
+        ]
+      },
+      "ink-finish-track": {
+        "role": "neutral",
+        "displayName": "Ink Track",
+        "canonical": "#5E6A7E",
+        "oklch": "oklch(52.2% 0.035 260.6)",
+        "tonalRamp": [
+          "#040b1a",
+          "#1b2536",
+          "#374255",
+          "#566276",
+          "#778398",
+          "#99a6bc",
+          "#bccae1",
+          "#e6efff"
+        ]
+      },
+      "ink-finish-lume": {
+        "role": "tertiary",
+        "displayName": "Ink Lume",
+        "canonical": "#8EF0C1",
+        "oklch": "oklch(88.2% 0.115 162.0)",
+        "tonalRamp": [
+          "#000f07",
+          "#002e1c",
+          "#004f34",
+          "#00744e",
+          "#30976d",
+          "#59bb8f",
+          "#7fe1b2",
+          "#c2ffdf"
+        ]
+      },
+      "ink-finish-rim": {
+        "role": "neutral",
+        "displayName": "Ink Rim",
+        "canonical": "#2A3447",
+        "oklch": "oklch(32.4% 0.037 262.9)",
+        "tonalRamp": [
+          "#040a1a",
+          "#1c2537",
+          "#384256",
+          "#566277",
+          "#778399",
+          "#99a6bd",
+          "#bdcae2",
+          "#e6efff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Dial Countdown",
+        "purpose": "The countdown in the dial face; scales with the dial via container-query units. Lexend 300, tabular."
+      },
+      "numeral": {
+        "displayName": "Dial Numerals",
+        "purpose": "Hour/minute numerals around the face: 40 units of the 1000-unit viewBox (4cqi); 64 units, every third numeral, on the compact widget."
+      },
+      "arc-label": {
+        "displayName": "Arc Label",
+        "purpose": "Block titles set on a textPath along the bezel insert; size is min(lane thickness × 0.34, 25 units); whole words only."
+      },
+      "headline": {
+        "displayName": "Sheet Title",
+        "purpose": "Block-sheet title input; the focus-mode title steps to 30px / 1.15 / -0.02em."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Top-bar day name, empty-state and coach titles."
+      },
+      "block-title": {
+        "displayName": "Block Title",
+        "purpose": "Rail block titles, two-line clamp, in the reading font."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base text, set in --font-read (Lexend, or Atkinson Hyperlegible 400/700 when chosen)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons and section headings (Pencil Grey, sentence case). Segmented options use the size at 400."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Rail times, meta lines, chips; always tabular."
+      }
+    },
+    "readingFontOption": {
+      "attribute": ":root[data-font='atkinson']",
+      "fontFamily": "'Atkinson Hyperlegible', Lexend Variable, sans-serif",
+      "weights": [
+        400,
+        700
+      ],
+      "scope": "Reading text only (--font-read): body, block titles, sheet and focus titles. Dial lettering and controls stay in Lexend."
+    },
+    "shadows": [
+      {
+        "name": "shadow-1 (Rest)",
+        "value": "0 1px 2px rgb(21 28 42 / 0.06), 0 1px 1px rgb(21 28 42 / 0.04)",
+        "dark": "0 1px 2px rgb(0 0 0 / 0.3)",
+        "purpose": "Segmented thumb, selected rail row."
+      },
+      {
+        "name": "shadow-2 (Float)",
+        "value": "0 2px 6px -1px rgb(21 28 42 / 0.08), 0 10px 24px -8px rgb(21 28 42 / 0.16)",
+        "dark": "0 2px 6px -1px rgb(0 0 0 / 0.35), 0 10px 24px -8px rgb(0 0 0 / 0.5)",
+        "purpose": "Dial hover tooltip, drag time pill, focus-mode next pill."
+      },
+      {
+        "name": "shadow-3 (Lift)",
+        "value": "0 6px 16px -4px rgb(21 28 42 / 0.12), 0 24px 56px -16px rgb(21 28 42 / 0.28)",
+        "dark": "0 6px 16px -4px rgb(0 0 0 / 0.4), 0 24px 56px -16px rgb(0 0 0 / 0.6)",
+        "purpose": "Inspector panel, toasts, a rail row while dragged."
+      },
+      {
+        "name": "case",
+        "value": "0 1px 2px rgb(0 0 0 / 0.18), 0 10px 30px -8px rgb(0 0 0 / 0.35)",
+        "purpose": "Widget dial case only."
+      },
+      {
+        "name": "lume-glow",
+        "value": "0 0 5px var(--lume) (week dots) · 0 0 10px var(--lume) (all-done tally) · SVG feGaussianBlur stdDeviation 5 (done arc rims on dark finishes)",
+        "purpose": "Light emission for finished time; not elevation."
+      },
+      {
+        "name": "live-capsule-ring",
+        "value": "inset 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent)",
+        "purpose": "Live rail capsule (glass edge)."
+      },
+      {
+        "name": "done-capsule-ring",
+        "value": "inset 0 0 0 2px color-mix(in srgb, var(--lume) 70%, transparent)",
+        "purpose": "Finished rail capsule."
+      }
+    ],
+    "focus": [
+      {
+        "name": "focus-visible",
+        "value": "outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px",
+        "purpose": "Global keyboard focus on every control."
+      },
+      {
+        "name": "field-focus",
+        "value": "border-color: var(--focus-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 20%, transparent)",
+        "purpose": "Text fields."
+      },
+      {
+        "name": "quick-add-active",
+        "value": "border-color: color-mix(in srgb, var(--c) 60%, var(--line)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 14%, transparent)",
+        "purpose": "Quick add takes the guessed category colour."
+      },
+      {
+        "name": "arc-focus",
+        "value": "stroke: var(--focus-ring); stroke-width: 4 (on the arc body)",
+        "purpose": "Keyboard focus on a dial insert (role=button)."
+      },
+      {
+        "name": "swatch-on",
+        "value": "box-shadow: 0 0 0 2px var(--focus-ring)",
+        "purpose": "Active theme swatch."
+      },
+      {
+        "name": "selection",
+        "value": "background: color-mix(in srgb, var(--focus-ring) 28%, transparent)",
+        "purpose": "Text selection."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Default easing for every state change, fly-ins, hand steps, liquid level."
+      },
+      {
+        "name": "ease-in-out",
+        "value": "cubic-bezier(0.65, 0, 0.35, 1)",
+        "purpose": "Theme circular reveal, onboarding demo."
+      },
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Things that land: capsule scale, check, swatch lift, switch thumb."
+      },
+      {
+        "name": "dur-1",
+        "value": "120ms",
+        "purpose": "Hover and press feedback."
+      },
+      {
+        "name": "dur-2",
+        "value": "220ms",
+        "purpose": "State changes (Calm: 1ms)."
+      },
+      {
+        "name": "dur-3",
+        "value": "380ms",
+        "purpose": "Colour and settle transitions (Calm: 120ms)."
+      },
+      {
+        "name": "spring-arc",
+        "value": "Svelte Spring { stiffness: 0.14, damping: 0.72 }",
+        "purpose": "Arc start/end angles and radii; always the nearest turn. Instant under Calm."
+      },
+      {
+        "name": "arc-bloom",
+        "value": "first paint only: delay 120ms + 55ms × index, arcs grow from zero sweep",
+        "purpose": "A fresh dial blooms clockwise, arc by arc."
+      },
+      {
+        "name": "arc-lift",
+        "value": "selected +10 units, hover +4, becoming-current +16 for 420ms",
+        "purpose": "Spring-driven radius lift."
+      },
+      {
+        "name": "hand-step",
+        "value": "transform 0.8s ease-out; steps every 60s (every 5s on 60-minute faces)",
+        "purpose": "Now-hand; idle repaint at most once a minute on hour-scale dials."
+      },
+      {
+        "name": "seconds-bead",
+        "value": "HTML layer, rotate stepped from the wall clock each second, transition 0.28s ease-out",
+        "purpose": "Never a free-running CSS animation. Hidden under Calm."
+      },
+      {
+        "name": "aura",
+        "value": "opacity 0.12 → 0.70 → 0.12, 8s ease-in-out infinite (4s during heads-up); static at 0.35 under Calm",
+        "purpose": "The only always-on loop: the block under the hand breathes. HTML conic-gradient layer with a static ring mask; only opacity animates."
+      },
+      {
+        "name": "breathing-guide",
+        "value": "transform scale 0.45 → 1 + opacity, 16s cycle (4 in · 4 hold · 6 out · 2 rest), runs 64s",
+        "purpose": "User-started one-minute pause in the face."
+      },
+      {
+        "name": "liquid-level",
+        "value": "transform translateY, 0.9s ease-out, updates once a minute",
+        "purpose": "Live rail capsule fill."
+      },
+      {
+        "name": "wave-slosh",
+        "value": "translateX(-20px): strip A 1.6s ×2, strip B 2.7s ×1 reverse, remounted each minute; linear infinite only while hovered; none under Calm",
+        "purpose": "The liquid surface sloshes once per minute, then rests."
+      },
+      {
+        "name": "now-ping",
+        "value": "scale 1 → 3, opacity 0.5 → 0, 2.4s ×2",
+        "purpose": "Rail now-dot as the minute turns; none under Calm."
+      },
+      {
+        "name": "lume-charge",
+        "value": "stroke-dashoffset sweep 0.95s cubic-bezier(0.3, 0.7, 0.2, 1), soft-light white band, once",
+        "purpose": "A finished arc charges with light."
+      },
+      {
+        "name": "day-sweep",
+        "value": "lume band around the bezel 2.4s cubic-bezier(0.45, 0.05, 0.2, 1), plus-lighter, once",
+        "purpose": "Every block of the day done."
+      },
+      {
+        "name": "pour",
+        "value": "liquid to brim 1.3s ease-out then fade; icon and check pop 0.45–0.5s",
+        "purpose": "Rail block finished. Skipped under Calm."
+      },
+      {
+        "name": "strike-draw",
+        "value": "background-size 0% → 100% over 0.5s ease-out, 0.15s delay",
+        "purpose": "Finished title strike draws left to right."
+      },
+      {
+        "name": "day-turn",
+        "value": "rotate(±28deg) scale(0.94) → none, 560ms cubicOut",
+        "purpose": "Changing day turns the dial in the direction of travel."
+      },
+      {
+        "name": "odometer",
+        "value": "per character translateY 55% + blur 2px, 420ms cubicOut; crossfade 260ms when the text changes shape",
+        "purpose": "Countdown and tally digits."
+      },
+      {
+        "name": "theme-reveal",
+        "value": "View Transition, clip-path circle from the clicked swatch, 650ms ease-in-out",
+        "purpose": "Theme and light/dark switch. Skipped under Calm."
+      },
+      {
+        "name": "segmented-thumb",
+        "value": "clip-path inset(... round 999px), 380ms ease-out",
+        "purpose": "Reference switcher thumb glide."
+      },
+      {
+        "name": "week-puck",
+        "value": "transform 420ms ease-out",
+        "purpose": "Selected-day puck in the week strip."
+      },
+      {
+        "name": "panel-fly",
+        "value": "in: x 40px 340ms cubicOut · out: x 30px 200ms",
+        "purpose": "Inspector panel."
+      },
+      {
+        "name": "toast-rise",
+        "value": "in: y 16px 280ms cubicOut · countdown bar scaleX linear over the undo window",
+        "purpose": "Toasts from the rail foot."
+      },
+      {
+        "name": "press",
+        "value": "scale 0.97 (buttons), 0.92 (icon buttons), 0.88 (check), 0.95 (chips)",
+        "purpose": "Tactile press on :active."
+      },
+      {
+        "name": "calm",
+        "value": ":root[data-motion='calm'] — set by prefers-reduced-motion (Motion: System) or Motion: Calm",
+        "purpose": "All loops off, springs instant, Svelte transitions 0ms, view transitions skipped, sparks/pour/seconds bead removed; global transition-duration 1ms under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "top-bar-wrap",
+        "value": "980px",
+        "purpose": "Week strip drops to its own centred row."
+      },
+      {
+        "name": "single-column",
+        "value": "860px",
+        "purpose": "Dial above, rail below in one scroll; panel becomes a bottom sheet (max 78vh); toasts centre."
+      }
+    ],
+    "dialGeometry": {
+      "viewBox": "0 0 1000 1000",
+      "centre": 500,
+      "angleZero": "12 o'clock, clockwise",
+      "radii": {
+        "case": 497,
+        "marker": 492,
+        "bezelOut": 468,
+        "bezelIn": 382,
+        "trackOut": 366,
+        "trackMinor": 354,
+        "trackMajor": 340,
+        "numerals": 298,
+        "readout": 252,
+        "wedgeIn": 214,
+        "wedgeOut": 330
+      },
+      "derived": {
+        "bezelBaseDisc": 476,
+        "faceDisc": 374,
+        "handThick": [
+          346,
+          378
+        ],
+        "handHairline": [
+          378,
+          472
+        ]
+      },
+      "lanes": {
+        "max": 3,
+        "gap": 5,
+        "scope": "per overlapping cluster only",
+        "titlesHiddenAbove": 2
+      },
+      "insertGap": {
+        "normal": 3.5,
+        "compact": 5,
+        "unit": "arc length at each end"
+      },
+      "strokes": {
+        "track": 3,
+        "trackCompact": 5,
+        "hand": 8,
+        "handCompact": 12,
+        "hairline": 2.5,
+        "hairlineCompact": 4,
+        "lumeRim": 5
+      },
+      "references": [
+        {
+          "id": "field12",
+          "name": "12 h",
+          "ticks": 60,
+          "majorEvery": 5,
+          "window": "1 h behind the hand, 11 h ahead"
+        },
+        {
+          "id": "gmt24",
+          "name": "24 h",
+          "ticks": 96,
+          "majorEvery": 4,
+          "window": "whole day, noon on top, night shaded"
+        },
+        {
+          "id": "timer60",
+          "name": "Hour",
+          "ticks": 60,
+          "majorEvery": 5,
+          "window": "next 60 minutes as a shrinking wedge"
+        },
+        {
+          "id": "chrono",
+          "name": "Cycles",
+          "ticks": 60,
+          "majorEvery": 5,
+          "window": "focus rounds with breaks on the 60-minute face"
+        }
+      ]
+    },
+    "themes": [
+      {
+        "id": "fog",
+        "name": "Fog",
+        "mode": "light",
+        "finish": "glacier",
+        "vars": {
+          "ground": "#eceff3",
+          "surface": "#f7f8fa",
+          "raised": "#ffffff",
+          "sunken": "#e2e6ec",
+          "ink": "#151c2a",
+          "ink2": "#485365",
+          "ink3": "#5f6a7b",
+          "signal": "#f2551d",
+          "lume": "#2fae7b",
+          "focus": "#3d6fe3",
+          "line": "rgb(21 28 42 / 0.09)",
+          "lineStrong": "rgb(21 28 42 / 0.16)"
+        },
+        "inkInverse": "#f7f8fa"
+      },
+      {
+        "id": "linen",
+        "name": "Linen",
+        "mode": "light",
+        "finish": "salmon",
+        "vars": {
+          "ground": "#efe9e1",
+          "surface": "#f8f4ee",
+          "raised": "#fffdf9",
+          "sunken": "#e5ddd2",
+          "ink": "#241d17",
+          "ink2": "#5a4d41",
+          "ink3": "#6f6153",
+          "signal": "#d9481c",
+          "lume": "#2c9d72",
+          "focus": "#3a63c9",
+          "line": "rgb(36 29 23 / 0.09)",
+          "lineStrong": "rgb(36 29 23 / 0.17)"
+        },
+        "inkInverse": "#f8f4ee"
+      },
+      {
+        "id": "mist",
+        "name": "Mist",
+        "mode": "light",
+        "finish": "glacier",
+        "vars": {
+          "ground": "#ecebf4",
+          "surface": "#f6f5fb",
+          "raised": "#ffffff",
+          "sunken": "#e0dfec",
+          "ink": "#1d1a2e",
+          "ink2": "#4d4866",
+          "ink3": "#625d7c",
+          "signal": "#e8508a",
+          "lume": "#2fae7b",
+          "focus": "#6a55e0",
+          "line": "rgb(29 26 46 / 0.09)",
+          "lineStrong": "rgb(29 26 46 / 0.16)"
+        },
+        "inkInverse": "#f6f5fb"
+      },
+      {
+        "id": "sage",
+        "name": "Sage",
+        "mode": "light",
+        "finish": "mint",
+        "vars": {
+          "ground": "#e7eee8",
+          "surface": "#f3f7f3",
+          "raised": "#ffffff",
+          "sunken": "#dbe5dc",
+          "ink": "#14231a",
+          "ink2": "#3f5546",
+          "ink3": "#55695b",
+          "signal": "#e2482e",
+          "lume": "#1f8f5f",
+          "focus": "#2f7a5a",
+          "line": "rgb(20 35 26 / 0.09)",
+          "lineStrong": "rgb(20 35 26 / 0.16)"
+        },
+        "inkInverse": "#f3f7f3"
+      },
+      {
+        "id": "midnight",
+        "name": "Midnight",
+        "mode": "dark",
+        "finish": "ink",
+        "vars": {
+          "ground": "#0d121c",
+          "surface": "#131a27",
+          "raised": "#1a2232",
+          "sunken": "#0a0e16",
+          "ink": "#e9edf3",
+          "ink2": "#b0b9c7",
+          "ink3": "#8f9aab",
+          "signal": "#ff7440",
+          "lume": "#8ef0c1",
+          "focus": "#7598ff",
+          "line": "rgb(233 237 243 / 0.08)",
+          "lineStrong": "rgb(233 237 243 / 0.15)"
+        },
+        "inkInverse": "#131a27"
+      },
+      {
+        "id": "black",
+        "name": "Black",
+        "mode": "dark",
+        "finish": "onyx",
+        "vars": {
+          "ground": "#000000",
+          "surface": "#000000",
+          "raised": "#121212",
+          "sunken": "#0b0b0b",
+          "ink": "#f2f2f2",
+          "ink2": "#b4b4b4",
+          "ink3": "#8e8e8e",
+          "signal": "#ff6a3d",
+          "lume": "#8ef0c1",
+          "focus": "#7598ff",
+          "line": "rgb(255 255 255 / 0.09)",
+          "lineStrong": "rgb(255 255 255 / 0.17)"
+        },
+        "inkInverse": "#0b0b0b"
+      },
+      {
+        "id": "graphite",
+        "name": "Graphite",
+        "mode": "dark",
+        "finish": "slate",
+        "vars": {
+          "ground": "#1b1d21",
+          "surface": "#212328",
+          "raised": "#2a2d33",
+          "sunken": "#16181b",
+          "ink": "#eceef1",
+          "ink2": "#b7bcc4",
+          "ink3": "#969ca6",
+          "signal": "#ffb13d",
+          "lume": "#a8f5cf",
+          "focus": "#8aa6ff",
+          "line": "rgb(236 238 241 / 0.08)",
+          "lineStrong": "rgb(236 238 241 / 0.15)"
+        },
+        "inkInverse": "#212328"
+      },
+      {
+        "id": "forest",
+        "name": "Forest",
+        "mode": "dark",
+        "finish": "moss",
+        "vars": {
+          "ground": "#0b1712",
+          "surface": "#101f18",
+          "raised": "#172a21",
+          "sunken": "#08120e",
+          "ink": "#e6f2ea",
+          "ink2": "#acc4b5",
+          "ink3": "#8aa595",
+          "signal": "#ffb13d",
+          "lume": "#b6f5c9",
+          "focus": "#7fd1a8",
+          "line": "rgb(230 242 234 / 0.08)",
+          "lineStrong": "rgb(230 242 234 / 0.15)"
+        },
+        "inkInverse": "#101f18"
+      },
+      {
+        "id": "plum",
+        "name": "Plum",
+        "mode": "dark",
+        "finish": "plum",
+        "vars": {
+          "ground": "#130e1b",
+          "surface": "#1a1324",
+          "raised": "#231a31",
+          "sunken": "#0e0a14",
+          "ink": "#efe7f7",
+          "ink2": "#bfb2d0",
+          "ink3": "#9d90b0",
+          "signal": "#ff8a5c",
+          "lume": "#c9b6ff",
+          "focus": "#b39cff",
+          "line": "rgb(239 231 247 / 0.08)",
+          "lineStrong": "rgb(239 231 247 / 0.15)"
+        },
+        "inkInverse": "#1a1324"
+      },
+      {
+        "id": "cocoa",
+        "name": "Cocoa",
+        "mode": "dark",
+        "finish": "tropic",
+        "vars": {
+          "ground": "#1a120c",
+          "surface": "#211710",
+          "raised": "#2b1f16",
+          "sunken": "#140e09",
+          "ink": "#f4e9dc",
+          "ink2": "#c9b6a0",
+          "ink3": "#a8937c",
+          "signal": "#f2c14e",
+          "lume": "#e9f59a",
+          "focus": "#f2c14e",
+          "line": "rgb(244 233 220 / 0.08)",
+          "lineStrong": "rgb(244 233 220 / 0.15)"
+        },
+        "inkInverse": "#211710"
+      }
+    ],
+    "finishes": [
+      {
+        "id": "glacier",
+        "name": "Glacier",
+        "dark": false,
+        "face": "#F7F8FA",
+        "bezel": "#E3E8EE",
+        "ink": "#151C2A",
+        "track": "#8F9AAA",
+        "signal": "#F2551D",
+        "lume": "#3FBF8A",
+        "rim": "#CBD3DC"
+      },
+      {
+        "id": "ink",
+        "name": "Ink",
+        "dark": true,
+        "face": "#141B29",
+        "bezel": "#1D2637",
+        "ink": "#E9EDF3",
+        "track": "#5E6A7E",
+        "signal": "#FF7440",
+        "lume": "#8EF0C1",
+        "rim": "#2A3447"
+      },
+      {
+        "id": "onyx",
+        "name": "Onyx",
+        "dark": true,
+        "face": "#000000",
+        "bezel": "#111111",
+        "ink": "#f2f2f2",
+        "track": "#565656",
+        "signal": "#ff6a3d",
+        "lume": "#8ef0c1",
+        "rim": "#1c1c1c"
+      },
+      {
+        "id": "moss",
+        "name": "Moss",
+        "dark": true,
+        "face": "#0f1f18",
+        "bezel": "#162a21",
+        "ink": "#e6f2ea",
+        "track": "#5d7a6a",
+        "signal": "#ffb13d",
+        "lume": "#b6f5c9",
+        "rim": "#1f362b"
+      },
+      {
+        "id": "plum",
+        "name": "Plum",
+        "dark": true,
+        "face": "#1b1425",
+        "bezel": "#251b33",
+        "ink": "#efe7f7",
+        "track": "#7a6a8c",
+        "signal": "#ff8a5c",
+        "lume": "#c9b6ff",
+        "rim": "#2f2442"
+      },
+      {
+        "id": "salmon",
+        "name": "Salmon",
+        "dark": false,
+        "face": "#F6C9B6",
+        "bezel": "#EDB39C",
+        "ink": "#2B1A17",
+        "track": "#9A6A5C",
+        "signal": "#1F3C8C",
+        "lume": "#2E8F6A",
+        "rim": "#D99B84"
+      },
+      {
+        "id": "mint",
+        "name": "Mint",
+        "dark": false,
+        "face": "#CDEBDD",
+        "bezel": "#B6DFCB",
+        "ink": "#11281F",
+        "track": "#5E8C78",
+        "signal": "#E2482E",
+        "lume": "#1C7A55",
+        "rim": "#9CCFB7"
+      },
+      {
+        "id": "slate",
+        "name": "Slate",
+        "dark": true,
+        "face": "#3A4352",
+        "bezel": "#2E3644",
+        "ink": "#F1F3F6",
+        "track": "#8C97A8",
+        "signal": "#FFB13D",
+        "lume": "#A8F5CF",
+        "rim": "#495366"
+      },
+      {
+        "id": "tropic",
+        "name": "Tropic",
+        "dark": true,
+        "face": "#3B2618",
+        "bezel": "#2E1D12",
+        "ink": "#F4E4CC",
+        "track": "#A07F5F",
+        "signal": "#F2C14E",
+        "lume": "#E9F59A",
+        "rim": "#55392A"
+      }
+    ],
+    "categoryOnColor": "Text/icons on a category fill: #FFFFFF or #141B29 by WCAG luminance, biased toward white (contrastWhite >= contrastInk × 0.62)."
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one ink-filled action in a view: start a focus cycle, save. Never signal-coloured.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M7 5.5v13a1 1 0 0 0 1.5.86l10.6-6.5a1 1 0 0 0 0-1.72L8.5 4.64A1 1 0 0 0 7 5.5z\"/></svg>4 × 25m focus</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border:0;border-radius:999px;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;transition:background 120ms cubic-bezier(0.16, 1, 0.3, 1),color 120ms cubic-bezier(0.16, 1, 0.3, 1),transform 120ms cubic-bezier(0.16, 1, 0.3, 1);background:var(--ink, #151c2a);color:var(--ink-inverse, #f7f8fa);}.ds-btn-primary:hover{background:color-mix(in srgb, var(--ink, #151c2a) 88%, var(--signal, #f2551d));}.ds-btn-primary:active{transform:scale(0.97);}.ds-btn-primary:focus-visible{outline:2px solid var(--focus-ring, #3d6fe3);outline-offset:2px;}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Secondary actions in panels and footers; text only until hovered.",
+      "html": "<button class=\"ds-btn-quiet\">Move to tomorrow</button>",
+      "css": ".ds-btn-quiet{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 16px;border:0;border-radius:999px;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);font-size:13px;font-weight:500;white-space:nowrap;cursor:pointer;transition:background 120ms cubic-bezier(0.16, 1, 0.3, 1),color 120ms cubic-bezier(0.16, 1, 0.3, 1),transform 120ms cubic-bezier(0.16, 1, 0.3, 1);background:transparent;color:var(--ink-2, #485365);}.ds-btn-quiet:hover{background:var(--sunken, #e2e6ec);color:var(--ink, #151c2a);}.ds-btn-quiet:active{transform:scale(0.97);}.ds-btn-quiet:focus-visible{outline:2px solid var(--focus-ring, #3d6fe3);outline-offset:2px;}"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "34px round icon action in the top bar, panel header and rail tools; inverts to ink when it is a pressed toggle.",
+      "html": "<div class=\"ds-icon-row\"><button class=\"ds-icon-btn\" aria-label=\"Settings\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 7h10M18 7h2M4 17h4M12 17h8\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"10\" cy=\"17\" r=\"2\"/></svg></button><button class=\"ds-icon-btn\" aria-pressed=\"true\" aria-label=\"Desktop widget\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg></button><button class=\"ds-icon-btn\" aria-label=\"Close\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button></div>",
+      "css": ".ds-icon-row{display:flex;gap:2px;}.ds-icon-btn{display:inline-grid;place-items:center;width:34px;height:34px;border:0;border-radius:999px;background:transparent;color:var(--ink-2, #485365);cursor:pointer;transition:background 120ms cubic-bezier(0.16, 1, 0.3, 1),color 120ms cubic-bezier(0.16, 1, 0.3, 1),transform 120ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-icon-btn:hover{background:var(--sunken, #e2e6ec);color:var(--ink, #151c2a);}.ds-icon-btn:active{transform:scale(0.92);}.ds-icon-btn[aria-pressed=\"true\"]{background:var(--ink, #151c2a);color:var(--ink-inverse, #f7f8fa);}.ds-icon-btn:focus-visible{outline:2px solid var(--focus-ring, #3d6fe3);outline-offset:2px;}"
+    },
+    {
+      "name": "Reference Switcher",
+      "kind": "nav",
+      "refersTo": "segmented",
+      "description": "Segmented pill under the dial (12 h / 24 h / Hour / Cycles), like a crown under a case. In the app the raised thumb glides between options via clip-path.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"Dial\"><button aria-pressed=\"true\">12 h</button><button aria-pressed=\"false\">24 h</button><button aria-pressed=\"false\">Hour</button><button aria-pressed=\"false\">Cycles</button></div>",
+      "css": ".ds-seg{display:inline-flex;padding:3px;gap:2px;border-radius:999px;background:var(--sunken, #e2e6ec);}.ds-seg button{height:30px;padding:0 12px;border:0;border-radius:999px;background:transparent;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);font-size:13px;color:var(--ink-2, #485365);cursor:pointer;transition:background 220ms cubic-bezier(0.16, 1, 0.3, 1),color 220ms cubic-bezier(0.16, 1, 0.3, 1),box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-seg button:hover{color:var(--ink, #151c2a);}.ds-seg button[aria-pressed=\"true\"]{background:var(--raised, #ffffff);color:var(--ink, #151c2a);box-shadow:var(--shadow-1, 0 1px 2px rgb(21 28 42 / 0.06), 0 1px 1px rgb(21 28 42 / 0.04));}.ds-seg button:focus-visible{outline:2px solid var(--focus-ring, #3d6fe3);outline-offset:2px;}"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Standard text field in the block sheet and settings; focus shifts the border to focus blue with a soft 3px ring.",
+      "html": "<input class=\"ds-field\" placeholder=\"Notes, links, how you'll know it's done…\" aria-label=\"Notes\" />",
+      "css": ".ds-field{width:100%;max-width:320px;height:38px;padding:0 12px;border-radius:10px;border:1px solid var(--line-strong, rgb(21 28 42 / 0.16));background:var(--raised, #ffffff);color:var(--ink, #151c2a);font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);font-size:14.5px;caret-color:var(--signal, #f2551d);transition:border-color 120ms cubic-bezier(0.16, 1, 0.3, 1),box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-field::placeholder{color:var(--ink-3, #5f6a7b);opacity:1;}.ds-field:focus{outline:none;border-color:var(--focus-ring, #3d6fe3);box-shadow:0 0 0 3px color-mix(in srgb, var(--focus-ring, #3d6fe3) 20%, transparent);}"
+    },
+    {
+      "name": "Quick Add",
+      "kind": "input",
+      "refersTo": "quick-add",
+      "description": "Type a block the way you would say it; the icon tile and focus ring take the guessed category colour, and a chip row previews where it lands.",
+      "html": "<div class=\"ds-quick-wrap\"><label class=\"ds-quick\" style=\"--c:#EA6A2A\"><span class=\"ds-quick-ico\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg></span><input value=\"gym 5pm 45m\" aria-label=\"Quick add a block\" /></label><div class=\"ds-quick-preview\" style=\"--c:#EA6A2A\"><span class=\"ds-chip strong\"><i></i>gym</span><span class=\"ds-chip\">Today 5:00 PM</span><span class=\"ds-chip\">45m</span></div></div>",
+      "css": ".ds-quick-wrap{max-width:360px;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);}.ds-quick{display:flex;align-items:center;gap:8px;height:42px;padding:0 8px 0 6px;border-radius:14px;background:var(--raised, #ffffff);border:1px solid var(--line, rgb(21 28 42 / 0.09));transition:border-color 220ms cubic-bezier(0.16, 1, 0.3, 1),box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-quick:focus-within{border-color:color-mix(in srgb, var(--c) 60%, var(--line, rgb(21 28 42 / 0.09)));box-shadow:0 0 0 4px color-mix(in srgb, var(--c) 14%, transparent);}.ds-quick-ico{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:10px;background:color-mix(in srgb, var(--c) 18%, transparent);color:var(--c);}.ds-quick input{flex:1;min-width:0;height:100%;border:0;outline:none;background:transparent;font:inherit;font-size:13px;color:var(--ink, #151c2a);caret-color:var(--signal, #f2551d);}.ds-quick-preview{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0 2px;}.ds-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;background:var(--sunken, #e2e6ec);font-size:11.5px;color:var(--ink-2, #485365);}.ds-chip.strong{color:var(--ink, #151c2a);font-weight:500;}.ds-chip i{width:8px;height:8px;border-radius:50%;background:var(--c);}"
+    },
+    {
+      "name": "Category Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Category picker in the block sheet: a dot carries the colour, the selected chip takes a 16% wash and a full-colour border.",
+      "html": "<div class=\"ds-cats\" role=\"radiogroup\" aria-label=\"Category\"><button class=\"ds-cat on\" role=\"radio\" aria-checked=\"true\" style=\"--c:#3D6FE3\"><i></i>Focus</button><button class=\"ds-cat\" role=\"radio\" aria-checked=\"false\" style=\"--c:#25976A\"><i></i>Care</button><button class=\"ds-cat\" role=\"radio\" aria-checked=\"false\" style=\"--c:#8670E6\"><i></i>Rest</button><button class=\"ds-cat\" role=\"radio\" aria-checked=\"false\" style=\"--c:#DB4F94\"><i></i>People</button></div>",
+      "css": ".ds-cats{display:flex;flex-wrap:wrap;gap:6px;}.ds-cat{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 8px;border-radius:999px;border:1px solid var(--line, rgb(21 28 42 / 0.09));background:transparent;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);font-size:11.5px;color:var(--ink-2, #485365);cursor:pointer;transition:background 220ms cubic-bezier(0.16, 1, 0.3, 1),border-color 220ms cubic-bezier(0.16, 1, 0.3, 1),color 220ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-cat i{width:10px;height:10px;border-radius:50%;background:var(--c);}.ds-cat:hover{border-color:var(--c);}.ds-cat.on{background:color-mix(in srgb, var(--c) 16%, transparent);border-color:var(--c);color:var(--ink, #151c2a);}.ds-cat:focus-visible{outline:2px solid var(--focus-ring, #3d6fe3);outline-offset:2px;}"
+    },
+    {
+      "name": "Rail Block",
+      "kind": "custom",
+      "refersTo": "rail-capsule",
+      "description": "Structured-style timeline row. The capsule height is the duration; the live block is a glass whose liquid rises once a minute; finished blocks get a lume ring and a drawn strike.",
+      "html": "<div class=\"ds-rail\"><div class=\"ds-row live\" style=\"--c:#3D6FE3;--c-soft:#d8e2f9;--h:120px;--p:0.45\"><span class=\"ds-time\">10:15</span><span class=\"ds-cap\"><span class=\"ds-liquid\"><span class=\"ds-wave\"></span></span><span class=\"ds-cap-ico\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"4\" y=\"5\" width=\"16\" height=\"11\" rx=\"2\"/><path d=\"M2 19h20\"/></svg></span></span><span class=\"ds-body\"><span class=\"ds-title\">Deep work</span><span class=\"ds-meta\">10:15–11:30 · 41m left</span></span><span class=\"ds-check\" aria-hidden=\"true\"></span></div><div class=\"ds-gap\"><span></span><span class=\"ds-gap-line\"></span><span>10m free</span></div><div class=\"ds-row done\" style=\"--c:#D99A06;--c-soft:#f7ebcd;--h:52px\"><span class=\"ds-time\">11:40</span><span class=\"ds-cap\"><span class=\"ds-cap-ico\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.5 12.5l3.6 3.6 7.4-7.6\"/></svg></span></span><span class=\"ds-body\"><span class=\"ds-title\"><s>Lunch &amp; water</s></span><span class=\"ds-meta\">11:40–12:20 · 40m</span></span><span class=\"ds-check on\" aria-hidden=\"true\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6.5 12.5l3.6 3.6 7.4-7.6\"/></svg></span></div><div class=\"ds-row\" style=\"--c:#EA6A2A;--h:48px\"><span class=\"ds-time\">12:30</span><span class=\"ds-cap\"><span class=\"ds-cap-ico\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6h3v12\"/></svg></span></span><span class=\"ds-body\"><span class=\"ds-title\">Walk outside</span><span class=\"ds-meta\">12:30–12:55 · 25m</span></span><span class=\"ds-check\" aria-hidden=\"true\"></span></div></div>",
+      "css": ".ds-rail{max-width:380px;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);color:var(--ink, #151c2a);}.ds-row{display:grid;grid-template-columns:52px 44px minmax(0,1fr) auto;align-items:start;min-height:var(--h);padding:3px 0;border-radius:14px;transition:background 220ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-row:hover{background:color-mix(in srgb, var(--sunken, #e2e6ec) 55%, transparent);}.ds-time,.ds-gap{font-size:11.5px;color:var(--ink-3, #5f6a7b);font-variant-numeric:tabular-nums;}.ds-time{padding:10px 8px 0 0;text-align:right;}.ds-cap{position:relative;justify-self:center;width:40px;height:var(--h);border-radius:20px;background:var(--c);color:#fff;overflow:hidden;display:grid;align-content:start;justify-items:center;padding-top:11px;transition:transform 220ms cubic-bezier(0.22, 1, 0.36, 1);}.ds-row:hover .ds-cap{transform:scale(1.05);}.ds-cap-ico{position:relative;z-index:1;display:grid;}.ds-liquid{position:absolute;inset:0;background:var(--c);transform:translateY(calc((1 - var(--p, 0)) * 100%));transition:transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);}.ds-wave{position:absolute;left:0;top:-6px;width:calc(100% + 40px);height:7px;background:radial-gradient(circle at 10px 0, transparent 8px, var(--c) 8.5px) repeat-x 0 0 / 20px 7px;}.ds-row:hover .ds-wave{animation:ds-roll 1.6s linear infinite;}@keyframes ds-roll{to{transform:translateX(-20px);}}.live .ds-cap{background:var(--c-soft);box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent);}.live .ds-cap-ico{color:color-mix(in srgb, var(--c) 70%, #151c2a);}.done .ds-cap{background:var(--c-soft);color:var(--c);box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--lume, #2fae7b) 70%, transparent);}.ds-body{display:grid;gap:2px;padding:8px 12px 6px;min-width:0;}.ds-title{font-size:14.5px;font-weight:500;line-height:1.3;}.done .ds-title{color:var(--ink-3, #5f6a7b);}.done .ds-title s{text-decoration-thickness:1.5px;}.ds-meta{font-size:11.5px;color:var(--ink-3, #5f6a7b);font-variant-numeric:tabular-nums;}.live .ds-meta{color:var(--ink-2, #485365);}.ds-check{width:28px;height:28px;margin:6px 8px 0 0;border-radius:50%;border:2px solid color-mix(in srgb, var(--c) 70%, var(--line-strong, rgb(21 28 42 / 0.16)));display:grid;place-items:center;color:#fff;}.ds-check.on{background:var(--c);border-color:var(--c);}.ds-gap{display:grid;grid-template-columns:52px 44px 1fr;align-items:center;min-height:34px;}.ds-gap-line{justify-self:center;height:100%;min-height:34px;border-left:2px dotted var(--line-strong, rgb(21 28 42 / 0.16));}.ds-gap span:last-child{padding-left:8px;}@media (prefers-reduced-motion: reduce){.ds-wave{animation:none !important;}}"
+    },
+    {
+      "name": "Day Dial",
+      "kind": "custom",
+      "refersTo": "dial",
+      "description": "12 h reference on the Glacier finish: bezel inserts in category colours, the elapsed part of the current block mixed into the bezel, a finished block with a lume rim, and the signal now-hand whose thick stroke stays between numerals and bezel.",
+      "html": "<div class=\"ds-dial-wrap\"><svg class=\"ds-dial\" viewBox=\"0 0 1000 1000\" role=\"img\" aria-label=\"Day dial, 12 hour reference\"><circle cx=\"500\" cy=\"500\" r=\"476\" fill=\"#E3E8EE\"/><path d=\"M60.2 339.9A468 468 0 0 1 199.2 141.5L254.5 207.4A382 382 0 0 0 141 369.3Z\" fill=\"#151C2A\" opacity=\"0.06\"/><circle cx=\"500\" cy=\"500\" r=\"374\" fill=\"#F7F8FA\"/><path d=\"M500 134L500 160M538.3 136L537 147.9M576.1 142L573.6 153.7M613.1 151.9L609.4 163.3M648.9 165.6L644 176.6M683 183L670 205.6M715.1 203.9L708.1 213.6M744.9 228L736.9 236.9M772 255.1L763.1 263.1M796.1 284.9L786.4 291.9M817 317L794.4 330M834.4 351.1L823.4 356M848.1 386.9L836.7 390.6M858 423.9L846.3 426.4M864 461.7L852.1 463M866 500L840 500M864 538.3L852.1 537M858 576.1L846.3 573.6M848.1 613.1L836.7 609.4M834.4 648.9L823.4 644M817 683L794.4 670M796.1 715.1L786.4 708.1M772 744.9L763.1 736.9M744.9 772L736.9 763.1M715.1 796.1L708.1 786.4M683 817L670 794.4M648.9 834.4L644 823.4M613.1 848.1L609.4 836.7M576.1 858L573.6 846.3M538.3 864L537 852.1M500 866L500 840M461.7 864L463 852.1M423.9 858L426.4 846.3M386.9 848.1L390.6 836.7M351.1 834.4L356 823.4M317 817L330 794.4M284.9 796.1L291.9 786.4M255.1 772L263.1 763.1M228 744.9L236.9 736.9M203.9 715.1L213.6 708.1M183 683L205.6 670M165.6 648.9L176.6 644M151.9 613.1L163.3 609.4M142 576.1L153.7 573.6M136 538.3L147.9 537M134 500L160 500M136 461.7L147.9 463M142 423.9L153.7 426.4M151.9 386.9L163.3 390.6M165.6 351.1L176.6 356M183 317L205.6 330M203.9 284.9L213.6 291.9M228 255.1L236.9 263.1M255.1 228L263.1 236.9M284.9 203.9L291.9 213.6M317 183L330 205.6M351.1 165.6L356 176.6M386.9 151.9L390.6 163.3M423.9 142L426.4 153.7M461.7 136L463 147.9\" stroke=\"#8F9AAA\" stroke-width=\"3\" stroke-linecap=\"round\"/><text x=\"500\" y=\"202\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">12</text><text x=\"649\" y=\"241.9\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">1</text><text x=\"758.1\" y=\"351\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">2</text><text x=\"798\" y=\"500\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">3</text><text x=\"758.1\" y=\"649\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">4</text><text x=\"649\" y=\"758.1\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">5</text><text x=\"500\" y=\"798\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">6</text><text x=\"351\" y=\"758.1\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">7</text><text x=\"241.9\" y=\"649\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">8</text><text x=\"202\" y=\"500\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">9</text><text x=\"241.9\" y=\"351\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">10</text><text x=\"351\" y=\"241.9\" font-size=\"40\" font-weight=\"300\" fill=\"#151C2A\" text-anchor=\"middle\" dominant-baseline=\"central\">11</text><path d=\"M92.8 730.7A468 468 0 0 1 61.6 663.7L142.1 633.6A382 382 0 0 0 167.6 688.3Z\" fill=\"#8ec8b2\"/><path d=\"M94.2 726.1A464.5 464.5 0 0 1 66 665.5\" stroke=\"#3FBF8A\" stroke-width=\"5\" stroke-linecap=\"round\" fill=\"none\"/><path d=\"M49 375.2A468 468 0 0 1 375.2 49L398.1 131.8A382 382 0 0 0 131.8 398.1Z\" fill=\"#3D6FE3\"/><path d=\"M49 375.2A468 468 0 0 1 199.2 141.5L254.5 207.4A382 382 0 0 0 131.8 398.1Z\" fill=\"#98b2e9\"/><path d=\"M422.5 38.5A468 468 0 0 1 577.5 38.5L563.2 123.3A382 382 0 0 0 436.8 123.3Z\" fill=\"#D99A06\"/><path d=\"M624.8 49A468 468 0 0 1 730.7 92.8L688.3 167.6A382 382 0 0 0 601.9 131.8Z\" fill=\"#EA6A2A\"/><path d=\"M925.8 305.7A468 468 0 0 1 960.2 414.9L875.6 430.6A382 382 0 0 0 847.5 341.4Z\" fill=\"#DB4F94\"/><path d=\"M903.4 737.3A468 468 0 0 1 737.3 903.4L693.7 829.2A382 382 0 0 0 829.2 693.7Z\" fill=\"#138FA6\"/><g transform=\"rotate(320 500 500)\"><line x1=\"500\" y1=\"154\" x2=\"500\" y2=\"122\" stroke=\"#F2551D\" stroke-width=\"8\" stroke-linecap=\"round\"/><line x1=\"500\" y1=\"122\" x2=\"500\" y2=\"28\" stroke=\"#F2551D\" stroke-width=\"2.5\"/><path d=\"M484 4L516 4L500 28Z\" fill=\"#F2551D\"/></g></svg><div class=\"ds-readout\"><div class=\"ds-big\">50m</div><div class=\"ds-rt\">Deep work</div><div class=\"ds-sub\">then Lunch &amp; water</div></div></div>",
+      "css": ".ds-dial-wrap{position:relative;width:340px;aspect-ratio:1;container-type:inline-size;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);}.ds-dial{display:block;width:100%;height:100%;overflow:visible;}.ds-dial text{font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}.ds-readout{position:absolute;inset:26%;display:grid;place-content:center;justify-items:center;gap:2px;text-align:center;color:#151C2A;}.ds-big{font-size:clamp(22px, 13cqi, 76px);font-weight:300;line-height:1;letter-spacing:-0.035em;font-variant-numeric:tabular-nums;}.ds-rt{margin-top:clamp(4px, 1.2cqi, 10px);font-size:clamp(11px, 2.9cqi, 17px);font-weight:500;}.ds-sub{font-size:clamp(10px, 2.3cqi, 14px);opacity:0.66;}"
+    },
+    {
+      "name": "Inspector Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Non-modal inspector that slides in beside the dial; a 4px top stripe carries the block category colour.",
+      "html": "<div class=\"ds-panel\" role=\"dialog\" aria-label=\"Block\" style=\"--accent:#25976A\"><header><h2>Block</h2><button class=\"ds-panel-x\" aria-label=\"Close\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg></button></header><div class=\"ds-panel-body\"><p class=\"ds-panel-title\">Morning meds</p><p class=\"ds-panel-meta\">08:00–08:10 · 10m · repeats daily</p></div><footer><button class=\"ds-panel-del\">Delete</button><span style=\"flex:1\"></span><button class=\"ds-panel-done\">Done</button></footer></div>",
+      "css": ".ds-panel{position:relative;width:min(400px, 100%);display:grid;grid-template-rows:auto 1fr auto;background:var(--raised, #ffffff);border:1px solid var(--line, rgb(21 28 42 / 0.09));border-radius:20px;box-shadow:var(--shadow-3, 0 6px 16px -4px rgb(21 28 42 / 0.12), 0 24px 56px -16px rgb(21 28 42 / 0.28));overflow:hidden;font-family:var(--font-ui, 'Lexend Variable', Lexend, ui-rounded, system-ui, sans-serif);color:var(--ink, #151c2a);}.ds-panel::before{content:\"\";position:absolute;inset:0 0 auto;height:4px;background:var(--accent, transparent);}.ds-panel header{display:flex;align-items:center;justify-content:space-between;padding:16px 12px 8px 24px;}.ds-panel h2{margin:0;font-size:13px;font-weight:500;color:var(--ink-3, #5f6a7b);}.ds-panel-x{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:999px;background:transparent;color:var(--ink-2, #485365);cursor:pointer;}.ds-panel-x:hover{background:var(--sunken, #e2e6ec);color:var(--ink, #151c2a);}.ds-panel-body{padding:0 24px 24px;}.ds-panel-title{margin:0;font-size:22px;font-weight:500;letter-spacing:-0.01em;}.ds-panel-meta{margin:4px 0 0;font-size:13px;color:var(--ink-2, #485365);font-variant-numeric:tabular-nums;}.ds-panel footer{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line, rgb(21 28 42 / 0.09));background:var(--surface, #f7f8fa);}.ds-panel footer button{height:36px;padding:0 16px;border:0;border-radius:999px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:background 120ms cubic-bezier(0.16, 1, 0.3, 1),transform 120ms cubic-bezier(0.16, 1, 0.3, 1);}.ds-panel footer button:active{transform:scale(0.97);}.ds-panel-del{background:transparent;color:var(--danger, #c4372b);}.ds-panel-del:hover{background:color-mix(in srgb, var(--danger, #c4372b) 10%, transparent);}.ds-panel-done{background:var(--ink, #151c2a);color:var(--ink-inverse, #f7f8fa);}.ds-panel button:focus-visible{outline:2px solid var(--focus-ring, #3d6fe3);outline-offset:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dial on the Desk",
+    "overview": "Daybloom is one object sitting on a quiet desk. The object is a Bauhaus watch dial: Max-Bill-thin numerals, a minute track, and a bezel whose coloured inserts are the day's blocks. You plan by sweeping the bezel, not by filling in forms. Everything else (the top bar, the day rail, the inspector panel, the settings) is the desk it rests on. The desk is cool, low in contrast, and tonally layered so the dial is always the first thing you read. The system rejects the category default of a calendar grid with a clock pasted beside it. Time is drawn as angle and area, and every number on screen has a shape that says the same thing faster.\n\nColour is semantic before it is decorative. Seven category colours carry meaning on every surface. One signal colour means *now*. One lume colour means *finished*. Free time keeps the bare neutral of the bezel. The palette is calm on purpose. Its users experience time blindness and anxiety around transitions, so nothing is red, nothing flashes, and nothing loops except one slow breathing halo around the block you are in. Delight is spent on real progress: a block draws itself onto the bezel, a finished block glows with lume, and a capsule fills like a glass.\n\nThe world ships as ten whole-app themes (four light, six dark, including true black). Each theme pairs with one of nine dial finishes. The planner, the desktop widget and the dial always agree.",
+    "keyCharacteristics": [
+      "A 1000-unit SVG dial with fixed radii: bezel band, minute track, numeral ring and face, all drawn in the finish's colours.",
+      "Seven-colour categorical palette, with a light value and a lifted dark value per category, chosen by the dial finish.",
+      "Cool tonal desk (ground, surface, raised, sunken). Elevation is mostly tone, plus three soft shadows.",
+      "Lexend Variable throughout. Weight 300 for dial lettering, 500 as the ceiling for chrome. Tabular numerals for every time.",
+      "Pills and circles for controls, gently rounded rectangles for containers, annular sectors for time.",
+      "Springs for arc geometry, ease-out tokens for chrome. Continuous motion is compositor-only and stops under Calm."
+    ],
+    "rules": [
+      {
+        "name": "The Category Is the Meaning Rule",
+        "body": "A block's colour is its category, on every surface: dial insert, rail capsule, quick-add icon tint, chip dot, category picker, the inspector's 4px accent stripe and the breathing aura. Never colour a block by status, priority or source.",
+        "section": "colors"
+      },
+      {
+        "name": "The Signal Means Now Rule",
+        "body": "Signal marks the present moment and the place you are acting on right now. It is never decoration, never a category, and never a button fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The Lume Means Done Rule",
+        "body": "Lume is the reward colour. It is spent only on finished time, plus the watch-native luminous indices on dark dials.",
+        "section": "colors"
+      },
+      {
+        "name": "The Free Time Is Bare Rule",
+        "body": "Unplanned time is never painted. On the dial it is bare bezel, showing faint graduation dots (track colour at 45%). In the rail it is a dotted Firm Hairline with Pencil Grey \"45m free\" text. In the time-timer face it is a wedge of track mixed into the face, tipped with a 4° edge in the next block's colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Time Rule",
+        "body": "Every time, duration, count and countdown uses tabular numerals: the `.tnum` utility or `font-variant-numeric: tabular-nums`. Digits never shift width as time passes, and changing digits roll like an odometer rather than reflow.",
+        "section": "typography"
+      },
+      {
+        "name": "The Thin Dial Rule",
+        "body": "Dial lettering is weight 300. Chrome is 400 to 500. Weight 600 is reserved for tiny 10.5–12px pill labels (the now-time pill and the toast action), where thin strokes would break up. There are no uppercase eyebrows or kickers. Hierarchy comes from size, weight and the ink ramp.",
+        "section": "typography"
+      },
+      {
+        "name": "The Dial First Rule",
+        "body": "Nothing covers the dial. The inspector panel slides in beside it as a non-modal inspector (fixed 64px from the top, 12px from the right), so the dial stays live. Toasts rise from the foot of the rail, 16px from the corner. Editing never dims the screen behind a scrim.",
+        "section": "layout"
+      },
+      {
+        "name": "The Tonal Desk Rule",
+        "body": "Reach for a tone step (sunken hover, raised selection) before a shadow. A shadow means the thing is held above the desk: selected, dragged, or a transient overlay.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Glow Is Not Elevation Rule",
+        "body": "Lume glow marks finished time, and nothing else may glow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Lanes Only Where It Overlaps Rule",
+        "body": "The bezel splits into lanes only inside a cluster of blocks that actually overlap. Lanes are up to 3, with 5-unit gaps, outermost first. Every block outside a cluster keeps the full 86-unit band. Above two lanes, titles drop and icons carry the label.",
+        "section": "components"
+      },
+      {
+        "name": "The Whole Word Rule",
+        "body": "Arc titles are fitted word by word into the room left after the icon. If fewer than three characters fit, no title is drawn and the icon stands alone. Never truncate with an ellipsis on the dial: a stub like \"Lun…\" reads worse than the icon.",
+        "section": "components"
+      },
+      {
+        "name": "The Upright Label Rule",
+        "body": "Text reads clockwise from the start when it lands on the top half. When both the start and end of the words fall between 90° and 270°, the text runs counter-clockwise from the end, so it is never upside down. Its baseline moves from just inside the mid-radius (−0.36 em) to just outside (+0.36 em).",
+        "section": "components"
+      },
+      {
+        "name": "The Hand Never Covers a Number Rule",
+        "body": "The thick part of the now-hand stays between the numerals and the bezel. Only a hairline crosses the inserts, so no numeral or label is ever hidden by the present.",
+        "section": "components"
+      },
+      {
+        "name": "The Never-Red Rule",
+        "body": "A missed block fades toward the bezel and gets a dashed outline, and is offered a slide into the next free gap. Red is reserved for destructive actions and system errors, never for the user's time. There is no streak, no warning colour and no shaming state.",
+        "section": "components"
+      },
+      {
+        "name": "The Compositor-Only Loop Rule",
+        "body": "Anything that moves without the user touching it animates only `opacity` or `transform` on an HTML layer. That covers the aura, the seconds bead, the liquid level, the waves and the now-ping. Never loop an animation on SVG geometry, a mask or a gradient. SVG may animate only in one-shots that end: the bloom, the charge, the day sweep and the wedge's path transition.",
+        "section": "motion"
+      },
+      {
+        "name": "The One Loop Rule",
+        "body": "The breathing aura is the only always-on loop. Everything else either steps with the clock (the hand once a minute, the bead once a second, the liquid once a minute) or plays once. The liquid wave sloshes once per minute, then rests.",
+        "section": "motion"
+      },
+      {
+        "name": "The Calm Switch Rule",
+        "body": "`prefers-reduced-motion`, or the in-app Motion setting set to Calm, sets `data-motion=\"calm\"`. That turns every loop off. The aura holds still at 35%, and the waves, pings, seconds bead, sparks and pour are removed. Springs jump to their targets, Svelte transitions get zero duration, view transitions are skipped, and `--dur-2` and `--dur-3` collapse to 1ms and 120ms.",
+        "section": "motion"
+      }
+    ],
+    "dos": [
+      "**Do** paint every block in its category colour on every surface. Pick the light or lifted dark value from the dial finish's darkness (`categoryColor(id, finish.dark)`).",
+      "**Do** keep signal for now: the hand, the now-line, today's date, the caret and the drop target.",
+      "**Do** keep lume for finished time, and for luminous hour indices on dark dials.",
+      "**Do** leave free time bare: bezel graduation dots on the dial, a dotted Firm Hairline with \"Nm free\" in the rail.",
+      "**Do** give every block an icon and a label as well as a colour. Colour is never the only signal.",
+      "**Do** set every time, duration and count in tabular numerals.",
+      "**Do** draw dial geometry from the fixed radii in `geometry.ts` (bezel 468→382, track 366→340, numerals 298). Do not invent new rings.",
+      "**Do** animate arc geometry with springs (0.14 / 0.72) and chrome with the `--ease-*` and `--dur-*` tokens.",
+      "**Do** pair every new theme with a dial finish in the single `THEMES` table, so the planner, the widget and the dial agree.",
+      "**Do** gate every loop and every spatial transition behind `prefers-reduced-motion` and the Calm setting."
+    ],
+    "donts": [
+      "**Don't** paint missed or overdue time red, or add any warning state. Missed blocks fade and dash.",
+      "**Don't** truncate a dial label with an ellipsis. Show whole words or the icon alone.",
+      "**Don't** let the now-hand's thick stroke cross the numerals or the bezel inserts. Only the hairline crosses.",
+      "**Don't** split the bezel into lanes for blocks that do not overlap, and don't exceed three lanes.",
+      "**Don't** loop an animation on SVG paths, masks or gradients. Don't add a second always-on loop beyond the breathing aura.",
+      "**Don't** use signal as a button, link or emphasis colour. The primary action is ink.",
+      "**Don't** cover the dial: no modal scrims for editing, and no toasts over the dial or its controls.",
+      "**Don't** use uppercase eyebrows or kickers. Section headings are 13px weight 500 Pencil Grey in sentence case.",
+      "**Don't** add hard or coloured shadows. Use the three soft ink shadows. Glow belongs to lume only."
+    ]
+  }
+}

@@ -1,0 +1,261 @@
+<script lang="ts">
+  import { adjust, createFromRange, createNext, removeBlock, toggleDone } from '../lib/actions';
+  import Dial from '../lib/dial/Dial.svelte';
+  import Readout from '../lib/dial/Readout.svelte';
+  import { cubicOut } from 'svelte/easing';
+  import { blockKey } from '../lib/engine/blocks';
+  import { mix } from '../lib/engine/categories';
+  import { MINUTE } from '../lib/engine/time';
+  import { formatTime, isoOf, minutesOfDay } from '../lib/engine/time';
+  import { sounds } from '../lib/sound';
+  import { tasks } from '../lib/stores/tasks.svelte';
+  import { platform } from '../lib/platform';
+  import { PRESET_ORDER, type PresetId } from '../lib/presets';
+  import { clock } from '../lib/stores/clock.svelte';
+  import { settings } from '../lib/stores/settings.svelte';
+  import { timer } from '../lib/stores/timer.svelte';
+  import { view } from '../lib/stores/view.svelte';
+  import BlockSheet from '../components/BlockSheet.svelte';
+  import Coach from '../components/Coach.svelte';
+  import DayRail from '../components/DayRail.svelte';
+  import FocusMode from '../components/FocusMode.svelte';
+  import PresetBar from '../components/PresetBar.svelte';
+  import SettingsSheet from '../components/SettingsSheet.svelte';
+  import Sparks from '../components/Sparks.svelte';
+  import Toast from '../components/Toast.svelte';
+  import TopBar from '../components/TopBar.svelte';
+
+  const presetId = $derived(settings.value.preset);
+
+  // Changing day turns the dial a little in the direction of travel.
+  function turn(_node: Element, { dir }: { dir: 1 | -1 }) {
+    if (view.reducedMotion) return { duration: 0 };
+    return {
+      duration: 560,
+      easing: cubicOut,
+      css: (t: number, u: number) => `transform: rotate(${dir * u * 28}deg) scale(${0.94 + 0.06 * t}); opacity: ${t}`,
+    };
+  }
+  const timed = $derived(presetId === 'timer60' || presetId === 'chrono');
+  const ts = $derived(timer.active ? timer.status(clock.now) : null);
+
+  const dialBlocks = $derived(timed && timer.active ? [...view.timerBlocks] : view.pool);
+
+  const wedge = $derived.by(() => {
+    if (!timed) return null;
+    if (ts && !ts.finished) {
+      const seg = view.timerBlocks[ts.index];
+      return seg ? { key: seg.key, startMs: clock.now, endMs: clock.now + ts.remainingMs, color: seg.color } : null;
+    }
+    const c = view.now.current;
+    if (c && !c.done) return { key: c.key, startMs: c.startMs, endMs: c.endMs, color: c.color };
+    // Free: the wedge is the time until the next block (an hour at most), in its colour, softened.
+    const n = view.now.next;
+    if (n && n.startMs - clock.now <= 60 * MINUTE) return { key: null, startMs: clock.now, endMs: n.startMs, color: mix(view.finish.track, view.finish.face, 0.62), edgeColor: n.color };
+    return null;
+  });
+
+  const readoutTimer = $derived(
+    ts && !ts.finished && timer.active
+      ? {
+          label: ts.segment.label,
+          remainingMs: ts.remainingMs,
+          paused: ts.paused,
+          index: ts.index,
+          count: timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1),
+          kind: timer.active.kind,
+          segment: ts.segment.kind,
+        }
+      : null,
+  );
+
+  function onTimer(a: 'pause' | 'resume' | 'stop' | 'skip') {
+    if (a === 'pause') timer.pause();
+    else if (a === 'resume') timer.resume();
+    else if (a === 'skip') timer.skip();
+    else timer.stop();
+  }
+
+  function onSelect(key: string | null) {
+    view.selected = key;
+    if (key && !key.startsWith('timer:')) view.sheet = { kind: 'edit', key };
+    else if (!key && view.sheet?.kind === 'edit') view.sheet = null;
+  }
+
+  function onCreate(r: { startMs: number; endMs: number }) {
+    if (timed) return;
+    createFromRange(r.startMs, r.endMs);
+    if (!settings.value.onboarded) settings.value.onboarded = true;
+  }
+
+  function onAdjust(key: string, r: { startMs: number; endMs: number }) {
+    adjust(key, r.startMs, r.endMs);
+  }
+
+  function onDropTask(id: string, startMs: number) {
+    const date = isoOf(startMs);
+    tasks.schedule(id, date, Math.round(minutesOfDay(startMs)));
+    view.selected = blockKey(id, date);
+    sounds.done();
+    view.say(`Scheduled for ${formatTime(startMs, view.hour12)}`);
+  }
+
+  function typing(e: KeyboardEvent) {
+    const el = e.target as HTMLElement;
+    return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+  }
+
+  function onKey(e: KeyboardEvent) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Escape') {
+      if (view.focus) view.focus = false;
+      else if (view.sheet) view.sheet = null;
+      else view.selected = null;
+      return;
+    }
+    if (typing(e)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'n') {
+      e.preventDefault();
+      createNext();
+    } else if (k === 't') view.goToday();
+    else if (e.key === 'ArrowLeft') view.shiftDay(-1);
+    else if (e.key === 'ArrowRight') view.shiftDay(1);
+    else if (k === 'f') view.focus = !view.focus;
+    else if (k === 'w') toggleWidget();
+    else if (k === ',') view.sheet = { kind: 'settings' };
+    else if (['1', '2', '3', '4'].includes(k)) settings.value.preset = PRESET_ORDER[Number(k) - 1] as PresetId;
+    else if (k === ' ' && view.selected) {
+      e.preventDefault();
+      toggleDone(view.selected);
+    } else if ((e.key === 'Backspace' || e.key === 'Delete') && view.selected) removeBlock(view.selected);
+  }
+
+  async function toggleWidget() {
+    const vis = await platform.showWidget(!settings.value.widget.visible);
+    settings.value.widget.visible = vis;
+  }
+
+  // Tray menu → app.
+  $effect(() =>
+    platform.onTray((a) => {
+      if (a === 'new-block') createNext(view.today);
+      else if (a === 'focus-now') view.focus = true;
+      else if (a === 'open-settings') view.sheet = { kind: 'settings' };
+    }),
+  );
+
+  const mac = platform.isNative && platform.os === 'mac';
+  const sleep = $derived({ wake: settings.value.wake, sleep: settings.value.sleep });
+</script>
+
+<svelte:window onkeydown={onKey} />
+
+<div class="shell" class:mac class:sheet-open={!!view.sheet}>
+  <TopBar {mac} ontogglewidget={toggleWidget} />
+
+  <main class="stage">
+    <section class="dial-col" aria-label="Dial">
+      <div class="dial-box">
+        {#key view.date}
+        <div class="turn" in:turn={{ dir: view.dayDir }}>
+        <Dial
+          {presetId}
+          finish={view.finish}
+          blocks={dialBlocks}
+          now={clock.now}
+          date={view.date}
+          isToday={view.isToday}
+          selectedKey={view.selected}
+          headsUpKey={view.headsUpKey}
+          showSeconds={settings.value.showSeconds}
+          reduced={view.reducedMotion}
+          {sleep}
+          {wedge}
+          hideKey={wedge?.key ?? null}
+          dayCompleteAt={view.dayCompleteAt}
+          interactive={!timed || !timer.active}
+          hour12={view.hour12}
+          onselect={onSelect}
+          oncreate={onCreate}
+          onadjust={onAdjust}
+          ondroptask={onDropTask}
+          breathing={view.breathing}
+        >
+          <Readout
+            state={view.now}
+            now={clock.now}
+            date={view.date}
+            isToday={view.isToday || timed}
+            hour12={view.hour12}
+            tally={view.tally}
+            timer={timed ? readoutTimer : null}
+            reduced={view.reducedMotion}
+            ontimer={onTimer}
+            breath={view.breathing ? clock.now - view.breatheAt : null}
+            onbreathe={(on) => (view.breatheAt = on ? clock.now : 0)}
+          />
+        </Dial>
+        </div>
+        {/key}
+      </div>
+      <PresetBar />
+    </section>
+
+    <DayRail />
+  </main>
+
+  <BlockSheet />
+  <SettingsSheet />
+  <Sparks />
+  <Toast />
+  {#if view.focus}
+    <FocusMode />
+  {/if}
+  {#if !settings.value.onboarded}
+    <Coach />
+  {/if}
+</div>
+
+<style>
+  .shell {
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    background: var(--ground);
+    overflow: hidden;
+  }
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 31vw, 420px);
+    min-height: 0;
+  }
+  .dial-col {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    justify-items: center;
+    align-items: center;
+    gap: var(--s-4);
+    padding: var(--s-4) var(--s-6) var(--s-5);
+    min-height: 0;
+    min-width: 0;
+  }
+  .dial-box {
+    width: min(100%, calc(100vh - 230px), 660px);
+    min-width: 240px;
+  }
+
+  @media (max-width: 860px) {
+    .stage {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      overflow-y: auto;
+    }
+    .dial-col {
+      padding: var(--s-3) var(--s-4) var(--s-4);
+    }
+    .dial-box {
+      width: min(100%, 54vh, 520px);
+    }
+  }
+</style>
