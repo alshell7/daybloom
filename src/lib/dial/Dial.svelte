@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { fade, scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
+  import HoverCard from './HoverCard.svelte';
+  import RemainRing from './RemainRing.svelte';
   import { assignLanes } from '../engine/blocks';
   import { mix } from '../engine/categories';
   import { atMinutes, addDays, formatDuration, formatTime, isoOf, MINUTE } from '../engine/time';
@@ -142,6 +145,21 @@
       };
     }),
   );
+
+  // The time-eating ring: the block you're in (or the free time before the next one),
+  // drawn in the face as a whole circle that shrinks. Hour / Cycles have their own wedge.
+  const remain = $derived.by(() => {
+    if (!isToday || fineDial || !blocks.length) return null;
+    const live = blocks
+      .filter((b) => !b.floating && !b.done && b.startMs <= now && b.endMs > now)
+      .sort((a, b) => a.endMs - b.endMs)[0];
+    if (live) return { id: live.key, start: live.startMs, end: live.endMs, color: live.color, free: false };
+    const next = blocks.filter((b) => !b.floating && !b.done && b.startMs > now).sort((a, b) => a.startMs - b.startMs)[0];
+    if (!next || next.startMs - now > 3 * 60 * MINUTE) return null;
+    const prevEnd = Math.max(...blocks.filter((b) => !b.floating && b.endMs <= now).map((b) => b.endMs), next.startMs - 3 * 60 * MINUTE, now - 6 * 60 * MINUTE);
+    return { id: `free:${next.key}`, start: Math.min(prevEnd, now), end: next.startMs, color: finish.track, free: true };
+  });
+  const ringR = $derived(compact ? { rIn: 196, rOut: 232 } : { rIn: 222, rOut: 262 });
 
   // Only the first paint staggers; arcs added later draw on immediately.
   let booting = $state(true);
@@ -375,12 +393,21 @@
 
   // Hovering an arc shows its name and times in a small chip just outside the rim.
   let hovered = $state<Block | null>(null);
+  // The card opens inward from the rim, so it always stays inside the dial's box.
   const tip = $derived.by(() => {
-    if (!hovered || drag || compact) return null;
+    if (!hovered || drag) return null;
     const a = arcs.find((x) => x.block.key === hovered!.key);
     if (!a) return null;
-    const [x, y] = polar(R.case + 26, (a.a0 + a.a1) / 2);
-    return { x: x / 10, y: y / 10, block: a.block };
+    const [x, y] = polar(R.bezelOut + 10, (a.a0 + a.a1) / 2);
+    const px = x / 10;
+    const py = y / 10;
+    return {
+      x: px,
+      y: py,
+      tx: px < 42 ? '0%' : px > 58 ? '-100%' : '-50%',
+      ty: py < 42 ? '0%' : py > 58 ? '-100%' : '-50%',
+      block: a.block,
+    };
   });
 
   // The block under the hand breathes: a soft halo just outside the rim, in its colour.
@@ -507,6 +534,10 @@
     {/each}
 
 
+    {#if remain}
+      <RemainRing {...remain} {now} {finish} rIn={ringR.rIn} rOut={ringR.rOut} {reduced} />
+    {/if}
+
     <!-- blocks -->
     {#each arcs as a, i (a.block.key)}
       <DialArc
@@ -594,18 +625,35 @@
     <div class="breath" style:background={finish.ink} aria-hidden="true"></div>
   {/if}
 
-  {#if tip}
+  {#if tip && !compact}
     {#key tip.block.key}
-      <div class="tip" style:left={`${tip.x}%`} style:top={`${tip.y}%`} style:--c={tip.block.color} in:fade={{ duration: reduced ? 0 : 140 }}>
-        <i></i>
-        <strong>{tip.block.title || 'Untitled'}</strong>
-        <span class="tnum">{formatTime(tip.block.startMs, hour12)}–{formatTime(tip.block.endMs, hour12)}</span>
+      <div
+        class="tip"
+        style:left={`${tip.x}%`}
+        style:top={`${tip.y}%`}
+        style:--tx={tip.tx}
+        style:--ty={tip.ty}
+        in:scale={{ start: 0.94, duration: reduced ? 0 : 160, easing: cubicOut }}
+        out:fade={{ duration: reduced ? 0 : 90 }}
+      >
+        <HoverCard block={tip.block} {now} {hour12} />
       </div>
     {/key}
   {/if}
 
   {#if children}
-    <div class="readout">{@render children()}</div>
+    <!-- On the small widget, hovering an arc swaps the face to that block's details. -->
+    <div class="readout">
+      {#if tip && compact}
+        {#key tip.block.key}
+          <div class="face-swap" in:fade={{ duration: reduced ? 0 : 140 }}>
+            <HoverCard block={tip.block} {now} {hour12} compact />
+          </div>
+        {/key}
+      {:else}
+        {@render children()}
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -766,30 +814,13 @@
   .tip {
     position: absolute;
     z-index: 3;
-    transform: translate(-50%, -50%);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    border-radius: 999px;
-    background: var(--raised, #fff);
-    color: var(--ink);
-    box-shadow: var(--shadow-2);
-    font-size: 12px;
-    white-space: nowrap;
+    translate: var(--tx) var(--ty);
     pointer-events: none;
   }
-  .tip i {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--c);
-  }
-  .tip strong {
-    font-weight: 500;
-  }
-  .tip span {
-    color: var(--ink-3, currentColor);
+  .face-swap {
+    display: grid;
+    place-items: center;
+    max-width: 100%;
   }
   .readout {
     position: absolute;

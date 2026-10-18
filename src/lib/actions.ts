@@ -6,6 +6,10 @@ import { sounds } from './sound';
 import { settings } from './stores/settings.svelte';
 import { tasks } from './stores/tasks.svelte';
 import { view } from './stores/view.svelte';
+import { unlockNew } from './stores/progress.svelte';
+import { streakFile } from './stores/streaks.svelte';
+import { milestoneFor, milestoneLine, rhythm } from './streaks';
+import { taskFile } from './stores/tasks.svelte';
 import { clock } from './stores/clock.svelte';
 
 // Keyword → icon/category. Typing "lunch" turns the block into a green fork-and-knife.
@@ -124,7 +128,7 @@ export function toggleDone(key: string, origin?: { x: number; y: number }) {
   let spent = 0;
   if (b && !b.floating) spent = clock.now >= b.endMs ? b.endMs - b.startMs : clock.now > b.startMs ? clock.now - b.startMs : 0;
   if (origin) view.spark(origin.x, origin.y, color, false, spent >= MINUTE ? `+${formatDuration(spent)}` : 'Done');
-  // Did that finish the day?
+  // Did that finish the day? Then: any new badge (shown after, so the toasts don't collide).
   queueMicrotask(() => {
     const own = [...view.dayBlocks, ...view.floating].filter((b) => b.kind === 'task' && b.date === p.date);
     const allDone = own.length > 1 && own.every((b) => b.done);
@@ -132,7 +136,11 @@ export function toggleDone(key: string, origin?: { x: number; y: number }) {
       sounds.dayComplete();
       view.dayCompleteAt = Date.now();
       view.say('Every block today is done. Finished time glows.');
-    } else sounds.done();
+      setTimeout(celebrateBadges, 2600);
+    } else {
+      sounds.done();
+      celebrateBadges();
+    }
   });
 }
 
@@ -224,4 +232,65 @@ export function scheduleSoon(taskId: string) {
   tasks.schedule(t.id, date, start);
   view.date = date;
   view.selected = blockKey(t.id, date);
+}
+
+/** Records and celebrates any newly earned badge — one toast, never a pile. */
+export function celebrateBadges() {
+  // Rhythm milestones first (3, 7, 14, 30…), once per run.
+  const r = rhythm(taskFile.value.tasks, clock.now);
+  if (r.current < streakFile.value.celebrated) streakFile.value.celebrated = 0;
+  const m = r.countedToday ? milestoneFor(r.current) : null;
+  if (m && m > streakFile.value.celebrated) {
+    streakFile.value.celebrated = m;
+    sounds.dayComplete();
+    view.spark(innerWidth / 2, innerHeight / 2, getComputedStyle(document.documentElement).getPropertyValue('--lume').trim() || '#2fae7b', true, `${m} days`);
+    view.say(milestoneLine(m), { label: 'See your week', run: () => (view.sheet = { kind: 'insights' }) }, 7000);
+    return;
+  }
+  const earned = unlockNew();
+  if (!earned.length) return;
+  const first = earned[0];
+  view.say(earned.length === 1 ? `New badge · ${first.title} — ${first.description}` : `New badges · ${first.title} and ${earned.length - 1} more`, {
+    label: 'See',
+    run: () => (view.sheet = { kind: 'insights' }),
+  }, 6500);
+  view.spark(innerWidth - 60, 28, CATEGORY_BY_ID.care.light, true, '★');
+}
+
+// ---------------------------------------------------------------------------
+// Check-ins: answering "did you finish?" for a block that has ended.
+
+/** "Not done, and that's ok" — the nudges for this occurrence stop. */
+export function acknowledge(key: string) {
+  const p = parseBlockKey(key);
+  const t = p && tasks.get(p.taskId);
+  if (!p || !t) return;
+  t.acks = [...(t.acks ?? []).filter((d) => d !== p.date), p.date];
+  t.updatedAt = Date.now();
+}
+
+/** Still going: give the block more time (it stays "now"). */
+export function extendBlock(key: string, minutes = 15) {
+  const p = parseBlockKey(key);
+  const b = view.blockByKey(key);
+  if (!p || !b) return;
+  const end = Math.max(b.endMs, Math.ceil(clock.now / (5 * MINUTE)) * 5 * MINUTE) + minutes * MINUTE;
+  adjust(key, b.startMs, end);
+  view.say(`${minutes} more minutes for “${b.title}”.`);
+}
+
+/** Park an unfinished occurrence in the backlog (Next), keeping its length. */
+export function toBacklog(key: string) {
+  const p = parseBlockKey(key);
+  const t = p && tasks.get(p.taskId);
+  const b = view.blockByKey(key);
+  if (!p || !t) return;
+  const duration = b ? Math.round((b.endMs - b.startMs) / MINUTE) : t.duration;
+  if (t.recurrence) {
+    tasks.removeOccurrence(t.id, p.date);
+    tasks.create({ title: t.title, icon: t.icon, category: t.category, notes: t.notes, date: null, start: null, duration, list: 'next' });
+  } else {
+    tasks.update(t.id, { date: null, start: null, duration, list: 'next', completions: [], completedAt: {} });
+  }
+  view.say(`“${t.title}” is waiting in your backlog.`);
 }

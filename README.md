@@ -69,6 +69,39 @@ the UI at another time of day.
 Windows builds need the WebView2 runtime (bundled installer handles it) and are built on Windows
 (`npm run tauri build`). Linux works too but is untested.
 
+## Releases & auto-update
+
+```bash
+npm run release          # 0.1.0 → 0.1.1 (or: npm run release minor | major | 1.2.3)
+```
+
+That bumps the version in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml`, commits,
+tags `vX.Y.Z` and pushes. The tag starts `.github/workflows/release.yml`, which:
+
+1. builds **macOS (universal: Apple silicon + Intel)** and **Windows (NSIS + MSI)** installers,
+   signing every update artifact with the updater key;
+2. publishes them as a release in this private repo (`alshell7/daybloom`);
+3. mirrors the installers, their `.sig` files and `latest.json` (rewritten to public URLs) to the
+   **public feed repo** [`alshell7/daybloom-releases`](https://github.com/alshell7/daybloom-releases),
+   whose README always links the newest installers. Source never leaves the private repo.
+
+Installed apps check `https://raw.githubusercontent.com/alshell7/daybloom-releases/main/latest.json`
+shortly after launch and every 6 hours. A new version shows a quiet **Update** chip in the top bar;
+one tap downloads (the chip fills), verifies the signature against the public key baked into
+`tauri.conf.json`, installs and restarts. Settings → Updates has *Check now* and an auto-check switch.
+
+| Secret (private repo) | What it is | Where the original lives |
+|---|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | minisign key that signs updates | `~/.tauri/daybloom.key` |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password | `~/.tauri/daybloom.key.password` |
+| `RELEASES_DEPLOY_KEY` | SSH deploy key with write access to the feed repo only | `~/.tauri/daybloom-releases-deploy` |
+| `VITE_GOOGLE_CLIENT_ID` / `_SECRET` (optional) | Google OAuth desktop client baked into builds | — |
+
+Back up `~/.tauri/daybloom.key` and its password somewhere safe: if they are lost, installed copies
+can no longer be updated (a new key means a manual reinstall). The installers are not yet
+Apple-notarised or Windows code-signed, so first installs show a Gatekeeper / SmartScreen prompt
+(see the feed README); updates after that are silent.
+
 ## Layout
 
 ```

@@ -3,6 +3,7 @@ import { addDays, DAY, HOUR, startOfDayMs, todayISO } from '../engine/time';
 import type { Block, CalendarEvent, ISODate, Minutes, Task } from '../engine/types';
 import { PRESETS, resolveFinish, type PresetId } from '../presets';
 import { THEME_BY_ID } from '../themes';
+import { openItems } from '../backlog';
 import { clock } from './clock.svelte';
 import { settings } from './settings.svelte';
 import { taskFile } from './tasks.svelte';
@@ -12,7 +13,10 @@ export type Sheet =
   | null
   | { kind: 'edit'; key: string }
   | { kind: 'new'; date: ISODate | null; start: Minutes | null; duration: Minutes }
-  | { kind: 'settings'; section?: string };
+  | { kind: 'settings'; section?: string }
+  | { kind: 'insights' }
+  | { kind: 'backlog' }
+  | { kind: 'winddown' };
 
 export interface Spark {
   id: number;
@@ -104,7 +108,7 @@ class View {
     return floatingBlocks(taskFile.value.tasks, this.events, this.date, this.finish.dark);
   });
 
-  later = $derived(taskFile.value.tasks.filter((t) => t.date === null));
+  later = $derived(openItems(taskFile.value.tasks));
 
   /** Today's blocks for now/next — independent of which day is being browsed. */
   todayBlocks = $derived.by(() => {

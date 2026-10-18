@@ -4,7 +4,7 @@
   import { view } from '../lib/stores/view.svelte';
 </script>
 
-<div class="dock" aria-live="polite">
+<div class="dock" class:beside={!!view.sheet} class:wide={view.sheet?.kind === 'backlog' || view.sheet?.kind === 'insights'} aria-live="polite">
   {#if view.toast}
     {#key view.toast.id}
       <div class="toast" in:fly={{ y: 16, duration: view.reducedMotion ? 0 : 280, easing: cubicOut }} out:fly={{ y: 8, duration: 160 }}>
@@ -35,8 +35,18 @@
     pointer-events: none;
     z-index: 70;
   }
+  /* with an inspector open, the toast sits beside it instead of over its footer */
+  .dock.beside {
+    right: 428px;
+  }
+  .dock.beside.wide {
+    right: 568px;
+  }
   @media (max-width: 860px) {
-    .dock {
+    .dock,
+    .dock.beside,
+    .dock.beside.wide {
+      right: 16px;
       left: 16px;
       width: auto;
       justify-items: center;

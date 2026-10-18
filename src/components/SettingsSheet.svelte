@@ -176,6 +176,34 @@
     </section>
 
     <section>
+      <h3>Gentle support</h3>
+      <label class="row">
+        <span>Ask “did you finish?” when a block ends</span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.nudges.checkIn} />
+      </label>
+      <label class="row">
+        <span>Speak up when a block runs into the next</span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.nudges.overrun} />
+      </label>
+      <label class="row">
+        <span>Suggest backlog items that fit free time</span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.nudges.gapIdeas} />
+      </label>
+      <div class="row">
+        <span>Time anchors</span>
+        <Segmented label="Time anchors" value={s.nudges.anchors} options={[{ value: 'off', label: 'Off' }, { value: 'hourly', label: 'Hourly' }, { value: 'half', label: 'Every 30m' }]} onchange={(v) => (settings.value.nudges.anchors = v)} />
+      </div>
+      <div class="row">
+        <span>Offer a wind-down at</span>
+        <span class="pair">
+          <input type="time" class="field tnum" value={s.nudges.windDown < 0 ? '' : minutesToStr(s.nudges.windDown)} disabled={s.nudges.windDown < 0} onchange={(e) => (settings.value.nudges.windDown = strToMinutes(e.currentTarget.value))} aria-label="Wind-down time" />
+          <input type="checkbox" class="switch" checked={s.nudges.windDown >= 0} onchange={(e) => (settings.value.nudges.windDown = e.currentTarget.checked ? Math.max(0, settings.value.sleep - 60) : -1)} aria-label="Wind-down on" />
+        </span>
+      </div>
+      <p class="hint">Anchors are a soft tick and a line of context, so hours don't quietly vanish. Nothing here ever turns red.</p>
+    </section>
+
+    <section>
       <h3>Comfort</h3>
       <div class="row">
         <span>Motion</span>

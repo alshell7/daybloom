@@ -74,6 +74,13 @@
   const subsDone = $derived(subs.filter((s) => s.done).length);
   const selected = $derived(view.selected === block.key);
   const fg = $derived(onColor(block.color));
+  const acked = $derived(!!task?.acks?.includes(block.date));
+  // Revealed on hover: the next step, else the first line of the notes.
+  const peek = $derived.by(() => {
+    const next = subs.find((s) => !s.done)?.title;
+    if (next && !block.done) return `Next: ${next}`;
+    return (task?.notes ?? '').split('\n').find((l) => l.trim())?.trim() ?? '';
+  });
 
   // The pour plays only at the moment a block is finished, from wherever the liquid was.
   let pouring = $state(false);
@@ -171,6 +178,12 @@
       {#if block.recurring}<span class="glyph" title="Repeats"><Icon name="repeat" size={12} /></span>{/if}
       {#if block.kind === 'event'}<span class="glyph" title="From your calendar"><Icon name="calendar" size={12} /></span>{/if}
     </span>
+    {#if missed && !acked}
+      <span class="waiting">check in?</span>
+    {/if}
+    {#if peek}
+      <span class="peek">{peek}</span>
+    {/if}
     {#if subs.length}
       <span class="subs tnum">
         <span class="subbar" style:--s={subsDone / subs.length}></span>
@@ -460,6 +473,35 @@
   .glyph {
     display: inline-grid;
     margin-left: 2px;
+  }
+  .waiting {
+    justify-self: start;
+    margin-top: 2px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: var(--t-xs);
+    background: color-mix(in srgb, var(--warm) 20%, transparent);
+    color: var(--ink);
+  }
+  /* the peek line appears on hover/selection */
+  .peek {
+    display: none;
+    font-size: var(--t-xs);
+    color: var(--ink-2);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .row:hover .peek,
+  .row.selected .peek {
+    display: block;
+    animation: peek-in var(--dur-2) var(--ease-out);
+  }
+  @keyframes peek-in {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
   }
   .subs {
     display: flex;

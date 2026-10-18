@@ -33,6 +33,13 @@ function normalize(t: Partial<Task>): Task {
     alerts: t.alerts ?? [],
     createdAt: t.createdAt ?? now,
     updatedAt: t.updatedAt ?? now,
+    list: t.list ?? 'inbox',
+    priority: t.priority ?? null,
+    due: t.due ?? null,
+    energy: t.energy ?? null,
+    order: t.order ?? now,
+    doneAt: t.doneAt ?? null,
+    acks: t.acks ?? [],
   };
 }
 

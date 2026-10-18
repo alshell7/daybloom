@@ -7,6 +7,7 @@
   import { settings } from './lib/stores/settings.svelte';
   import { seedSampleDay, taskFile } from './lib/stores/tasks.svelte';
   import { timerFile } from './lib/stores/timer.svelte';
+  import { progressFile } from './lib/stores/progress.svelte';
   import { view } from './lib/stores/view.svelte';
   import { themeCss } from './lib/themes';
   import { startUpdateChecks } from './lib/updater.svelte';
@@ -40,7 +41,7 @@
     let stopWidgetSync: (() => void) | undefined;
     let stopUpdates: (() => void) | undefined;
     (async () => {
-      await Promise.all([settings.load(), taskFile.load(), timerFile.load()]);
+      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load()]);
       if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0) {
         seedSampleDay(clock.now);
       }

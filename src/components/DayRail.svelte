@@ -1,19 +1,21 @@
 <script lang="ts">
   import { flip } from 'svelte/animate';
-  import { fly, slide } from 'svelte/transition';
+  import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { createNext, scheduleSoon, suggest, toggleDone } from '../lib/actions';
+  import { createNext, toggleDone } from '../lib/actions';
   import { blockKey } from '../lib/engine/blocks';
   import { formatDuration, formatTime, minutesOfDay, MINUTE, startOfDayMs } from '../lib/engine/time';
   import type { Block } from '../lib/engine/types';
   import Icon from '../lib/Icon.svelte';
   import { clock } from '../lib/stores/clock.svelte';
-  import { tasks } from '../lib/stores/tasks.svelte';
+  import { taskFile, tasks } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
-  import { categoryColor } from '../lib/engine/categories';
   import RailBlock from './RailBlock.svelte';
   import Rolling from '../lib/dial/Rolling.svelte';
   import QuickAdd from './QuickAdd.svelte';
+  import RhythmChip from './RhythmChip.svelte';
+  import Capture from './backlog/Capture.svelte';
+  import { dueNow } from '../lib/backlog';
 
   type Row =
     | { kind: 'block'; key: string; block: Block }
@@ -54,17 +56,7 @@
   );
   const ratio = $derived(view.tally.total ? view.tally.done / view.tally.total : 0);
 
-  let laterOpen = $state(true);
-  let laterText = $state('');
-
-  function addLater(e: SubmitEvent) {
-    e.preventDefault();
-    const title = laterText.trim();
-    if (!title) return;
-    const s = suggest(title);
-    tasks.create({ title, date: null, start: null, duration: 30, ...(s ?? {}) });
-    laterText = '';
-  }
+  const due = $derived(dueNow(taskFile.value.tasks, view.today).length);
 
   function anytimeToggle(b: Block, e: MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -85,6 +77,7 @@
           {/if}
         </div>
         <span class="bar" aria-hidden="true"><i style:transform={`scaleX(${ratio})`}></i></span>
+        {#if view.isToday}<RhythmChip />{/if}
       </header>
     {/if}
 
@@ -160,43 +153,15 @@
       <kbd>N</kbd>
     </button>
 
-    <section class="later" aria-label="Later">
-      <button class="later-head" onclick={() => (laterOpen = !laterOpen)} aria-expanded={laterOpen}>
+    <section class="later" aria-label="Backlog">
+      <button class="later-head" onclick={() => (view.sheet = { kind: 'backlog' })}>
         <Icon name="inbox" size={16} />
-        <span>Later</span>
+        <span>Backlog</span>
         <span class="count tnum">{view.later.length || ''}</span>
-        <span class="chev" class:open={laterOpen}><Icon name="chevron-down" size={16} /></span>
+        {#if due}<span class="due tnum">{due} due</span>{/if}
+        <span class="open-link">Open <Icon name="chevron-right" size={14} /></span>
       </button>
-      {#if laterOpen}
-        <div transition:slide={{ duration: view.reducedMotion ? 0 : 220 }}>
-          <ul class="later-list">
-            {#each view.later as t (t.id)}
-              <li
-                class="later-item"
-                style:--c={categoryColor(t.category, view.finish.dark)}
-                animate:flip={{ duration: 260 }}
-                out:fly={{ x: -16, duration: 200 }}
-                draggable="true"
-                ondragstart={(e) => {
-                  e.dataTransfer?.setData('application/x-daybloom-task', t.id);
-                  e.dataTransfer?.setData(`application/x-daybloom-min-${t.duration}`, '');
-                  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
-                }}
-                title="Drag onto the dial to schedule"
-              >
-                <span class="later-icon"><Icon name={t.icon} size={14} /></span>
-                <button class="later-title" onclick={() => (view.sheet = { kind: 'edit', key: `later:${t.id}` })}>{t.title}</button>
-                <button class="btn btn-quiet schedule" onclick={() => scheduleSoon(t.id)} title="Put it in the next free gap today">
-                  Fit in today
-                </button>
-              </li>
-            {/each}
-          </ul>
-          <form class="later-add" onsubmit={addLater}>
-            <input class="field" placeholder="Something for later…" bind:value={laterText} aria-label="Add something for later" />
-          </form>
-        </div>
-      {/if}
+      <div class="capture-wrap"><Capture target="inbox" /></div>
     </section>
   </div>
 </aside>
@@ -552,72 +517,25 @@
     color: var(--ink-3);
     font-weight: 400;
   }
-  .chev {
-    margin-left: auto;
-    transition: transform var(--dur-2) var(--ease-out);
-    transform: rotate(-90deg);
-  }
-  .chev.open {
-    transform: rotate(0);
-  }
-  .later-list {
-    list-style: none;
-    margin: var(--s-1) 0 var(--s-2);
-    padding: 0;
-  }
-  .later-item {
-    display: flex;
-    align-items: center;
-    gap: var(--s-2);
-    min-height: 38px;
-    padding: 0 var(--s-1) 0 var(--s-2);
-    border-radius: var(--r-sm);
-  }
-  .later-item:hover {
-    background: var(--sunken);
-  }
-  .later-item[draggable='true'] {
-    cursor: grab;
-  }
-  .later-icon {
-    width: 24px;
-    height: 24px;
-    border-radius: 7px;
-    display: grid;
-    place-items: center;
-    background: color-mix(in srgb, var(--c) 18%, transparent);
-    color: color-mix(in srgb, var(--c) 75%, var(--ink));
-  }
-  .later-title {
-    flex: 1;
-    text-align: left;
-    font-size: var(--t-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .schedule {
-    height: 28px;
-    padding: 0 var(--s-3);
+  .due {
+    padding: 1px 7px;
+    border-radius: 999px;
     font-size: var(--t-xs);
-    opacity: 0;
+    font-weight: 500;
+    background: color-mix(in srgb, var(--warm) 20%, transparent);
+    color: var(--ink);
   }
-  .later-item:hover .schedule,
-  .schedule:focus-visible {
-    opacity: 1;
+  .open-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: auto;
+    font-weight: 400;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
   }
-  .later-add {
-    padding: 0 var(--s-1);
-  }
-  .later-add .field {
-    height: 34px;
-    font-size: var(--t-sm);
-    background: transparent;
-    border-style: dashed;
-  }
-  .later-add .field:focus {
-    background: var(--raised);
-    border-style: solid;
+  .capture-wrap {
+    margin-top: var(--s-2);
   }
 
   @media (max-width: 860px) {

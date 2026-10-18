@@ -8,6 +8,7 @@ import { clock } from './stores/clock.svelte';
 import { settings } from './stores/settings.svelte';
 import { timer } from './stores/timer.svelte';
 import { view } from './stores/view.svelte';
+import { nudges } from './nudges.svelte';
 
 export function startScheduler() {
   const fired = new Set<string>();
@@ -87,6 +88,56 @@ export function startScheduler() {
       } else lastTimerIndex = -1;
     });
 
+    // Check-ins and gentle escalation, once a minute. Each step fires once per block:
+    // at the end ("did you finish?"), +10 min (only if it's spilling into the next thing),
+    // and +30 min (a last soft reminder). Answering any card stops them all.
+    let minuteBooted = false;
+    $effect(() => {
+      const m = clock.minute;
+      const cfg = settings.value;
+      for (const b of nudges.checkIns) {
+        const late = Math.floor((m - b.endMs) / MINUTE);
+        const steps: [string, boolean, () => void][] = [
+          [`ci0:${b.key}`, late >= 0, () => {
+            sounds.headsUp();
+            if (cfg.notify) platform.notify(`Time's up · ${b.title || 'block'}`, 'Did you finish? Tick it, give it more time, or let it go.');
+          }],
+          [`ci1:${b.key}`, late >= 10 && cfg.nudges.overrun, () => {
+            const next = view.now.current;
+            if (cfg.notify) platform.notify(next ? `${next.title} started ${formatDuration(m - next.startMs)} ago` : `Still on ${b.title}?`, next ? `Wrap up “${b.title}” when you can.` : 'A quick check-in keeps the day honest.');
+          }],
+          [`ci2:${b.key}`, late >= 30, () => {
+            if (cfg.notify) platform.notify(`“${b.title}” is waiting for a check-in`, 'Done, later, or let it go — any answer is fine.');
+          }],
+        ];
+        for (const [id, due, fire] of steps) {
+          if (!due || fired.has(id)) continue;
+          fired.add(id);
+          // Launching late shouldn't replay a pile of old reminders.
+          if (minuteBooted && late < 45) fire();
+        }
+      }
+
+      // Time anchors: a soft tick and a line of context on the hour (or half hour).
+      const a = cfg.nudges.anchors;
+      const minOfHour = Math.round((m / MINUTE) % 60);
+      if (minuteBooted && a !== 'off' && (minOfHour === 0 || (a === 'half' && minOfHour === 30)) && !fired.has(`an:${m}`)) {
+        fired.add(`an:${m}`);
+        sounds.tick();
+        const s = view.now;
+        const line = s.current ? `${s.current.title} · ${formatDuration(s.remainingMs)} left` : s.next ? `Free · ${s.next.title} in ${formatDuration(s.remainingMs)}` : 'Free time';
+        view.say(`It's ${formatTime(m, view.hour12)} — ${line}`, undefined, 6000);
+        if (document.hidden && cfg.notify) platform.notify(`It's ${formatTime(m, view.hour12)}`, line);
+      }
+
+      // Evening: offer the wind-down once.
+      if (nudges.windDown && !fired.has(`wd:${view.today}`)) {
+        fired.add(`wd:${view.today}`);
+        if (minuteBooted && cfg.notify) platform.notify('Time to wind down', 'Close the day in a minute: what you did, what moves to tomorrow.');
+      }
+      minuteBooted = true;
+    });
+
     // Menu-bar / tray text, once a minute.
     $effect(() => {
       clock.minute;
@@ -104,6 +155,7 @@ export function startScheduler() {
         title = `${formatDuration(s.remainingMs)} → ${s.next.title}`;
         tip = `Free for ${formatDuration(s.remainingMs)}, then ${s.next.title}`;
       }
+      if (nudges.attention) tip = `${nudges.attention} to check in · ${tip}`;
       if (!settings.value.menuBarTimer) title = null;
       if (title && title.length > 28) title = `${title.slice(0, 26)}…`;
       const key = `${title}|${tip}`;

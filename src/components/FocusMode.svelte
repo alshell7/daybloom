@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade, fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { toggleDone } from '../lib/actions';
+  import { celebrateBadges, toggleDone } from '../lib/actions';
   import { parseBlockKey } from '../lib/engine/blocks';
   import Dial from '../lib/dial/Dial.svelte';
   import Readout from '../lib/dial/Readout.svelte';
@@ -90,6 +90,7 @@
                   onclick={() => {
                     tasks.toggleSubtask(task.id, s.id);
                     sounds.tick();
+                    celebrateBadges();
                   }}
                   aria-pressed={s.done}
                 >
@@ -106,6 +107,11 @@
               <Icon name="check" size={16} stroke={2.4} /> {cur.done ? 'Done' : 'Finished'}
             </button>
             <button class="btn btn-soft big" onclick={extend}>+5 min</button>
+            {#if !timer.active && !cur.done}
+              <button class="btn btn-quiet big" onclick={() => timer.startCountdown(2, `Just start: ${cur.title}`, cur.category, cur.icon)} title="Hard to begin? Two minutes of the first tiny step.">
+                <Icon name="timer" size={16} /> Just 2 minutes
+              </button>
+            {/if}
           {/if}
           {#if !timer.active}
             <button class="btn btn-quiet big" onclick={() => timer.startCycles(settings.value.cycles, cur.title)}>

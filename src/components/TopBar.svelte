@@ -32,12 +32,22 @@
   let weekEl: HTMLElement | undefined = $state();
   let puckX = $state(-1);
   let puckReady = $state(false);
+  function placePuck() {
+    const el = weekEl?.querySelector<HTMLElement>('.day-chip.selected');
+    puckX = el ? el.offsetLeft : -1;
+  }
   $effect(() => {
     view.date;
     days;
-    const el = weekEl?.querySelector<HTMLElement>('.day-chip.selected');
-    puckX = el ? el.offsetLeft : -1;
+    placePuck();
     requestAnimationFrame(() => (puckReady = true));
+  });
+  // Layout changes (window resize, fonts arriving) move the chips; keep the puck under them.
+  $effect(() => {
+    if (!weekEl) return;
+    const ro = new ResizeObserver(placePuck);
+    ro.observe(weekEl);
+    return () => ro.disconnect();
   });
 
   const title = $derived(formatDayLong(view.date));
@@ -90,6 +100,13 @@
   <div class="actions">
     <UpdateChip />
     <ThemeToggle />
+    <button class="icon-btn" onclick={() => (view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' })} aria-pressed={view.sheet?.kind === 'backlog'} aria-label="Backlog (B)" title="Backlog · B">
+      <Icon name="inbox" size={18} />
+      {#if view.later.length}<span class="badge tnum">{view.later.length > 99 ? '99+' : view.later.length}</span>{/if}
+    </button>
+    <button class="icon-btn" onclick={() => (view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' })} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
+      <Icon name="chart" size={18} />
+    </button>
     <button class="icon-btn" onclick={() => (view.focus = true)} aria-label="Focus on now (F)" title="Focus on now · F">
       <Icon name="focus" size={18} />
     </button>
@@ -234,6 +251,25 @@
   .today-btn {
     height: 30px;
     margin-left: var(--s-2);
+  }
+  .actions .icon-btn {
+    position: relative;
+  }
+  .badge {
+    position: absolute;
+    top: 2px;
+    right: 1px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: var(--ink-inverse);
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 15px;
+    text-align: center;
+    pointer-events: none;
   }
   .actions {
     display: flex;

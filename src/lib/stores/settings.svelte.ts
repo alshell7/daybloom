@@ -43,6 +43,19 @@ export interface Settings {
   recentZones: string[];
   /** Look for new versions in the background (installing always needs a tap). */
   autoUpdate: boolean;
+  /** Proactive support. */
+  nudges: {
+    /** Ask "did you finish?" when a block ends unticked. */
+    checkIn: boolean;
+    /** Speak up when a block runs well past its end (hyperfocus guard). */
+    overrun: boolean;
+    /** Gentle time anchors so hours don't vanish. */
+    anchors: 'off' | 'hourly' | 'half';
+    /** Suggest something from the backlog that fits a free gap. */
+    gapIdeas: boolean;
+    /** Offer an end-of-day wind-down at this minute of the day (sleep − 60 by default; -1 = off). */
+    windDown: number;
+  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -71,6 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timeZone: '',
   recentZones: [],
   autoUpdate: true,
+  nudges: { checkIn: true, overrun: true, anchors: 'off', gapIdeas: true, windDown: 22 * 60 - 60 },
 };
 
 export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) => ({
@@ -79,4 +93,5 @@ export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) 
   widget: { ...DEFAULT_SETTINGS.widget, ...(raw?.widget ?? {}) },
   cycles: { ...DEFAULT_SETTINGS.cycles, ...(raw?.cycles ?? {}) },
   google: { ...DEFAULT_SETTINGS.google, ...(raw?.google ?? {}) },
+  nudges: { ...DEFAULT_SETTINGS.nudges, ...(raw?.nudges ?? {}) },
 }));

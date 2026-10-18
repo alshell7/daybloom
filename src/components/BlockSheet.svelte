@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
-  import { removeBlock, suggest, toggleDone } from '../lib/actions';
+  import { celebrateBadges, removeBlock, suggest, toggleDone } from '../lib/actions';
   import { blockKey, parseBlockKey } from '../lib/engine/blocks';
   import { CATEGORIES, categoryColor } from '../lib/engine/categories';
   import { describeRecurrence } from '../lib/engine/recurrence';
@@ -56,7 +56,8 @@
   function close() {
     // A sweep that never got a name was a doodle — let it go quietly.
     if (task && !task.title.trim() && !task.notes.trim() && task.subtasks.length === 0) tasks.remove(task.id);
-    view.sheet = null;
+    const fromBacklog = sheetKey?.startsWith('later:') && task?.date === null;
+    view.sheet = fromBacklog ? { kind: 'backlog' } : null;
     view.selected = null;
   }
 
@@ -147,6 +148,7 @@
     if (!task) return;
     tasks.toggleSubtask(task.id, id);
     sounds.tick();
+    celebrateBadges();
   }
 
   function toggleAlert(m: number) {

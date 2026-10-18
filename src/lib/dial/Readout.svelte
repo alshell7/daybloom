@@ -69,7 +69,8 @@
         tone: 'day' as const,
       };
     }
-    const fine = state.remainingMs < MINUTE;
+    // The last five minutes count down in seconds: the urgency is felt, not computed.
+    const fine = state.remainingMs < (state.current ? 5 * MINUTE : MINUTE);
     if (state.current) {
       return {
         big: fine ? formatClockCountdown(state.remainingMs) : formatDuration(state.remainingMs),

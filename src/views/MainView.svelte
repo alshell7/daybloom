@@ -21,6 +21,10 @@
   import FocusMode from '../components/FocusMode.svelte';
   import PresetBar from '../components/PresetBar.svelte';
   import SettingsSheet from '../components/SettingsSheet.svelte';
+  import InsightsPanel from '../components/InsightsPanel.svelte';
+  import BacklogPanel from '../components/BacklogPanel.svelte';
+  import Nudges from '../components/Nudges.svelte';
+  import WindDown from '../components/WindDown.svelte';
   import Sparks from '../components/Sparks.svelte';
   import Toast from '../components/Toast.svelte';
   import TopBar from '../components/TopBar.svelte';
@@ -124,6 +128,8 @@
     else if (k === 'f') view.focus = !view.focus;
     else if (k === 'w') toggleWidget();
     else if (k === ',') view.sheet = { kind: 'settings' };
+    else if (k === 'b') view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' };
+    else if (k === 'i') view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' };
     else if (['1', '2', '3', '4'].includes(k)) settings.value.preset = PRESET_ORDER[Number(k) - 1] as PresetId;
     else if (k === ' ' && view.selected) {
       e.preventDefault();
@@ -207,6 +213,12 @@
 
   <BlockSheet />
   <SettingsSheet />
+  <InsightsPanel />
+  <BacklogPanel />
+  <WindDown />
+  {#if !view.focus && !view.sheet}
+    <Nudges />
+  {/if}
   <Sparks />
   <Toast />
   {#if view.focus}

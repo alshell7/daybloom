@@ -24,7 +24,8 @@
   --lume: #2fae7b;
   --focus-ring: #3d6fe3;
   --danger: #c4372b;
-  --scrim: rgb(14 19 29 / 0.28);
+  /* gentle urgency: waiting check-ins, things due soon — never red */
+  --warm: #d98a12;
 
   --shadow-1: 0 1px 2px rgb(21 28 42 / 0.06), 0 1px 1px rgb(21 28 42 / 0.04);
   --shadow-2: 0 2px 6px -1px rgb(21 28 42 / 0.08), 0 10px 24px -8px rgb(21 28 42 / 0.16);
@@ -76,7 +77,7 @@
   --lume: #8ef0c1;
   --focus-ring: #7598ff;
   --danger: #ff7a6b;
-  --scrim: rgb(0 0 0 / 0.45);
+  --warm: #ffb54d;
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow-2: 0 2px 6px -1px rgb(0 0 0 / 0.35), 0 10px 24px -8px rgb(0 0 0 / 0.5);
   --shadow-3: 0 6px 16px -4px rgb(0 0 0 / 0.4), 0 24px 56px -16px rgb(0 0 0 / 0.6);

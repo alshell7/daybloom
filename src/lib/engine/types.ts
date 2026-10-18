@@ -68,7 +68,25 @@ export interface Task {
   alerts: number[];
   createdAt: number;
   updatedAt: number;
+
+  // --- backlog (tasks with no date live here) ---
+  /** Which backlog list an undated task sits in. */
+  list?: BacklogList;
+  /** 1 = must, 2 = should, 3 = could. */
+  priority?: 1 | 2 | 3 | null;
+  /** Soft deadline. Undated tasks with a due date surface as it gets close. */
+  due?: ISODate | null;
+  /** How much energy it takes: 1 low, 2 medium, 3 high (for matching to the day). */
+  energy?: 1 | 2 | 3 | null;
+  /** Manual order inside its backlog list (ascending). */
+  order?: number;
+  /** An undated task finished from the backlog (epoch ms). */
+  doneAt?: number | null;
+  /** Occurrence dates the user acknowledged as "not done, and that's ok" — nudges stop. */
+  acks?: ISODate[];
 }
+
+export type BacklogList = 'inbox' | 'next' | 'someday';
 
 /** A read-only event pulled from an external calendar. */
 export interface CalendarEvent {

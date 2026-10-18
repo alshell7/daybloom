@@ -9,6 +9,7 @@
   import { settings } from '../lib/stores/settings.svelte';
   import { timer } from '../lib/stores/timer.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { nudges } from '../lib/nudges.svelte';
 
   // The desktop object: a watch on your wallpaper. Drag to move, double-click to open
   // the planner, hover for a few quiet controls.
@@ -100,6 +101,12 @@
     </Dial>
   </div>
 
+  {#if nudges.attention}
+    <button class="pip tnum" onclick={() => platform.showMain()} title="Open Daybloom to check in" aria-label={`${nudges.attention} check-ins waiting`}>
+      {nudges.attention}
+    </button>
+  {/if}
+
   <div class="tools" style:--face={finish.face} style:--ink={finish.ink}>
     <button onclick={cyclePreset} aria-label="Switch dial" title="Switch dial"><Icon name="dial" size={14} stroke={2} /></button>
     <button onclick={toggleLayer} aria-pressed={w.layer === 'top'} aria-label={w.layer === 'top' ? 'Floating on top' : 'Sitting on desktop'} title={w.layer === 'top' ? 'Floating on top — click to sit on the desktop' : 'On the desktop — click to float on top'}><Icon name="pin" size={14} stroke={2} /></button>
@@ -125,6 +132,20 @@
   .dial {
     width: min(100vw, 100vh);
     padding: 7px;
+  }
+  .pip {
+    position: absolute;
+    top: 9%;
+    right: 9%;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    background: var(--warm, #d98a12);
+    color: #1b1206;
+    font: 600 12px/22px var(--font-ui);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+    cursor: pointer;
   }
   .tools {
     position: absolute;

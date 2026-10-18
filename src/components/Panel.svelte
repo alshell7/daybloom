@@ -11,12 +11,14 @@
     children,
     footer,
     accent = undefined,
-  }: { title: string; onclose: () => void; children: Snippet; footer?: Snippet; accent?: string } = $props();
+    wide = false,
+  }: { title: string; onclose: () => void; children: Snippet; footer?: Snippet; accent?: string; wide?: boolean } = $props();
 </script>
 
 <!-- An inspector, not a modal: the dial stays live beside it. -->
 <div
   class="panel"
+  class:wide
   role="dialog"
   aria-label={title}
   style:--accent={accent}
@@ -50,6 +52,9 @@
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-3);
     overflow: hidden;
+  }
+  .panel.wide {
+    width: min(540px, calc(100vw - 24px));
   }
   .panel::before {
     content: '';

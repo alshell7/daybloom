@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { suggest } from '../lib/actions';
+  import { celebrateBadges, suggest } from '../lib/actions';
   import { blockKey, blocksInRange, freeGaps } from '../lib/engine/blocks';
   import { categoryColor } from '../lib/engine/categories';
   import { describeRecurrence } from '../lib/engine/recurrence';
@@ -77,6 +77,7 @@
       view.selected = blockKey(t.id, plan.date);
     }
     text = '';
+    celebrateBadges();
   }
 </script>
 

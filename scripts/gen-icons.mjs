@@ -46,7 +46,14 @@ const ICONS = [
   ['focus', 'scan', null], ['eye', 'eye', null], ['list', 'list-checks', null], ['dial', 'circle-gauge', null],
   ['external', 'external-link', null], ['refresh', 'refresh-cw', null], ['google', 'mail', null],
   ['link', 'link', null], ['globe', 'globe', null], ['search', 'search', null], ['wand', 'wand-sparkles', null],
-  ['undo', 'undo-2', null], ['copy', 'copy', null], ['corner', 'corner-down-left', null], ['maximize', 'maximize-2', null], ['minimize', 'minimize-2', null], ['more', 'ellipsis', null],
+  ['undo', 'undo-2', null], ['copy', 'copy', null], ['corner', 'corner-down-left', null],
+  ['chart', 'chart-no-axes-column', null], ['trophy', 'trophy', null], ['flag', 'flag', null], ['zap', 'zap', null],
+  ['battery-low', 'battery-low', null], ['battery-medium', 'battery-medium', null], ['battery-full', 'battery-full', null],
+  ['hourglass', 'hourglass', null], ['archive', 'archive', null], ['filter', 'list-filter', null], ['sort', 'arrow-up-down', null],
+  ['calendar-clock', 'calendar-clock', null], ['star', 'star', null], ['alarm', 'alarm-clock', null], ['hand', 'hand', null],
+  ['medal', 'medal', null], ['rocket', 'rocket', null], ['sunset', 'sunset', null], ['brain-dump', 'notebook-pen', null],
+  ['timer', 'timer', null], ['circle-dashed', 'circle-dashed', null], ['circle-check', 'circle-check', null],
+  ['trend-up', 'trending-up', null], ['flame', 'flame', null], ['bed-rest', 'bed-double', null], ['shuffle', 'shuffle', null], ['wand-sparkles', 'wand-sparkles', null], ['maximize', 'maximize-2', null], ['minimize', 'minimize-2', null], ['more', 'ellipsis', null],
 ];
 
 // Aliased icons are absent from icon-nodes.json; read their SVG instead.
