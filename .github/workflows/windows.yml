@@ -1,0 +1,94 @@
+# Windows: install Daybloom on a clean runner and check the transparent widget, its layers,
+# the tray, notifications, the theme reveal and idle CPU (scripts/windows-smoke.mjs).
+# Pull requests build an unsigned installer from source and are tested next to the latest
+# release; a finished release run (or a manual run with `release`) tests that release's
+# own installers. Screenshots and numbers land in the run summary and the smoke artifacts.
+name: windows
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'index.html'
+      - 'package*.json'
+      - 'scripts/windows-smoke.mjs'
+      - 'scripts/win32.ps1'
+      - '.github/workflows/windows.yml'
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Release tag to test (e.g. v0.1.0). Leave empty to build this branch.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.release == '')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      # Unsigned: updater artifacts need the release signing key, which pull requests never get.
+      - run: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daybloom-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+
+  smoke:
+    needs: build
+    if: >-
+      always() && (needs.build.result == 'success' ||
+      (needs.build.result == 'skipped' && github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled')))
+    strategy:
+      fail-fast: false
+      matrix:
+        source: ${{ fromJSON(needs.build.result == 'success' && '["build","release"]' || '["release"]') }}
+    name: smoke (${{ matrix.source }})
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: matrix.source == 'build'
+        uses: actions/download-artifact@v4
+        with:
+          name: daybloom-windows
+          path: artifact
+      - if: matrix.source == 'release'
+        name: Download the release installers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release || github.event.workflow_run.head_branch }}
+        run: |
+          case "$TAG" in v*) ;; *) TAG=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName) ;; esac
+          echo "Testing release $TAG"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*-setup.exe' -p '*.msi' -D artifact
+      - run: node scripts/windows-smoke.mjs smoke-out artifact
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-${{ matrix.source }}
+          path: smoke-out
