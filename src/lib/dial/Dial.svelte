@@ -752,7 +752,6 @@
   }
   .wedge {
     opacity: 0.88;
-    transition: d 0.6s var(--ease-out);
   }
   .knob {
     cursor: ew-resize;

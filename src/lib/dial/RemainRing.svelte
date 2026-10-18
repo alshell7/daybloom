@@ -107,9 +107,6 @@
   .remain {
     pointer-events: none;
   }
-  .slice {
-    transition: d 0.9s linear;
-  }
   .refill .slot,
   .refill .slice {
     transform-origin: 500px 500px;
@@ -126,11 +123,6 @@
       opacity: 0;
       transform: scale(0.86) rotate(-12deg);
     }
-  }
-  .edge {
-    transition:
-      cx 1s linear,
-      cy 1s linear;
   }
   .crumb {
     transform-box: fill-box;
