@@ -66,6 +66,8 @@ jobs:
     name: smoke (${{ matrix.source }})
     runs-on: windows-latest
     timeout-minutes: 40
+    # On a pull request the release leg is only the baseline to compare against.
+    continue-on-error: ${{ github.event_name == 'pull_request' && matrix.source == 'release' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
