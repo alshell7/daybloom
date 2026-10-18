@@ -36,8 +36,10 @@ function record(check, status, detail = '') {
 function ps(cmd, args = {}) {
   const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', PS1, '-Cmd', cmd];
   for (const [k, v] of Object.entries(args)) argv.push(`-${k}`, String(v));
-  const out = execFileSync('powershell', argv, { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
-  return out ? JSON.parse(out) : null;
+  const out = execFileSync('powershell', argv, { encoding: 'utf8', maxBuffer: 16 << 20 });
+  // The JSON is the last line; anything a cmdlet printed before it (even UTF-16) is ignored.
+  const last = out.replace(/\0/g, '').trim().split(/\r?\n/).pop();
+  return last ? JSON.parse(last) : null;
 }
 
 const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
@@ -169,9 +171,9 @@ function install() {
   const msi = findFiles(ART, (n) => /\.msi$/i.test(n))[0];
   record('Installers built', 'pass', [setup, msi].filter(Boolean).map((f) => `${path.basename(f)} (${(fs.statSync(f).size / 1048576).toFixed(1)} MB)`).join(', '));
   execFileSync(setup, ['/S'], { stdio: 'inherit' });
-  const dir = path.join(process.env.LOCALAPPDATA, 'Daybloom');
-  const exe = findFiles(dir, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n))[0];
-  if (!exe) throw new Error(`installed exe not found in ${dir}`);
+  const dirs = [path.join(process.env.LOCALAPPDATA, 'Daybloom'), path.join(process.env.LOCALAPPDATA, 'Programs', 'Daybloom'), path.join(process.env.ProgramFiles, 'Daybloom')];
+  const exe = dirs.flatMap((d) => findFiles(d, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n)))[0];
+  if (!exe) throw new Error(`installed exe not found in ${dirs.join(', ')}`);
   record('NSIS silent install', 'pass', exe);
   // tauri.conf.json is compiled into the exe; reuse its WebView2 args so the debug launch
   // differs from a normal one only by the port (the env var replaces the app's own args).
@@ -341,7 +343,7 @@ async function behaviour(app) {
       shot('05-layer-top.png', `${wg.x - 80},${wg.y - 80},${wg.w + 160},${wg.h + 160}`);
 
       if (pg) {
-        await pg.widget.eval(`document.querySelectorAll('.tools button')[1].click()`); // pin: top → desktop
+        await pg.widget.eval(`document.querySelector('.tools button[aria-pressed]').click()`); // pin: top → desktop
         await sleep(1200);
         ps('front', { A: np.hwnd });
         await sleep(800);
@@ -357,7 +359,7 @@ async function behaviour(app) {
         );
         shot('06-layer-desktop.png', `${wg.x - 80},${wg.y - 80},${wg.w + 160},${wg.h + 160}`);
 
-        await pg.widget.eval(`document.querySelectorAll('.tools button')[1].click()`); // back to top
+        await pg.widget.eval(`document.querySelector('.tools button[aria-pressed]').click()`); // back to top
         await sleep(1200);
         s = z();
         record('Widget returns to floating on top', s.widget.exStyle & TOPMOST ? 'pass' : 'fail');

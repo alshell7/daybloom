@@ -9,6 +9,7 @@ param(
   [string]$D = ''
 )
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 Add-Type -ReferencedAssemblies System.Drawing, System.Windows.Forms -TypeDefinition @'
 using System;
@@ -189,7 +190,8 @@ switch ($Cmd) {
     Out-Json @{ w = $s.Width; h = $s.Height }
   }
   'resolution' {
-    try { Set-DisplayResolution -Width ([int]$A) -Height ([int]$B) -Force -ErrorAction Stop } catch { }
+    # Set-DisplayResolution chatters in UTF-16 on some images; keep stdout to the one JSON line.
+    try { $null = Set-DisplayResolution -Width ([int]$A) -Height ([int]$B) -Force -ErrorAction Stop 2>&1 } catch { }
     $s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
     Out-Json @{ w = $s.Width; h = $s.Height }
   }
