@@ -55,7 +55,59 @@ public static class W {
   [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
   [DllImport("gdi32.dll")] static extern uint GetPixel(IntPtr dc, int x, int y);
 
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+  [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageText(IntPtr h, uint m, IntPtr w, StringBuilder l);
+
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+
+  // The text of a Notepad window (its Edit control), via WM_GETTEXT.
+  public static string EditText(IntPtr top) {
+    IntPtr e = FindWindowEx(top, IntPtr.Zero, "Edit", null);
+    if (e == IntPtr.Zero) e = FindWindowEx(top, IntPtr.Zero, "RichEditD2DPT", null);
+    if (e == IntPtr.Zero) return null;
+    var sb = new StringBuilder(65536);
+    SendMessageText(e, 0x000D, (IntPtr)sb.Capacity, sb);
+    return sb.ToString();
+  }
+
+  // Real key presses for letters (virtual-key codes 0x41-0x5A), into whatever has the focus.
+  public static void TypeText(string s) {
+    foreach (char ch in s.ToUpperInvariant()) {
+      if (ch < 'A' || ch > 'Z') continue;
+      keybd_event((byte)ch, 0, 0, UIntPtr.Zero); Thread.Sleep(15);
+      keybd_event((byte)ch, 0, 2, UIntPtr.Zero); Thread.Sleep(15);
+    }
+  }
+
+  public class FgWatch { public int samples; public long initial; public string initialTitle; public int away; public int longestAwayMs; public List<string> seen = new List<string>(); }
+
+  // The foreground window every ~3 ms for `ms`: how often and how long it left the window that
+  // was in front at the start, and which windows it went to.
+  public static FgWatch WatchForeground(int ms) {
+    var r = new FgWatch();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    IntPtr first = GetForegroundWindow();
+    var fi = Info(first);
+    r.initial = first.ToInt64();
+    r.initialTitle = fi == null ? "(none)" : fi.title;
+    long awayFrom = -1;
+    while (sw.ElapsedMilliseconds < ms) {
+      long t = sw.ElapsedMilliseconds;
+      IntPtr f = GetForegroundWindow();
+      r.samples++;
+      if (f != first) {
+        if (awayFrom < 0) {
+          awayFrom = t; r.away++;
+          var i = Info(f);
+          string name = i == null ? "(none)" : (i.title == "" ? i.cls : i.title);
+          if (!r.seen.Contains(name)) r.seen.Add(name);
+        }
+        r.longestAwayMs = Math.Max(r.longestAwayMs, (int)(t - awayFrom) + 3);
+      } else awayFrom = -1;
+      Thread.Sleep(2);
+    }
+    return r;
+  }
 
   public class Watch { public int samples; public int hidden; public int blank; public int longestHiddenMs; public int longestBlankMs; }
 
@@ -258,6 +310,12 @@ switch ($Cmd) {
     [Console]::Out.WriteLine('READY'); [Console]::Out.Flush()
     Out-Json ([W]::WatchWindow([IntPtr][long]$A, [int]$B, $xy[0], $xy[1], $bg[0], $bg[1], $bg[2]))
   }
+  'watchfg' {
+    [Console]::Out.WriteLine('READY'); [Console]::Out.Flush()
+    Out-Json ([W]::WatchForeground([int]$A))
+  }
+  'type' { [W]::TypeText($A); Out-Json $true }
+  'edittext' { Out-Json ([W]::EditText([IntPtr][long]$A)) }
   'affinity' { Out-Json ([W]::Affinity([IntPtr][long]$A)) }
   'nudge' { [W]::Nudge(); Out-Json $true }
   'downloads' { Out-Json ([string](New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path) }

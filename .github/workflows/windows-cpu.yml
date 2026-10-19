@@ -1,8 +1,8 @@
 # Idle CPU of Daybloom on a clean Windows runner, build by build: published releases next to
 # test builds of this branch, each measured in the same four states
 # (scripts/windows-smoke.mjs with SMOKE_MODE=cpu, merged by scripts/windows-cpu-table.mjs).
-# The "plain-show" build shows the widget with tao's plain show() (v0.1.5's path: known idle CPU,
-# but it takes the focus), as the control for whatever the "main" build does.
+# The "plain-show" build shows the widget with tao's plain show() and nothing else (v0.1.5's path:
+# known idle CPU, but it keeps the focus), as the control for whatever the "main" build does.
 name: windows-cpu
 
 on:
@@ -37,8 +37,15 @@ jobs:
         if: matrix.variant == 'plain-show'
         shell: bash
         run: |
-          sed -i 's/crate::show_quietly(&ensure(app)?)?;/ensure(app)?.show().map_err(|e| e.to_string())?;/' src-tauri/src/widget.rs
-          grep -n 'ensure(app)?.show()' src-tauri/src/widget.rs
+          node -e "
+            const fs = require('fs');
+            const f = 'src-tauri/src/widget.rs';
+            const call = 'crate::show_quietly(&ensure(app)?, move || changed(&a))?;';
+            const s = fs.readFileSync(f, 'utf8');
+            if (!s.includes(call)) { console.error('show_quietly call not found in widget.rs'); process.exit(1); }
+            fs.writeFileSync(f, s.replace(call, 'ensure(app)?.show().map_err(|e| e.to_string())?;\\n        changed(&a);'));
+          "
+          grep -n -A1 'ensure(app)?.show()' src-tauri/src/widget.rs
       # Same test-build config as windows.yml: unsigned, with a DevTools port in both windows.
       - name: Tauri config for the test build
         shell: bash

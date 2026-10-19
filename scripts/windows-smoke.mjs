@@ -574,6 +574,7 @@ async function behaviour(app) {
     }
     await privacyChecks(pid, pg);
     if (pg) await reshowChecks(pid, pg);
+    if (pg) await keyboardFocusChecks(pid, pg);
   } finally {
     closeAll(pg);
     await quit(run);
@@ -583,8 +584,15 @@ async function behaviour(app) {
 
 // ---- v0.1.5 native pieces: activity sensing, export, privacy mode -----------------------
 
-const invoke = (pg, cmd, args = {}) =>
-  pg.main.eval(`__TAURI_INTERNALS__.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args)}).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e: String(e) }))`);
+// Never throws: a command that rejects or never answers (DevTools gives up after 20 s) comes back
+// as { ok: false }, so one stuck call fails its check instead of the whole run.
+const invoke = async (pg, cmd, args = {}) => {
+  try {
+    return await pg.main.eval(`__TAURI_INTERNALS__.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args)}).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e: String(e) }))`);
+  } catch (e) {
+    return { ok: false, e: `${cmd}: ${e.message}` };
+  }
+};
 
 async function activityChecks(pid, pg) {
   ps('nudge');
@@ -697,6 +705,60 @@ async function blinkCheck(pid, pg) {
   const sw = savedWidget();
   const now = widgetOf(pid);
   record('Widget back on top: still shown and saved as shown', now?.visible && sw.visible === true && sw.layer === 'top' ? 'pass' : 'fail', `visible ${now?.visible}; settings.widget ${JSON.stringify(sw)}`);
+}
+
+// Typing in Notepad, then in the planner's Quick add box, while the widget and then the screen
+// cues appear: the keys must still land there. The foreground is watched every ~3 ms meanwhile,
+// so any detour (a hand-back flashes the planner's title bar) is measured. The typed words only
+// use letters the planner has no shortcut for, so a stray key cannot change anything.
+async function keyboardFocusChecks(pid, pg) {
+  const notepad = spawn('notepad.exe', [], { detached: true, stdio: 'ignore' });
+  notepad.unref();
+  const np = await waitFor('Notepad window', () => list(ps('windows')).find((x) => x.pid === notepad.pid && x.visible && x.w > 100), 15_000).catch(() => null);
+  if (!np) return record('Keyboard focus while the widget or screen cues appear', 'fail', 'Notepad did not open');
+  const surfaces = [
+    { what: 'the widget appears', cmd: 'widget_show', gone: () => !widgetOf(pid), there: () => widgetOf(pid)?.visible },
+    { what: 'the screen cues appear', cmd: 'overlay_show', gone: () => !cuesOf(), there: () => cuesOf()?.visible },
+  ];
+  const box = `(document.querySelector('input[placeholder^="Try"]') ?? document.querySelector('input[type="text"], input:not([type])'))`;
+  const words = { 'Notepad|widget_show': 'qkzx', 'Notepad|overlay_show': 'qzxj', 'the planner|widget_show': 'kzxj', 'the planner|overlay_show': 'zqjk' };
+  for (const target of ['Notepad', 'the planner']) {
+    for (const s of surfaces) {
+      await invoke(pg, s.cmd, { show: false });
+      await waitFor(`${s.cmd} closed`, s.gone, 10_000).catch(() => null);
+      const word = words[`${target}|${s.cmd}`];
+      if (target === 'Notepad') ps('front', { A: np.hwnd });
+      else {
+        ps('front', { A: mainOf(pid).hwnd });
+        await sleep(500);
+        await pg.main.eval(`(() => { const i = ${box}; i.focus(); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`).catch(() => null);
+      }
+      await sleep(700);
+      const watch = psAsync('watchfg', { A: 3000 });
+      await watch.ready;
+      await sleep(300);
+      const shown = await invoke(pg, s.cmd, { show: true });
+      const appeared = await waitFor(`${s.cmd} shown`, s.there, 8000).catch(() => false);
+      const tl = await watch.done.catch((e) => ({ away: -1, seen: [String(e.message)], initialTitle: '?', longestAwayMs: -1 }));
+      ps('type', { A: word });
+      await sleep(600);
+      const got = (target === 'Notepad' ? ps('edittext', { A: np.hwnd }) : await pg.main.eval(`${box}?.value ?? ''`).catch(() => '')) ?? '';
+      const fgEnd = ps('foreground');
+      const detour = tl.away > 0 ? `the foreground left '${tl.initialTitle}' ${tl.away}× for up to ${tl.longestAwayMs} ms (to ${tl.seen.join(', ')})` : tl.away === 0 ? `the foreground never left '${tl.initialTitle}'` : `foreground not watched: ${tl.seen[0]}`;
+      const ok = appeared && got.includes(word) && fgEnd?.hwnd === (target === 'Notepad' ? np.hwnd : mainOf(pid)?.hwnd);
+      record(
+        `Typing in ${target} while ${s.what}: the keys still land there`,
+        !ok ? 'fail' : tl.longestAwayMs > 50 ? 'warn' : 'pass',
+        `${appeared ? 'shown' : 'NOT shown'}${shown.ok ? '' : ` (${shown.e})`}; ${detour}; typed '${word}' → '${got.slice(-24)}'; foreground now '${fgEnd?.title}'`,
+      );
+      if (target === 'the planner') await pg.main.eval(`(() => { const i = ${box}; i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); })()`).catch(() => null);
+    }
+  }
+  // Leave things as the rest of the run expects: widget shown, cues off.
+  await invoke(pg, 'overlay_show', { show: false });
+  await invoke(pg, 'widget_show', { show: true });
+  await waitFor('widget shown', () => widgetOf(pid)?.visible, 10_000).catch(() => null);
+  taskkill('/PID', String(notepad.pid));
 }
 
 // Hiding and showing the widget again: it draws again and does not take the focus.
@@ -1182,7 +1244,8 @@ try {
     msiInstall(app.msi);
   }
 } catch (e) {
-  record('Smoke test aborted', 'fail', String(e.stack ?? e));
+  const last = results.at(-1)?.check ?? 'the start';
+  record('Smoke test aborted', 'fail', `after '${last}': ${String(e.stack ?? e)}`);
   try {
     shot('99-abort.png');
   } catch {
