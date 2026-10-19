@@ -1,3 +1,4 @@
+mod assistant;
 mod commands;
 mod oauth;
 mod tray;
@@ -52,6 +53,7 @@ pub fn run() {
                 .build(),
         )
         .manage(oauth::Listeners::default())
+        .manage(assistant::Weights::default())
         .manage(widget::LayerState::default())
         .setup(|app| {
             tray::create(app.handle())?;
@@ -97,6 +99,10 @@ pub fn run() {
             commands::set_dock_visible,
             oauth::oauth_listen,
             oauth::oauth_wait,
+            assistant::assistant_weights_status,
+            assistant::assistant_weights_download,
+            assistant::assistant_weights_read,
+            assistant::assistant_weights_forget,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Daybloom");

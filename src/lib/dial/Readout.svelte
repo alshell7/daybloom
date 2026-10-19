@@ -75,7 +75,11 @@
       return {
         big: fine ? formatClockCountdown(state.remainingMs) : formatDuration(state.remainingMs),
         title: state.current.title,
-        sub: state.next ? `then ${state.next.title}` : 'last one today',
+        sub: state.alongside?.length
+          ? `also now: ${state.alongside[0].title}${state.alongside.length > 1 ? ` +${state.alongside.length - 1}` : ''}`
+          : state.next
+            ? `then ${state.next.title}`
+            : 'last one today',
         icon: state.current.icon,
         tone: 'now' as const,
       };
@@ -107,6 +111,10 @@
       <div class="controls"><button class="pill" onclick={() => onbreathe(false)}>Stop</button></div>
     {/if}
   {:else}
+  {#if view.tone !== 'rest' && view.tone !== 'day'}
+    <!-- the wall clock, always readable at a glance; the big number is time left -->
+    <div class="clock tnum" aria-label={`It's ${formatTime(now, hour12)}`}><Rolling text={formatTime(now, hour12)} {reduced} /></div>
+  {/if}
   <div class="big tnum"><Rolling text={view.big} {reduced} /></div>
   {#key view.title}
     <div class="title" in:fly={{ y: 8, duration: reduced ? 0 : 360, easing: cubicOut }}>
@@ -145,6 +153,21 @@
     gap: 2px;
     max-width: 100%;
     font-family: var(--font-ui);
+  }
+  .clock {
+    margin-bottom: clamp(2px, 1cqi, 8px);
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 7%, transparent);
+    font-size: clamp(11px, 3.6cqi, 21px);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    opacity: 0.85;
+  }
+  .compact .clock {
+    font-size: 6cqi;
+    padding: 0.4cqi 2.4cqi;
+    margin-bottom: 1cqi;
   }
   .big {
     font-size: clamp(22px, 13cqi, 76px);

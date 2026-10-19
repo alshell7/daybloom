@@ -11,7 +11,7 @@
   import Icon from '../Icon.svelte';
   import { PRESETS, type Finish, type PresetId } from '../presets';
   import { detent } from '../sound';
-  import { angleOf, arcPath, C, laneRadii, nearestTurn, polar, R, radiusOf, sectorPath } from './geometry';
+  import { angleOf, arcPath, C, laneRadii, MAX_LANES, nearestTurn, polar, R, radiusOf, sectorPath } from './geometry';
   import DialArc from './DialArc.svelte';
 
   type Range = { startMs: number; endMs: number };
@@ -160,6 +160,21 @@
     return { id: `free:${next.key}`, start: Math.min(prevEnd, now), end: next.startMs, color: finish.track, free: true };
   });
   const ringR = $derived(compact ? { rIn: 196, rOut: 232 } : { rIn: 222, rOut: 262 });
+
+  // More than three things at once: the extras gather into a "+N" badge on the rim.
+  const overflow = $derived.by(() => {
+    const extra = arcs.filter((a) => a.lane >= MAX_LANES).sort((a, b) => a.a0 - b.a0);
+    const out: { angle: number; count: number; titles: string[] }[] = [];
+    for (const a of extra) {
+      const mid = (a.a0 + a.a1) / 2;
+      const last = out.at(-1);
+      if (last && Math.abs(last.angle - mid) < 10) {
+        last.count++;
+        last.titles.push(a.block.title);
+      } else out.push({ angle: mid, count: 1, titles: [a.block.title] });
+    }
+    return out;
+  });
 
   // Only the first paint staggers; arcs added later draw on immediately.
   let booting = $state(true);
@@ -439,7 +454,11 @@
   // Seconds bead: placed from the wall clock on every tick (never a free-running CSS
   // animation, which can drift after sleep or throttling). The angle only ever grows,
   // so 59 → 0 steps forward instead of spinning back.
-  const secondsAngle = $derived(Math.floor(now / 1000) * 6);
+  // Seconds within the current minute only. (A forever-growing angle reached ~10¹⁰°, where the
+  // compositor's float maths loses precision and the bead jittered and jumped back.) The bead
+  // re-mounts at :00 so it never spins backwards from 354° to 0°.
+  const secondsAngle = $derived(Math.floor((now % 60_000) / 1000) * 6);
+  const minuteKey = $derived(Math.floor(now / 60_000));
 </script>
 
 <div class="dial-wrap" class:compact class:case={withCase} style:--face={finish.face} style:--ink={finish.ink} style:--signal={finish.signal}>
@@ -539,7 +558,7 @@
     {/if}
 
     <!-- blocks -->
-    {#each arcs as a, i (a.block.key)}
+    {#each arcs.filter((x) => x.lane < MAX_LANES) as a, i (a.block.key)}
       <DialArc
         enterDelay={booting ? 120 + i * 55 : 0}
         block={a.block}
@@ -560,6 +579,15 @@
         onpick={onPick}
         onhover={(b) => (hovered = b)}
       />
+    {/each}
+
+    {#each overflow as o (o.angle)}
+      {@const p = polar(R.bezelIn + 6, o.angle)}
+      <g class="overflow">
+        <title>{o.titles.join(' · ')}</title>
+        <circle cx={p[0]} cy={p[1]} r="20" fill={finish.ink} />
+        <text x={p[0]} y={p[1] + 1} fill={finish.face} font-size="19" text-anchor="middle" dominant-baseline="central" class="numeral strong">+{o.count}</text>
+      </g>
     {/each}
 
     {#if ghost}
@@ -616,9 +644,11 @@
   {#if showNow && showSeconds && !reduced}
     <!-- Seconds bead: an HTML layer outside the SVG, stepping once a second, so the
          compositor moves it without repainting the dial. Re-synced every minute. -->
-    <div class="seconds" style:transform={`rotate(${secondsAngle}deg)`} aria-hidden="true">
-      <i style:background={finish.track} class:big={compact}></i>
-    </div>
+    {#key minuteKey}
+      <div class="seconds" style:transform={`rotate(${secondsAngle}deg)`} aria-hidden="true">
+        <i style:background={finish.track} class:big={compact}></i>
+      </div>
+    {/key}
   {/if}
 
   {#if breathing}

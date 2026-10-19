@@ -103,6 +103,8 @@ export interface CalendarEvent {
   color?: string;
   location?: string;
   htmlLink?: string;
+  /** The same event also appears in these other accounts (merged into this one). */
+  alsoIn?: string[];
 }
 
 /**

@@ -25,6 +25,7 @@
   import BacklogPanel from '../components/BacklogPanel.svelte';
   import Nudges from '../components/Nudges.svelte';
   import WindDown from '../components/WindDown.svelte';
+  import AssistantPanel from '../components/assistant/AssistantPanel.svelte';
   import Sparks from '../components/Sparks.svelte';
   import Toast from '../components/Toast.svelte';
   import TopBar from '../components/TopBar.svelte';
@@ -110,6 +111,12 @@
   }
 
   function onKey(e: KeyboardEvent) {
+    // ⌘K / Ctrl+K: ask Daybloom, from anywhere.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      view.sheet = view.sheet?.kind === 'assistant' ? null : { kind: 'assistant' };
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Escape') {
       if (view.focus) view.focus = false;
@@ -216,6 +223,7 @@
   <InsightsPanel />
   <BacklogPanel />
   <WindDown />
+  <AssistantPanel />
   {#if !view.focus && !view.sheet}
     <Nudges />
   {/if}

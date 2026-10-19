@@ -6,11 +6,14 @@ import { persisted } from './persisted.svelte';
 interface TaskFile {
   version: 1;
   tasks: Task[];
+  /** Tombstones, so a deletion on one device survives a sync with another. */
+  deleted?: { id: string; at: number }[];
 }
 
 export const taskFile = persisted<TaskFile>('tasks', { version: 1, tasks: [] }, (raw) => ({
   version: 1,
   tasks: Array.isArray(raw?.tasks) ? raw.tasks.map(normalize) : [],
+  deleted: Array.isArray(raw?.deleted) ? raw.deleted : [],
 }));
 
 function normalize(t: Partial<Task>): Task {
@@ -74,11 +77,17 @@ export const tasks = {
   remove(id: string) {
     const i = taskFile.value.tasks.findIndex((t) => t.id === id);
     if (i >= 0) taskFile.value.tasks.splice(i, 1);
+    const tomb = (taskFile.value.deleted ??= []);
+    if (!tomb.some((d) => d.id === id)) tomb.push({ id, at: Date.now() });
+    // Keep tombstones bounded: 90 days is plenty for any device to catch up.
+    const cutoff = Date.now() - 90 * 86_400_000;
+    if (tomb.length > 500) taskFile.value.deleted = tomb.filter((d) => d.at > cutoff).slice(-2000);
   },
 
   /** Restore a task removed moments ago (undo). */
   restore(task: Task) {
-    if (!find(task.id)) taskFile.value.tasks.push(task);
+    if (!find(task.id)) taskFile.value.tasks.push({ ...task, updatedAt: Date.now() });
+    if (taskFile.value.deleted) taskFile.value.deleted = taskFile.value.deleted.filter((d) => d.id !== task.id);
   },
 
   /** Returns the new done state. `at` is when it was finished. */
