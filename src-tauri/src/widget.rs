@@ -73,15 +73,19 @@ pub fn layer(app: &AppHandle) -> Layer {
 pub fn set_visible(app: &AppHandle, show: Option<bool>) -> Result<bool, String> {
     let show = show.unwrap_or_else(|| !is_visible(app));
     if show {
-        // Never steals the keyboard focus (see `show_quietly`).
-        crate::show_quietly(&ensure(app)?)?;
-    } else if let Some(w) = window(app) {
+        // Never left with the keyboard focus (see `show_quietly`); the status goes out once
+        // the widget is actually shown.
+        let a = app.clone();
+        crate::show_quietly(&ensure(app)?, move || changed(&a))?;
+        return Ok(true);
+    }
+    if let Some(w) = window(app) {
         // Closing (not hiding) frees the webview; `Destroyed` then calls `changed`.
         w.close().map_err(|e| e.to_string())?;
         return Ok(false);
     }
     changed(app);
-    Ok(show)
+    Ok(false)
 }
 
 fn apply_layer(w: &WebviewWindow, layer: Layer) -> Result<(), String> {
@@ -97,36 +101,10 @@ fn apply_layer(w: &WebviewWindow, layer: Layer) -> Result<(), String> {
 pub fn set_layer(app: &AppHandle, layer: Layer) -> Result<(), String> {
     *app.state::<LayerState>().0.lock().unwrap() = layer;
     if let Some(w) = window(app) {
-        let shown = w.is_visible().unwrap_or(false);
         apply_layer(&w, layer)?;
-        // The status (tray tick, saved setting) is reported once the widget is shown again.
-        if shown && keep_shown(app, &w) {
-            return Ok(());
-        }
     }
     changed(app);
     Ok(())
-}
-
-/// Windows: tao keeps its own "visible" flag, which `show_quietly`'s raw SW_SHOWNOACTIVATE
-/// doesn't set, and it hides a window whose styles change while that flag says hidden. So
-/// after a layer change, show the widget quietly again, queued on the main thread behind
-/// tao's own style update so it runs last.
-/// Returns whether the re-show (which then reports the status) was queued.
-#[cfg(windows)]
-fn keep_shown(app: &AppHandle, w: &WebviewWindow) -> bool {
-    let w = w.clone();
-    let a = app.clone();
-    app.run_on_main_thread(move || {
-        let _ = crate::show_quietly(&w);
-        changed(&a);
-    })
-    .is_ok()
-}
-
-#[cfg(not(windows))]
-fn keep_shown(_app: &AppHandle, _w: &WebviewWindow) -> bool {
-    false
 }
 
 #[derive(Clone, Serialize)]
