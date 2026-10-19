@@ -44,7 +44,39 @@ public static class W {
   [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
   [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
 
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr m);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMenuString(IntPtr m, uint id, StringBuilder s, int n, uint flags);
+  [DllImport("user32.dll")] static extern uint GetMenuState(IntPtr m, uint id, uint flags);
+  [DllImport("user32.dll")] static extern bool GetMenuItemRect(IntPtr h, IntPtr m, uint item, out RECT r);
+  [DllImport("user32.dll")] static extern bool GetWindowDisplayAffinity(IntPtr h, out uint a);
+
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+
+  public class MenuItem { public string text; public bool isChecked; public int x, y, w, h; }
+
+  // The items of an open popup menu (class #32768), read through MN_GETHMENU.
+  public static List<MenuItem> MenuItems(IntPtr menuWnd) {
+    var list = new List<MenuItem>();
+    IntPtr m = SendMessage(menuWnd, 0x01E1, IntPtr.Zero, IntPtr.Zero);
+    if (m == IntPtr.Zero) return list;
+    int n = GetMenuItemCount(m);
+    for (int i = 0; i < n; i++) {
+      var s = new StringBuilder(256); GetMenuString(m, (uint)i, s, 256, 0x400);
+      uint st = GetMenuState(m, (uint)i, 0x400);
+      RECT r; GetMenuItemRect(IntPtr.Zero, m, (uint)i, out r);
+      list.Add(new MenuItem { text = s.ToString(), isChecked = (st & 0x8) != 0, x = r.Left, y = r.Top, w = r.Right - r.Left, h = r.Bottom - r.Top });
+    }
+    return list;
+  }
+
+  // 0 none, 1 WDA_MONITOR (black in captures), 0x11 WDA_EXCLUDEFROMCAPTURE; -1 on failure.
+  public static long Affinity(IntPtr h) { uint a; return GetWindowDisplayAffinity(h, out a) ? a : -1; }
+
+  public static void Key(byte vk) { keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); }
+
+  // One pixel there and back: real (injected) input, so GetLastInputInfo resets.
+  public static void Nudge() { mouse_event(1, 1, 0, 0, UIntPtr.Zero); mouse_event(1, -1, 0, 0, UIntPtr.Zero); }
 
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -191,6 +223,30 @@ switch ($Cmd) {
   'front' { Out-Json ([W]::Front([IntPtr][long]$A)) }
   'foreground' { Out-Json ([W]::Info([W]::GetForegroundWindow())) }
   'point' { Out-Json ([W]::At([int]$A, [int]$B)) }
+  'affinity' { Out-Json ([W]::Affinity([IntPtr][long]$A)) }
+  'nudge' { [W]::Nudge(); Out-Json $true }
+  'downloads' { Out-Json ([string](New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path) }
+  'traymenu' {
+    # Opens the tray menu the way a right click does (-A app pid), reads its items, then clicks
+    # the item whose text is -B, or closes the menu with Escape when -B is empty.
+    $tray = [W]::All() | Where-Object { $_.pid -eq [uint32]$A -and $_.cls -eq 'tray_icon_app' } | Select-Object -First 1
+    if (-not $tray) { Out-Json $null; break }
+    [void][W]::SetCursorPos(1650, 160) # the menu opens here, clear of the planner
+    [void][W]::PostMessage([IntPtr]$tray.hwnd, 6002, [IntPtr]::Zero, [IntPtr]0x204)
+    [void][W]::PostMessage([IntPtr]$tray.hwnd, 6002, [IntPtr]::Zero, [IntPtr]0x205)
+    $menu = $null
+    for ($i = 0; $i -lt 30 -and -not $menu; $i++) {
+      Start-Sleep -Milliseconds 100
+      $menu = [W]::All() | Where-Object { $_.cls -eq '#32768' -and $_.visible } | Select-Object -First 1
+    }
+    if (-not $menu) { Out-Json @{ menu = $false }; break }
+    Start-Sleep -Milliseconds 250
+    $items = @([W]::MenuItems([IntPtr]$menu.hwnd))
+    $hit = $null
+    if ($B) { $hit = $items | Where-Object { (($_.text -replace '&', '') -replace "`t.*$", '') -eq $B } | Select-Object -First 1 }
+    if ($hit) { [W]::Click($hit.x + [int]($hit.w / 2), $hit.y + [int]($hit.h / 2), 1) } else { [W]::Key(0x1B) }
+    Out-Json @{ menu = $true; items = $items; clicked = [bool]$hit }
+  }
   'show' { Out-Json ([W]::ShowWindow([IntPtr][long]$A, [int]$B)) }
   'post' { Out-Json ([W]::PostMessage([IntPtr][long]$A, [uint32]$B, [IntPtr][long]$C, [IntPtr][long]$D)) }
   'place' {

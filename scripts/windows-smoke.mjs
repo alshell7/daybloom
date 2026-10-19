@@ -5,11 +5,11 @@
 // Installs the NSIS bundle silently, launches Daybloom, and checks with real Win32 input,
 // window styles and screenshots: the transparent widget (no black box), float-on-top vs
 // sit-on-desktop, the tray left click, the widget double-click and drag, notifications, the
-// microphone path, the theme reveal, the screen-cues overlay, and idle CPU. Page state is read
-// over the WebView2 DevTools protocol on a port the workflow builds into pull-request
-// installers (WebView2 ignored the env var and registry overrides for it); published releases
-// have no port, so their page-level checks are skipped. Nothing is attached while CPU is
-// sampled. SMOKE_SOURCE says which kind is under test.
+// microphone path, the theme reveal, activity sensing, exports, privacy mode, the screen-cues
+// overlay, and idle CPU. Page state is read over the WebView2 DevTools protocol on a port the
+// workflow builds into pull-request installers (WebView2 ignored the env var and registry
+// overrides for it); published releases have no port, so their page-level checks are skipped.
+// Nothing is attached while CPU is sampled. SMOKE_SOURCE says which kind is under test.
 // Writes results.json, summary.md and screenshots to <out-dir>.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -501,14 +501,163 @@ async function behaviour(app) {
     record('Dragging the widget moves it', Math.abs(dx + 120) < 20 && Math.abs(dy - 60) < 20 ? 'pass' : 'fail', `moved by ${dx},${dy} (expected -120,60)`);
 
     if (pg) {
+      await activityChecks(pid, pg);
+      await exportChecks(pg);
       const errs = [...pg.main.errors.map((e) => `main ${e}`), ...pg.widget.errors.map((e) => `widget ${e}`)];
       record('No console errors or exceptions', errs.length ? 'warn' : 'pass', errs.slice(0, 8).join(' | '));
     }
+    await privacyChecks(pid, pg);
   } finally {
     closeAll(pg);
     quit(run);
     await sleep(2000);
   }
+}
+
+// ---- v0.1.5 native pieces: activity sensing, export, privacy mode -----------------------
+
+const invoke = (pg, cmd, args = {}) =>
+  pg.main.eval(`__TAURI_INTERNALS__.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args)}).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e: String(e) }))`);
+
+async function activityChecks(pid, pg) {
+  ps('nudge');
+  const fresh = await invoke(pg, 'activity_idle_seconds');
+  await sleep(6000);
+  const later = await invoke(pg, 'activity_idle_seconds');
+  record(
+    'Activity: idle seconds reset on input and grow without it',
+    fresh.ok && later.ok && fresh.v >= 0 && fresh.v < 4 && later.v >= fresh.v + 4 ? 'pass' : 'fail',
+    `${fresh.ok ? fresh.v : fresh.e} s just after input, ${later.ok ? later.v : later.e} s six seconds later`,
+  );
+
+  const notepad = spawn('notepad.exe', [], { detached: true, stdio: 'ignore' });
+  notepad.unref();
+  const np = await waitFor('Notepad window', () => list(ps('windows')).find((x) => x.pid === notepad.pid && x.visible && x.w > 100), 15_000).catch(() => null);
+  if (!np) return record('Activity: foreground app', 'fail', 'Notepad did not open');
+  ps('front', { A: np.hwnd });
+  await sleep(800);
+  const fg = ps('foreground');
+  const plain = await invoke(pg, 'activity_foreground', { withTitle: false });
+  const titled = await invoke(pg, 'activity_foreground', { withTitle: true });
+  record(
+    'Activity: foreground app is Notepad when it is in front',
+    fg?.hwnd === np.hwnd && plain.ok && /^notepad$/i.test(plain.v?.app ?? '') && plain.v?.title == null ? 'pass' : 'fail',
+    `foreground '${fg?.title}'; withTitle false → ${JSON.stringify(plain.ok ? plain.v : plain.e)}`,
+  );
+  record(
+    'Activity: the window title only when asked',
+    titled.ok && /^notepad$/i.test(titled.v?.app ?? '') && /Notepad/.test(titled.v?.title ?? '') ? 'pass' : 'fail',
+    `withTitle true → ${JSON.stringify(titled.ok ? titled.v : titled.e)}`,
+  );
+  taskkill('/PID', String(notepad.pid));
+}
+
+async function exportChecks(pg) {
+  const dl = ps('downloads');
+  const BYTES = 'a,b\r\n1,2\r\n';
+  const same = (a, b) => a.toLowerCase().replace(/\\+$/, '') === b.toLowerCase().replace(/\\+$/, '');
+  const isFile = (p) => {
+    try {
+      return fs.statSync(p).isFile(); // never read a device name (CON) as a file
+    } catch {
+      return false;
+    }
+  };
+  const save = (name) => invoke(pg, 'export_save', { name, contents: BYTES, then: null });
+  const made = [];
+  const keep = (r) => (r.ok && made.push(r.v), r);
+
+  const r1 = keep(await save('Daybloom test.csv'));
+  const bytes = r1.ok && isFile(r1.v) ? fs.readFileSync(r1.v) : null;
+  record(
+    'Export: saves into Downloads with the exact bytes',
+    r1.ok && same(path.dirname(r1.v), dl) && bytes?.equals(Buffer.from(BYTES)) ? 'pass' : 'fail',
+    r1.ok ? `${r1.v}; ${bytes ? `${bytes.length} bytes` : 'no file'}` : r1.e,
+  );
+
+  const escaped = path.resolve(dl, '..', '..', 'evil.csv');
+  const r2 = keep(await save('..\\..\\evil.csv'));
+  record(
+    'Export: a path in the name stays inside Downloads',
+    r2.ok && same(path.dirname(r2.v), dl) && !isFile(escaped) ? 'pass' : 'fail',
+    `${r2.ok ? r2.v : r2.e}; ${escaped} ${isFile(escaped) ? 'EXISTS' : 'absent'}`,
+  );
+
+  const before = fs.readdirSync(dl).length;
+  const names = ['evil.exe', 'evil.csv.exe', 'evil.bat', 'evil.ps1', 'evil.html.lnk', 'evil'];
+  const written = [];
+  for (const n of names) if (keep(await save(n)).ok) written.push(n);
+  record(
+    'Export: only .html, .csv, .json and .txt are written',
+    !written.length && fs.readdirSync(dl).length === before ? 'pass' : 'fail',
+    written.length ? `written: ${written.join(', ')}` : `refused ${names.join(', ')}`,
+  );
+
+  const r3 = keep(await save('CON.csv'));
+  const con = r3.ok && isFile(r3.v) && fs.readFileSync(r3.v).equals(Buffer.from(BYTES));
+  record('Export: a reserved Windows name (CON.csv) still becomes a real file', con ? 'pass' : 'warn', r3.ok ? `${r3.v}: ${isFile(r3.v) ? 'file' : 'no file (Windows treated CON as a device)'}` : r3.e);
+
+  for (const f of made) {
+    try {
+      if (isFile(f)) fs.unlinkSync(f);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// Privacy mode through the tray menu (both legs), then privacy_set (with DevTools).
+async function privacyChecks(pid, pg) {
+  await trayClick(pid);
+  await sleep(1200);
+  ps('front', { A: mainOf(pid).hwnd });
+  await sleep(600);
+  const main = mainOf(pid);
+  const patch = `${main.x + Math.round(main.w / 2) - 100},${main.y + Math.round(main.h / 2) - 100},200,200`;
+  const diff = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+  const rgb = (c) => `rgb(${c.r},${c.g},${c.b})`;
+  const affinities = () => Object.fromEntries(windowsOf(pid).filter((w) => w.visible && /^Daybloom/.test(w.title)).map((w) => [w.title, ps('affinity', { A: w.hwnd })]));
+  const hidden = (a) => a === 0x11 || a === 0x1;
+  const shown = ps('corners', { A: patch });
+
+  const m1 = ps('traymenu', { A: pid, B: 'Privacy Mode' });
+  const i1 = list(m1?.items).find((i) => /Privacy Mode/.test(i.text));
+  if (!m1?.menu || !i1 || !m1.clicked) {
+    return record('Privacy mode: tray menu item', 'fail', !m1?.menu ? 'tray menu did not open' : `items: ${list(m1.items).map((i) => i.text).join(' | ')}`);
+  }
+  await sleep(1200);
+  const a1 = affinities();
+  const off = ps('corners', { A: patch });
+  shot('08-privacy-on.png');
+  record('Privacy mode: the tray item turns it on for every window', !i1.isChecked && Object.keys(a1).length > 1 && Object.values(a1).every(hidden) ? 'pass' : 'fail', `item was ${i1.isChecked ? 'checked' : 'unchecked'}; display affinity ${JSON.stringify(a1)}`);
+  record('Privacy mode: the planner is left out of screen captures', diff(off, shown) > 60 ? 'pass' : 'fail', `planner patch ${rgb(shown)} → ${rgb(off)} in a capture`);
+
+  const m2 = ps('traymenu', { A: pid, B: 'Privacy Mode' });
+  const i2 = list(m2?.items).find((i) => /Privacy Mode/.test(i.text));
+  await sleep(1200);
+  const a2 = affinities();
+  const back = ps('corners', { A: patch });
+  record(
+    'Privacy mode: the tray item shows the check and turns it off',
+    i2?.isChecked && m2.clicked && Object.values(a2).every((a) => a === 0) && diff(back, shown) < 30 ? 'pass' : 'fail',
+    `item ${i2?.isChecked ? 'checked' : 'unchecked'}; affinity ${JSON.stringify(a2)}; planner patch ${rgb(back)}`,
+  );
+
+  if (!pg) return;
+  // privacy_set reaches the tray check, and a widget built while privacy is on gets it too.
+  await invoke(pg, 'privacy_set', { on: true });
+  await invoke(pg, 'widget_show', { show: false });
+  await waitFor('widget to close', () => !widgetOf(pid), 10_000).catch(() => null);
+  await invoke(pg, 'widget_show', { show: true });
+  const w = await waitFor('widget to reopen', () => widgetOf(pid)?.visible && widgetOf(pid), 15_000).catch(() => null);
+  const m3 = ps('traymenu', { A: pid, B: '' });
+  const i3 = list(m3?.items).find((i) => /Privacy Mode/.test(i.text));
+  const wa = w ? ps('affinity', { A: w.hwnd }) : null;
+  record('Privacy mode: privacy_set, the tray check and a newly built widget agree', i3?.isChecked && hidden(wa) ? 'pass' : 'fail', `tray item ${i3?.isChecked ? 'checked' : 'unchecked'}; new widget affinity ${wa}`);
+  await invoke(pg, 'privacy_set', { on: false });
+  await sleep(1000);
+  const a4 = affinities();
+  record('Privacy mode: privacy_set(false) clears every window', Object.values(a4).every((a) => a === 0) ? 'pass' : 'fail', JSON.stringify(a4));
 }
 
 // ---- phase B: idle CPU (nothing attached while sampling) -----------------------------
@@ -582,6 +731,7 @@ function seedCues() {
   const dir = path.join(process.env.APPDATA, IDENTIFIER, 'state');
   const file = path.join(dir, 'settings.json');
   const settings = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  settings.privacy = { ...(settings.privacy ?? {}), on: false }; // whatever phase A left
   settings.screen = { when: 'focus', glow: true, glowStrength: 'medium', bar: true, barDock: 'top', barSize: 'thin', hud: true, hudCorner: 'top-right' };
   fs.writeFileSync(file, JSON.stringify(settings));
   const label = 'Smoke focus';
