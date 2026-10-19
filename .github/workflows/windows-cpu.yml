@@ -1,8 +1,8 @@
 # Idle CPU of Daybloom on a clean Windows runner, build by build: published releases next to
 # test builds of this branch, each measured in the same four states
 # (scripts/windows-smoke.mjs with SMOKE_MODE=cpu, merged by scripts/windows-cpu-table.mjs).
-# The "widget-shown-later" build reverts only the widget's build-visible change (widget.rs), to
-# tell whether that is what keeps the GPU busy once the planner is hidden.
+# The "plain-show" build shows the widget with tao's plain show() (v0.1.5's path: known idle CPU,
+# but it takes the focus), as the control for whatever the "main" build does.
 name: windows-cpu
 
 on:
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [main, widget-shown-later]
+        variant: [main, plain-show]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,12 +33,12 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: npm ci
-      - name: Revert the widget's build-visible change
-        if: matrix.variant == 'widget-shown-later'
+      - name: Show the widget with tao's plain show()
+        if: matrix.variant == 'plain-show'
         shell: bash
         run: |
-          sed -i '/b\.visible(true)/d' src-tauri/src/widget.rs
-          ! grep -n 'visible(true)' src-tauri/src/widget.rs
+          sed -i 's/crate::show_quietly(&ensure(app)?)?;/ensure(app)?.show().map_err(|e| e.to_string())?;/' src-tauri/src/widget.rs
+          grep -n 'ensure(app)?.show()' src-tauri/src/widget.rs
       # Same test-build config as windows.yml: unsigned, with a DevTools port in both windows.
       - name: Tauri config for the test build
         shell: bash
@@ -61,7 +61,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tag: [v0.1.3, v0.1.4, v0.1.5, v0.1.6]
+        # v0.1.5: shown later with plain show() (focus-stealing); v0.1.6: built visible.
+        tag: [v0.1.5, v0.1.6]
     name: cpu (${{ matrix.tag }})
     runs-on: windows-latest
     timeout-minutes: 45
@@ -98,7 +99,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [main, widget-shown-later]
+        variant: [main, plain-show]
     name: cpu (build ${{ matrix.variant }})
     runs-on: windows-latest
     timeout-minutes: 45

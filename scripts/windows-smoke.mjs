@@ -235,6 +235,13 @@ const mainOf = (pid) => windowsOf(pid).find((w) => w.title === 'Daybloom');
 const widgetOf = (pid) => windowsOf(pid).find((w) => w.title === 'Daybloom Widget');
 const TOPMOST = 0x8;
 
+// A shown widget must draw: the middle of its dial reads as its face, not the desktop behind.
+function drawnAt(w) {
+  const c = ps('corners', { A: `${w.x + Math.round(w.w / 2) - 40},${w.y + Math.round(w.h / 2) - 40},80,80` });
+  const fromWall = Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]);
+  return { ok: fromWall > 60, detail: `dial centre avg rgb(${c.r},${c.g},${c.b}), ${fromWall} from the desktop's rgb(${WALL})` };
+}
+
 // What the app looked like when something never showed up: written to diagnostics-N.json.
 function diagnose(run, what) {
   const procs = list(ps('procs'));
@@ -369,6 +376,8 @@ async function behaviour(app) {
       w = widgetOf(pid);
       const c = ps('corners', { A: rect(w) });
       record('Transparent widget: no black box', teal(c) ? 'pass' : 'fail', `corners over bare desktop avg rgb(${c.r},${c.g},${c.b}), ${(c.black * 100).toFixed(1)}% near-black; desktop is rgb(${WALL})`);
+      const face = drawnAt(w);
+      record('Widget renders (its dial face is drawn, not blank)', face.ok ? 'pass' : 'fail', face.detail);
     }
     shot('02-widget-over-desktop.png', `${w.x - 30},${w.y - 30},${w.w + 60},${w.h + 60}`);
 
@@ -479,15 +488,15 @@ async function behaviour(app) {
         const after = z();
         record(
           'Widget sits on the desktop (below other windows, even when activated)',
-          below && after.widget.z > after.notepad.z ? 'pass' : 'fail',
-          `topmost ${!!(s.widget.exStyle & TOPMOST)}, z widget ${s.widget.z} vs Notepad ${s.notepad.z}; after activating the widget ${after.widget.z} vs ${after.notepad.z}`,
+          s.widget.visible && below && after.widget.z > after.notepad.z ? 'pass' : 'fail',
+          `visible ${s.widget.visible}; topmost ${!!(s.widget.exStyle & TOPMOST)}, z widget ${s.widget.z} vs Notepad ${s.notepad.z}; after activating the widget ${after.widget.z} vs ${after.notepad.z}`,
         );
         shot('06-layer-desktop.png', `${wg.x - 80},${wg.y - 80},${wg.w + 160},${wg.h + 160}`);
 
         await pg.widget.eval(`document.querySelector('.tools button[aria-pressed]').click()`); // back to top
         await sleep(1200);
         s = z();
-        record('Widget returns to floating on top', s.widget.exStyle & TOPMOST ? 'pass' : 'fail');
+        record('Widget returns to floating on top, still visible', s.widget.visible && s.widget.exStyle & TOPMOST ? 'pass' : 'fail', `visible ${s.widget.visible}; topmost ${!!(s.widget.exStyle & TOPMOST)}`);
       }
       taskkill('/PID', String(notepad.pid));
     }
@@ -524,6 +533,7 @@ async function behaviour(app) {
       record('No console errors or exceptions', errs.length ? 'warn' : 'pass', errs.slice(0, 8).join(' | '));
     }
     await privacyChecks(pid, pg);
+    if (pg) await reshowChecks(pid, pg);
   } finally {
     closeAll(pg);
     await quit(run);
@@ -621,6 +631,28 @@ async function exportChecks(pg) {
       /* ignore */
     }
   }
+}
+
+// Hiding and showing the widget again: it draws again and does not take the focus.
+async function reshowChecks(pid, pg) {
+  await invoke(pg, 'widget_show', { show: false });
+  await waitFor('widget to close', () => !widgetOf(pid), 10_000).catch(() => null);
+  ps('front', { A: mainOf(pid).hwnd });
+  await sleep(600);
+  const before = ps('foreground');
+  await invoke(pg, 'widget_show', { show: true });
+  const w = await waitFor('widget to reopen', () => widgetOf(pid)?.visible && widgetOf(pid), 15_000).catch(() => null);
+  await sleep(2500);
+  const after = ps('foreground');
+  if (!w) return record('Widget re-shown: draws and leaves the focus alone', 'fail', 'the widget did not come back');
+  // Over bare desktop again, so its centre can only read as the dial if it draws.
+  const scr = ps('screen');
+  ps('place', { A: w.hwnd, B: `${scr.w - w.w - 60},${Math.round((scr.h - w.h) / 2)},${w.w},${w.h}` });
+  await sleep(1500);
+  const face = drawnAt(widgetOf(pid));
+  shot('09-widget-reshown.png', `${scr.w - w.w - 90},${Math.round((scr.h - w.h) / 2) - 30},${w.w + 60},${w.h + 60}`);
+  record('Widget re-shown: it draws again', face.ok ? 'pass' : 'fail', face.detail);
+  record('Widget re-shown: the focus stays where it was', after?.hwnd === before?.hwnd && after?.hwnd !== w.hwnd ? 'pass' : 'fail', `foreground '${before?.title}' → '${after?.title}'`);
 }
 
 // Privacy mode: privacy_set through DevTools (build leg) carries the capture check; the tray
@@ -825,6 +857,10 @@ async function screenCues(app) {
     const fg = ps('foreground');
     record('Screen cues: never takes focus', fg?.hwnd !== cues.hwnd ? 'pass' : 'fail', `foreground '${fg?.title}' (${fg?.cls})`);
     shot('07-screen-cues.png');
+    // The HUD (top right) must actually be drawn, not just a transparent frame.
+    const hud = ps('corners', { A: `${scr.w - 200},${42},120,36` });
+    const hudOff = Math.abs(hud.r - WALL[0]) + Math.abs(hud.g - WALL[1]) + Math.abs(hud.b - WALL[2]);
+    record('Screen cues: the HUD is drawn', hudOff > 60 ? 'pass' : 'warn', `HUD area avg rgb(${hud.r},${hud.g},${hud.b}), ${hudOff} from the desktop (top right; a window behind it can also differ)`);
 
     // With the planner closed, points that hit-test to the desktop must still show it.
     await hideMain(pid);
