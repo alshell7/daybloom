@@ -30,9 +30,9 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 ## See it move
 
 <div align="center">
-<img src="docs/media/demo.webp" width="880" alt="A one-minute tour of Daybloom: the dial, the four dial types, quick add, the assistant, themes, finishing a block and the desktop widget.">
+<img src="docs/media/demo.webp" width="880" alt="A tour of Daybloom: the dial, the four dial types, quick add, voice, the focus launcher, themes, finishing a block, the desktop widget and screen cues.">
 <br>
-<sub>The animation does not play? <a href="docs/media/demo.mp4">Watch the video (MP4, 59 s)</a>.</sub>
+<sub>The animation does not play? <a href="docs/media/demo.mp4">Watch the video (MP4, 71 s)</a>.</sub>
 </div>
 
 <br>
