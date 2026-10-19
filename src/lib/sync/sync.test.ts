@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { migrateTrackerFile } from '../addons/tracker/migrate';
+import type { Entry, TrackerFile } from '../addons/tracker/types';
+import { migrateWork } from '../addons/work/migrate';
+import type { Invoice, WorkData } from '../addons/work/types';
 import type { Task } from '../engine/types';
 import { DEFAULT_SETTINGS, type Settings } from '../stores/settings.svelte';
 import { decodeBase64, encodeBase64, type FetchLike } from './github';
@@ -81,6 +85,8 @@ interface Data {
   settings: Settings;
   progress: { version: 1; unlocked: { id: string; at: number }[]; viewedAt: number };
   streaks: { celebrated: number };
+  work: WorkData;
+  tracker: TrackerFile;
 }
 
 interface Device {
@@ -98,6 +104,8 @@ function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<
     settings: structuredClone({ ...DEFAULT_SETTINGS, ...settings }),
     progress: { version: 1, unlocked: [], viewedAt: 0 },
     streaks: { celebrated: 0 },
+    work: migrateWork(null),
+    tracker: migrateTrackerFile(null),
   };
   const bind = <K extends keyof Data>(k: K) => ({
     read: () => structuredClone(data[k]),
@@ -111,6 +119,8 @@ function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<
     settings: bind('settings'),
     progress: bind('progress'),
     streaks: bind('streaks'),
+    work: bind('work'),
+    tracker: bind('tracker'),
     watch(cb, active) {
       watcher = { cb, active };
       return () => (watcher = null);
@@ -188,6 +198,8 @@ const synced = (d: Device) => ({
   shared: { theme: d.data.settings.theme, clock: d.data.settings.clock, wake: d.data.settings.wake, nudges: d.data.settings.nudges },
   badges: d.data.progress.unlocked,
   streaks: d.data.streaks,
+  work: d.data.work,
+  tracker: d.data.tracker,
 });
 
 afterEach(() => {
@@ -470,7 +482,7 @@ describe('github sync, end to end', () => {
     expect(a.secrets.has(TOKEN_ACCOUNT)).toBe(false);
     expect(a.svc.hasToken).toBe(false);
     expect(a.svc.config.enabled).toBe(false);
-    for (const k of ['tasks', 'settings', 'progress', 'streaks']) expect(a.storage.get(BASE_PREFIX + k)).toBe('');
+    for (const k of ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker']) expect(a.storage.get(BASE_PREFIX + k)).toBe('');
     expect(repo.files).toEqual(before);
     expect(a.data.tasks.tasks.map((t) => t.id)).toEqual(['t1']);
   });
@@ -532,5 +544,272 @@ describe('github sync, end to end', () => {
     stop();
     await vi.advanceTimersByTimeAsync(SYNC_INTERVAL_MS * 2);
     expect(listings()).toBe(settled + 1);
+  });
+});
+
+describe('github sync, addon files', () => {
+  /** 09:00 UTC on 19 October 2026. */
+  const T = Date.UTC(2026, 9, 19, 9);
+  const MIN = 60_000;
+
+  const entry = (id: string, startMin: number, endMin: number | null, p: Partial<Entry> = {}): Entry => ({
+    id,
+    startMs: T + startMin * MIN,
+    endMs: endMin === null ? null : T + endMin * MIN,
+    source: 'tracker',
+    ...p,
+  });
+
+  const invoice = (id: string, number: string, createdAt: number, keys: string[] = []): Invoice => ({
+    id,
+    number,
+    clientId: 'c1',
+    currency: 'USD',
+    issueDate: '2026-10-19',
+    dueDate: '2026-11-02',
+    from: '2026-10-01',
+    to: '2026-10-31',
+    lines: [{ description: 'Work', quantity: 1, unit: 'hour', unitPrice: 10_000, amount: 10_000, sourceKeys: keys }],
+    taxPct: 0,
+    status: 'draft',
+    createdAt,
+    updatedAt: createdAt,
+  });
+
+  const acme = { id: 'c1', name: 'Acme', currency: 'USD' };
+  const entryIds = (f: TrackerFile) => f.entries.map((e) => e.id);
+  const numbers = (w: WorkData) => Object.fromEntries(w.invoices.map((i) => [i.id, i.number]));
+
+  function putRaw(repo: FakeRepo, file: string, text: string) {
+    repo.files.set(`daybloom/${file}`, { text, sha: fnv(text) });
+  }
+
+  it('writes no addon file until an addon is used, then carries it to the other computer', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    await connect(b, 'Home PC', 'merge');
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(repo.read('work.json')).toBeNull();
+    expect(repo.read('tracker.json')).toBeNull();
+
+    // Only the tracker gets used: only tracker.json appears, and B never writes a work.json.
+    clock.t += 1000;
+    a.data.tracker.entries.push(entry('e1', 0, 30));
+    await a.svc.syncNow();
+    expect(entryIds(repo.read('tracker.json'))).toEqual(['e1']);
+    await b.svc.syncNow();
+    expect(entryIds(b.data.tracker)).toEqual(['e1']);
+    expect(repo.read('work.json')).toBeNull();
+    expect([...repo.files.keys()].filter((k) => !k.includes('device-')).sort()).toEqual([
+      'daybloom/progress.json',
+      'daybloom/settings.json',
+      'daybloom/streaks.json',
+      'daybloom/tasks.json',
+      'daybloom/tracker.json',
+    ]);
+
+    // Settled: another round is one listing each and no writes.
+    const puts = repo.puts;
+    const gets = repo.gets;
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(repo.puts).toBe(puts);
+    expect(repo.gets - gets).toBe(2);
+  });
+
+  it('a joining computer can adopt the repo’s addon data, or combine its own with it', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    a.data.work = migrateWork({
+      clients: [acme],
+      projects: [{ id: 'p1', name: 'Site', clientId: 'c1', color: 'focus', rate: { kind: 'hourly', amount: 10_000 }, createdAt: 1 }],
+      assignments: { t1: { projectId: 'p1', billable: true } },
+      invoices: [invoice('i1', 'INV-2026-0001', 1, ['task:t1@2026-10-19'])],
+    });
+    a.data.tracker = migrateTrackerFile({ entries: [entry('e1', 0, 30, { taskId: 't1' })], settings: { roundTo: 15 } });
+    await connect(a, 'Work Mac');
+    expect(repo.read('work.json')).toEqual(a.data.work);
+    expect(repo.read('tracker.json')).toEqual(a.data.tracker);
+
+    // "Use the repo's": B's own addon data gives way.
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    b.data.work = migrateWork({ clients: [{ id: 'mine', name: 'Mine', currency: 'USD' }] });
+    b.data.tracker = migrateTrackerFile({ entries: [entry('b-old', 100, 110)] });
+    await connect(b, 'Home PC', 'replace');
+    expect(b.data.work).toEqual(a.data.work);
+    expect(b.data.tracker).toEqual(a.data.tracker);
+
+    // "Combine both": C keeps its own, merged as if nothing had been synced before.
+    const c = makeDevice(repo, 'mac-c', 'Studio');
+    c.data.work = migrateWork({ clients: [{ ...acme, email: 'billing@acme.test' }], invoices: [invoice('i9', 'INV-2026-0001', 5, ['k9'])] });
+    c.data.tracker = migrateTrackerFile({ entries: [entry('c-own', 40, 50)] });
+    await connect(c, 'Studio', 'merge');
+    expect(c.data.work.clients).toEqual([{ ...acme, email: 'billing@acme.test' }]);
+    expect(numbers(c.data.work)).toEqual({ i1: 'INV-2026-0001', i9: 'INV-2026-0002' });
+    expect(c.data.work.invoicedKeys).toEqual({ 'task:t1@2026-10-19': 'i1', k9: 'i9' });
+    expect(entryIds(c.data.tracker)).toEqual(['e1', 'c-own']);
+    expect(c.data.tracker.settings.roundTo).toBe(15);
+    expect(repo.read('work.json')).toEqual(c.data.work);
+
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(synced(a)).toEqual(synced(c));
+    expect(synced(b)).toEqual(synced(c));
+  });
+
+  it('two computers tracking at once: a sha conflict re-fetches, re-merges and retries, leaving one entry running', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    a.data.tracker = migrateTrackerFile({ entries: [entry('e1', 0, 30), entry('e2', 40, 50)] });
+    await connect(a, 'Work Mac');
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    await connect(b, 'Home PC', 'replace');
+    expect(b.data.tracker).toEqual(a.data.tracker);
+
+    // Apart: A notes e1 and starts tracking; B deletes e2, changes a setting, starts tracking later.
+    clock.t += 1000;
+    a.data.tracker.entries[0].note = 'Kick-off';
+    a.data.tracker.entries.push(entry('a-run', 60, null, { taskId: 'write' }));
+    b.data.tracker.entries = b.data.tracker.entries.filter((e) => e.id !== 'e2');
+    b.data.tracker.entries.push(entry('b-run', 90, null, { taskId: 'call' }));
+    b.data.tracker.settings.roundTo = 15;
+
+    // B's whole sync lands just before A's write of tracker.json.
+    let injected = false;
+    repo.beforePut = async (path) => {
+      if (injected || !path.endsWith('tracker.json')) return;
+      injected = true;
+      await b.svc.syncNow();
+    };
+    const conflicts = repo.conflicts;
+    await a.svc.syncNow();
+    repo.beforePut = null;
+    expect(injected).toBe(true);
+    expect(repo.conflicts - conflicts).toBe(1);
+    expect(a.svc.status.state).toBe('ok');
+    expect(b.svc.status.state).toBe('ok');
+
+    await b.svc.syncNow();
+    expect(a.data.tracker).toEqual(repo.read('tracker.json'));
+    expect(b.data.tracker).toEqual(a.data.tracker);
+    const t = a.data.tracker;
+    expect(t.entries.map((e) => [e.id, e.endMs])).toEqual([
+      ['e1', T + 30 * MIN],
+      ['a-run', T + 90 * MIN], // a switch to B's entry, not an overlap
+      ['b-run', null],
+    ]);
+    expect(t.entries[0].note).toBe('Kick-off');
+    expect(t.settings.roundTo).toBe(15);
+
+    // Settled: nothing more to write.
+    const puts = repo.puts;
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(repo.puts).toBe(puts);
+  });
+
+  it('two computers that issued the same invoice number at the same moment end with unique numbers', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    a.data.work = migrateWork({ clients: [acme], invoices: [invoice('i1', 'INV-2026-0001', 1, ['k1'])] });
+    await connect(a, 'Work Mac');
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    await connect(b, 'Home PC');
+
+    clock.t += 1000;
+    a.data.work.invoices.push(invoice('ia', 'INV-2026-0002', 100, ['k2']));
+    a.data.work.invoicedKeys.k2 = 'ia';
+    b.data.work.invoices.push(invoice('ib', 'INV-2026-0002', 200, ['k2', 'k3']));
+    Object.assign(b.data.work.invoicedKeys, { k2: 'ib', k3: 'ib' });
+    await Promise.all([a.svc.syncNow(), b.svc.syncNow()]);
+    expect(repo.conflicts).toBeGreaterThan(0);
+    expect(a.svc.status.state).toBe('ok');
+    expect(b.svc.status.state).toBe('ok');
+
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(synced(a)).toEqual(synced(b));
+    expect(numbers(a.data.work)).toEqual({ i1: 'INV-2026-0001', ia: 'INV-2026-0002', ib: 'INV-2026-0003' });
+    // Work both billed stays with the older invoice; nothing billed is missing from the ledger.
+    expect(a.data.work.invoicedKeys).toEqual({ k1: 'i1', k2: 'ia', k3: 'ib' });
+  });
+
+  it('normalises garbled addon files from the repo instead of trusting them', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    putRaw(
+      repo,
+      'work.json',
+      JSON.stringify({
+        version: 9,
+        clients: [{ id: 'c1', name: 'Acme', currency: 'eur' }, 'junk', null],
+        projects: 'nope',
+        assignments: { t1: { projectId: 'ghost' } },
+        invoices: [{ id: 'i1', number: 'INV-2026-0001', clientId: 'c1', issueDate: '2026-10-19', createdAt: 1, updatedAt: 1, lines: [{ description: 'x', quantity: 2, unitPrice: 500, sourceKeys: ['k1', 7] }] }],
+        invoicedKeys: { stolen: 'i1' },
+        profile: { logoDataUrl: 'javascript:alert(1)' },
+      }),
+    );
+    putRaw(
+      repo,
+      'tracker.json',
+      JSON.stringify({
+        entries: [{ id: 'r1', startMs: T, endMs: null }, { id: 'r2', startMs: T + 60 * MIN, endMs: null }, { id: 'bad', startMs: 'x' }, null],
+        settings: { idleMinutes: 'soon', roundTo: 15 },
+      }),
+    );
+    clock.t += 1000;
+    await a.svc.syncNow();
+    expect(a.svc.status.state).toBe('ok');
+    expect(a.data.work.clients).toEqual([{ id: 'c1', name: 'Acme', currency: 'EUR' }]);
+    expect(a.data.work.assignments).toEqual({});
+    expect(a.data.work.invoices[0].lines[0]).toMatchObject({ amount: 1000, sourceKeys: ['k1'] });
+    expect(a.data.work.invoicedKeys).toEqual({ k1: 'i1' });
+    expect(a.data.work.profile).not.toHaveProperty('logoDataUrl');
+    expect(a.data.tracker.entries.map((e) => [e.id, e.endMs])).toEqual([
+      ['r1', T + 60 * MIN],
+      ['r2', null],
+    ]);
+    expect(a.data.tracker.settings).toMatchObject({ idleMinutes: 5, roundTo: 15 });
+
+    // Not JSON at all: refused, and neither side is overwritten.
+    putRaw(repo, 'tracker.json', '{ oops');
+    clock.t += 1000;
+    await a.svc.syncNow();
+    expect(a.svc.status).toMatchObject({ state: 'error', kind: 'invalid' });
+    expect(repo.files.get('daybloom/tracker.json')!.text).toBe('{ oops');
+    expect(entryIds(a.data.tracker)).toEqual(['r1', 'r2']);
+  });
+
+  it('syncs an addon edit ~20 s after it settles', async () => {
+    vi.useFakeTimers();
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    const stop = a.svc.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    clock.t += 1000;
+    a.data.work = migrateWork({ clients: [acme] });
+    a.touch();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS - 1000);
+    expect(repo.read('work.json')).toBeNull();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(repo.read('work.json').clients).toEqual([acme]);
+    expect(repo.read('tracker.json')).toBeNull();
+
+    clock.t += 1000;
+    a.data.tracker.entries.push(entry('e1', 0, null));
+    a.touch();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    expect(entryIds(repo.read('tracker.json'))).toEqual(['e1']);
+    stop();
   });
 });

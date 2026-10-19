@@ -1,6 +1,6 @@
 [package]
 name = "daybloom"
-version = "0.1.5"
+version = "0.1.6"
 description = "Daybloom — a visual, sectograph-style day planner and timer"
 authors = ["Daybloom"]
 edition = "2021"
