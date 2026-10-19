@@ -1,13 +1,15 @@
-// Windows smoke test for the installed app (run by .github/workflows/windows-smoke.yml).
+// Windows smoke test for the installed app (run by .github/workflows/windows.yml).
 //
 //   node scripts/windows-smoke.mjs <out-dir> <artifact-dir>
 //
 // Installs the NSIS bundle silently, launches Daybloom, and checks with real Win32 input,
 // window styles and screenshots: the transparent widget (no black box), float-on-top vs
 // sit-on-desktop, the tray left click, the widget double-click and drag, notifications, the
-// theme reveal, and idle CPU. Page state is read over the WebView2 DevTools protocol: the app is
-// launched with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS set to the browser args baked into the exe
-// plus a debugging port, and nothing is attached while CPU is sampled.
+// microphone path, the theme reveal, activity sensing, exports, privacy mode, the screen-cues
+// overlay, and idle CPU. Page state is read over the WebView2 DevTools protocol on a port the
+// workflow builds into pull-request installers (WebView2 ignored the env var and registry
+// overrides for it); published releases have no port, so their page-level checks are skipped.
+// Nothing is attached while CPU is sampled. SMOKE_SOURCE says which kind is under test.
 // Writes results.json, summary.md and screenshots to <out-dir>.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -18,6 +20,7 @@ const OUT = path.resolve(process.argv[2] ?? 'smoke-out');
 const ART = path.resolve(process.argv[3] ?? 'artifact');
 const PS1 = path.resolve(import.meta.dirname, 'win32.ps1');
 const DEBUG_PORT = 9222;
+const SOURCE = process.env.SMOKE_SOURCE ?? 'build'; // 'build' (port built in) | 'release'
 const WALL = [0, 128, 128]; // solid teal desktop: anything else in a widget corner is the window itself
 const IDENTIFIER = 'app.daybloom.desktop';
 const CPU_SECONDS = 60;
@@ -36,9 +39,53 @@ function record(check, status, detail = '') {
 function ps(cmd, args = {}) {
   const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', PS1, '-Cmd', cmd];
   for (const [k, v] of Object.entries(args)) argv.push(`-${k}`, String(v));
-  const out = execFileSync('powershell', argv, { encoding: 'utf8', maxBuffer: 16 << 20 }).trim();
-  return out ? JSON.parse(out) : null;
+  let out;
+  try {
+    out = execFileSync('powershell', argv, { encoding: 'utf8', maxBuffer: 16 << 20, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (e) {
+    // Say what PowerShell said (a compile error in the helper's C# fails every command).
+    throw new Error(`win32.ps1 ${cmd} failed: ${String(e.stderr ?? e.message).replace(/\s+/g, ' ').trim().slice(0, 600)}`);
+  }
+  // The JSON is the last line; anything a cmdlet printed before it (even UTF-16) is ignored.
+  const last = out.replace(/\0/g, '').trim().split(/\r?\n/).pop();
+  return last ? JSON.parse(last) : null;
 }
+
+// Runs a helper command in the background; `ready` resolves once it prints READY.
+function psAsync(cmd, args = {}) {
+  const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', PS1, '-Cmd', cmd];
+  for (const [k, v] of Object.entries(args)) argv.push(`-${k}`, String(v));
+  const child = spawn('powershell', argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '';
+  let err = '';
+  let onReady;
+  const ready = new Promise((r) => (onReady = r));
+  child.stdout.on('data', (d) => {
+    out += d;
+    if (out.includes('READY')) onReady(true);
+  });
+  child.stderr.on('data', (d) => (err += d));
+  const done = new Promise((res, rej) =>
+    child.on('close', () => {
+      const last = out.replace(/\0/g, '').trim().split(/\r?\n/).pop();
+      try {
+        res(JSON.parse(last));
+      } catch {
+        rej(new Error(`win32.ps1 ${cmd} failed: ${(err || out).replace(/\s+/g, ' ').slice(0, 400)}`));
+      }
+    }),
+  );
+  return { ready: Promise.race([ready, sleep(20_000).then(() => false)]), done };
+}
+
+const settingsFile = () => path.join(process.env.APPDATA, IDENTIFIER, 'state', 'settings.json');
+const savedWidget = () => {
+  try {
+    return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')).widget ?? {};
+  } catch {
+    return {};
+  }
+};
 
 const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
 const rect = (w) => `${w.x},${w.y},${w.w},${w.h}`;
@@ -114,15 +161,15 @@ class Cdp {
   }
 }
 
-// { main, widget } DevTools clients, or null when the debug port never opened.
-async function pages() {
+// DevTools clients by window label ({ main, widget }), or null if the wanted pages never showed.
+async function pages(want = ['main', 'widget']) {
   const targets = await waitFor(
-    'two WebView2 pages on the debug port',
+    `${want.join(' + ')} on the debug port`,
     async () => {
       try {
         const r = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
         const t = (await r.json()).filter((x) => x.type === 'page');
-        return t.length >= 2 ? t : null;
+        return t.length >= want.length ? t : null;
       } catch {
         return null;
       }
@@ -139,7 +186,9 @@ async function pages() {
     if (label) byLabel[label] = c;
     else c.close();
   }
-  return byLabel.main && byLabel.widget ? byLabel : null;
+  if (want.every((l) => byLabel[l])) return byLabel;
+  closeAll(byLabel);
+  return null;
 }
 
 const closeAll = (pg) => pg && Object.values(pg).forEach((c) => c.close());
@@ -169,16 +218,11 @@ function install() {
   const msi = findFiles(ART, (n) => /\.msi$/i.test(n))[0];
   record('Installers built', 'pass', [setup, msi].filter(Boolean).map((f) => `${path.basename(f)} (${(fs.statSync(f).size / 1048576).toFixed(1)} MB)`).join(', '));
   execFileSync(setup, ['/S'], { stdio: 'inherit' });
-  const dir = path.join(process.env.LOCALAPPDATA, 'Daybloom');
-  const exe = findFiles(dir, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n))[0];
-  if (!exe) throw new Error(`installed exe not found in ${dir}`);
-  record('NSIS silent install', 'pass', exe);
-  // tauri.conf.json is compiled into the exe; reuse its WebView2 args so the debug launch
-  // differs from a normal one only by the port (the env var replaces the app's own args).
-  const found = fs.readFileSync(exe).toString('latin1').match(/--disable-features=[\w,]+/g) ?? [];
-  const args = found.sort((a, b) => b.length - a.length)[0] ?? '--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection';
-  record('WebView2 browser args in the build', 'info', args);
-  return { exe, msi, webviewArgs: `${args} --remote-debugging-port=${DEBUG_PORT}` };
+  const dirs = [path.join(process.env.LOCALAPPDATA, 'Daybloom'), path.join(process.env.LOCALAPPDATA, 'Programs', 'Daybloom'), path.join(process.env.ProgramFiles, 'Daybloom')];
+  const exe = dirs.flatMap((d) => findFiles(d, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n)))[0];
+  if (!exe) throw new Error(`installed exe not found in ${dirs.join(', ')}`);
+  record('NSIS silent install', 'pass', `${exe}; WebView2 runtime ${ps('webview2') || 'not found'}`);
+  return { exe, msi };
 }
 
 function seedState() {
@@ -188,18 +232,37 @@ function seedState() {
   fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ widget: { visible: true, layer: 'top' }, motion: 'full', notify: true, autoUpdate: false }));
 }
 
-function launch({ exe, webviewArgs }) {
-  const env = { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: webviewArgs };
-  const child = spawn(exe, [], { env, detached: true, stdio: 'ignore' });
+const exits = new Map();
+let launches = 0;
+
+// The app's stdout/stderr go to app-N.log: a GUI-subsystem exe still writes a panic there.
+function launch({ exe }) {
+  const log = path.join(OUT, `app-${++launches}.log`);
+  const fd = fs.openSync(log, 'w');
+  const child = spawn(exe, [], { detached: true, stdio: ['ignore', fd, fd] });
+  child.on('exit', (code) => exits.set(child.pid, `0x${(code >>> 0).toString(16)}`));
   child.unref();
-  return child.pid;
+  return { pid: child.pid, log };
 }
 
-function quit(pid) {
+function taskkill(...args) {
   try {
-    execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    execFileSync('taskkill', [...args, '/F'], { stdio: 'ignore' });
   } catch {
     /* already gone */
+  }
+}
+
+// Also waits for the DevTools port to be free: a WebView2 process that outlives the app keeps
+// it, and the next launch would then attach to a dead app's pages (or to none).
+async function quit(app) {
+  if (app.pid) taskkill('/PID', String(app.pid), '/T');
+  taskkill('/IM', path.basename(app.exe));
+  for (let i = 0; i < 20; i++) {
+    const holders = list(ps('port', { A: DEBUG_PORT }));
+    if (!holders.length) return;
+    if (i === 10) for (const h of holders) taskkill('/PID', String(h), '/T');
+    await sleep(500);
   }
 }
 
@@ -208,18 +271,52 @@ const mainOf = (pid) => windowsOf(pid).find((w) => w.title === 'Daybloom');
 const widgetOf = (pid) => windowsOf(pid).find((w) => w.title === 'Daybloom Widget');
 const TOPMOST = 0x8;
 
-async function waitWindows(pid) {
-  return waitFor(
-    'planner and widget windows',
-    () => {
-      const ws = windowsOf(pid);
-      const main = ws.find((w) => w.title === 'Daybloom' && w.visible);
-      const widget = ws.find((w) => w.title === 'Daybloom Widget' && w.visible);
-      return main && widget ? { main, widget } : null;
-    },
-    60_000,
-    1000,
-  );
+// A shown widget must draw: the middle of its dial reads as its face, not the desktop behind.
+function drawnAt(w) {
+  const c = ps('corners', { A: `${w.x + Math.round(w.w / 2) - 40},${w.y + Math.round(w.h / 2) - 40},80,80` });
+  const fromWall = Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]);
+  return { ok: fromWall > 60, detail: `dial centre avg rgb(${c.r},${c.g},${c.b}), ${fromWall} from the desktop's rgb(${WALL})` };
+}
+
+// What the app looked like when something never showed up: written to diagnostics-N.json.
+function diagnose(run, what) {
+  const procs = list(ps('procs'));
+  const pids = new Set([run.pid, ...procs.map((p) => p.pid)]);
+  const windows = list(ps('windows')).filter((w) => pids.has(w.pid) || /daybloom/i.test(w.title));
+  const log = fs.existsSync(run.log) ? fs.readFileSync(run.log, 'utf8').slice(-4000) : '';
+  const d = { what, spawned: run.pid, exit: exits.get(run.pid) ?? 'still running', procs, windows, log };
+  fs.writeFileSync(path.join(OUT, `diagnostics-${launches}.json`), JSON.stringify(d, null, 2));
+  try {
+    shot(`diagnostics-${launches}.png`);
+  } catch {
+    /* ignore */
+  }
+  return `${what}: spawned pid ${run.pid} exit ${d.exit}; daybloom processes ${JSON.stringify(procs)}; windows ${JSON.stringify(windows.map((w) => [w.pid, w.title, w.cls, w.visible]))}; log ${JSON.stringify(log.slice(-600))}`;
+}
+
+// Launches the app and waits for the planner, then the widget (shown at launch from the seeded
+// settings; opened through the app's own widget_show command if it was not).
+async function start(app, { widget: wantWidget = true } = {}) {
+  const run = { ...app, ...launch(app) };
+  const planner = await waitFor('planner window', () => {
+    const procs = list(ps('procs'));
+    const pids = [run.pid, ...procs.map((p) => p.pid)];
+    return list(ps('windows', { A: pids.join(',') })).find((w) => w.title === 'Daybloom' && w.visible);
+  }, 90_000, 1000).catch(() => null);
+  if (!planner) throw new Error(diagnose(run, 'planner window never appeared'));
+  run.pid = planner.pid;
+  if (!wantWidget) return { run, main: planner, widget: null };
+
+  let widget = await waitFor('widget window', () => widgetOf(run.pid)?.visible && widgetOf(run.pid), 20_000).catch(() => null);
+  if (!widget) {
+    const pg = await pages(['main']);
+    await pg?.main.eval(`__TAURI_INTERNALS__.invoke('widget_show', { show: true })`).catch((e) => console.log('widget_show', e.message));
+    closeAll(pg);
+    widget = await waitFor('widget window', () => widgetOf(run.pid)?.visible && widgetOf(run.pid), 15_000).catch(() => null);
+    if (!widget) throw new Error(diagnose(run, 'widget window never appeared'));
+    record(`Widget shown at launch ${launches}`, 'warn', 'not shown from saved settings; opened with widget_show');
+  }
+  return { run, main: planner, widget };
 }
 
 async function hideMain(pid) {
@@ -238,14 +335,42 @@ async function trayClick(pid) {
 
 // ---- phase A: behaviour ----------------------------------------------------------------
 
+async function devtoolsWhy(pid) {
+  let version;
+  try {
+    version = JSON.stringify(await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`)).json()).slice(0, 200);
+  } catch (e) {
+    version = String(e.cause?.code ?? e.message);
+  }
+  return `port ${DEBUG_PORT} listeners ${JSON.stringify(ps('port', { A: DEBUG_PORT }))}; /json/version ${version}; browser flags '${ps('browserargs', { A: pid })}'`;
+}
+
+// Starts the app and attaches to its pages when the build has a debugging port.
+async function startWithDevtools(app) {
+  const started = await start(app);
+  await sleep(8000); // fonts, first springs, sample day
+  if (SOURCE === 'release') {
+    record('DevTools connection to the WebView2 pages', 'warn', 'release builds have no debugging port; page-level checks skipped');
+    return { started, pg: null };
+  }
+  const pg = await pages();
+  record(
+    'DevTools connection to the WebView2 pages',
+    pg ? 'pass' : 'fail',
+    pg ? `browser flags '${ps('browserargs', { A: started.run.pid })}'` : `${await devtoolsWhy(started.run.pid)}; page-level checks skipped`,
+  );
+  return { started, pg };
+}
+
 async function behaviour(app) {
-  const pid = launch(app);
+  let run = app;
   let pg = null;
   try {
-    const { widget } = await waitWindows(pid);
-    await sleep(8000); // fonts, first springs, sample day
-    pg = await pages();
-    if (!pg) record('DevTools connection to the WebView2 pages', 'fail', 'debug port never offered both pages; page-level checks skipped');
+    const { started, pg: pages0 } = await startWithDevtools(app);
+    pg = pages0;
+    run = started.run;
+    const { pid } = run;
+    const { widget } = started;
 
     if (pg) {
       const probeMain = await pg.main.eval(PROBE);
@@ -259,6 +384,8 @@ async function behaviour(app) {
         `html ${probeWidget.htmlBg}, body ${probeWidget.bodyBg}`,
       );
     }
+    const fg0 = ps('foreground');
+    record('Widget does not take the focus when it appears', fg0?.hwnd !== widget.hwnd ? 'pass' : 'fail', `foreground '${fg0?.title}'`);
     record('Widget window styles', 'info', `exStyle 0x${(widget.exStyle >>> 0).toString(16)}, ${widget.w}x${widget.h} at ${widget.x},${widget.y}`);
     shot('01-launch.png');
 
@@ -269,10 +396,25 @@ async function behaviour(app) {
       const vis = await pg.main.eval('document.visibilityState');
       record('Planner closed to the tray reports document.hidden', vis === 'hidden' ? 'pass' : 'fail', `visibilityState '${vis}'`);
     }
-    const w = widgetOf(pid);
-    const c = ps('corners', { A: rect(w) });
-    const near = Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]) < 60;
-    record('Transparent widget: no black box', c.black < 0.05 && near ? 'pass' : 'fail', `corner pixels avg rgb(${c.r},${c.g},${c.b}), ${(c.black * 100).toFixed(1)}% near-black; desktop is rgb(${WALL})`);
+    // Over desktop checked to be bare first: the runner's own console window sits top left.
+    let w = widgetOf(pid);
+    const scr = ps('screen');
+    const teal = (c) => c.black < 0.01 && Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]) < 60;
+    const spot = [
+      [scr.w - w.w - 60, Math.round((scr.h - w.h) / 2)],
+      [scr.w - w.w - 60, 60],
+      [Math.round((scr.w - w.w) / 2), scr.h - w.h - 90],
+    ].find(([x, y]) => teal(ps('corners', { A: `${x},${y},${w.w},${w.h}` })));
+    if (!spot) record('Transparent widget: no black box', 'warn', 'no bare patch of desktop to test over');
+    else {
+      ps('place', { A: w.hwnd, B: `${spot[0]},${spot[1]},${w.w},${w.h}` });
+      await sleep(1500);
+      w = widgetOf(pid);
+      const c = ps('corners', { A: rect(w) });
+      record('Transparent widget: no black box', teal(c) ? 'pass' : 'fail', `corners over bare desktop avg rgb(${c.r},${c.g},${c.b}), ${(c.black * 100).toFixed(1)}% near-black; desktop is rgb(${WALL})`);
+      const face = drawnAt(w);
+      record('Widget renders (its dial face is drawn, not blank)', face.ok ? 'pass' : 'fail', face.detail);
+    }
     shot('02-widget-over-desktop.png', `${w.x - 30},${w.y - 30},${w.w + 60},${w.h + 60}`);
 
     // Tray: a left click (button up) opens the planner.
@@ -307,6 +449,15 @@ async function behaviour(app) {
         !flip.error && flip.from !== flip.to && !errs.length ? 'pass' : 'fail',
         flip.error ?? `${flip.from} → ${flip.to}${errs.length ? `; ${errs.join(' | ')}` : ''}`,
       );
+      // The widget follows the theme; a dark color-scheme must not paint its canvas dark.
+      if (flip.to === 'dark' && spot) {
+        await sleep(1500);
+        const wd = widgetOf(pid);
+        const behind = ps('corners', { A: rect(wd) });
+        const ok = behind.black < 0.01 && Math.abs(behind.r - WALL[0]) + Math.abs(behind.g - WALL[1]) + Math.abs(behind.b - WALL[2]) < 60;
+        record('Transparent widget in the dark theme', ok ? 'pass' : 'fail', `corners avg rgb(${behind.r},${behind.g},${behind.b}), ${(behind.black * 100).toFixed(1)}% near-black; theme '${await pg.widget.eval('document.documentElement.dataset.theme')}'`);
+        shot('03b-widget-dark.png', `${wd.x - 30},${wd.y - 30},${wd.w + 60},${wd.h + 60}`);
+      }
       await pg.main.eval(`document.querySelector('button.icon-btn.toggle')?.click()`);
       await sleep(1200);
 
@@ -320,6 +471,27 @@ async function behaviour(app) {
       } catch (e) {
         record('Notification sent from the installed app', 'fail', String(e.message ?? e));
       }
+
+      // Microphone path for voice: getUserMedia must fail only for want of a device (runners
+      // have none), never on CSP, the secure context or a permission prompt; the worklet loads.
+      const mic = await pg.main.eval(`(async () => {
+        const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error('no answer after ' + ms + ' ms (permission prompt?)'), { name: 'Timeout' })), ms))]);
+        const out = { secure: isSecureContext, inputs: (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput').length };
+        try {
+          const s = await within(navigator.mediaDevices.getUserMedia({ audio: true }), 8000);
+          s.getTracks().forEach((t) => t.stop());
+          out.gum = 'granted';
+        } catch (e) { out.gum = e.name + ': ' + e.message; }
+        try {
+          const ctx = new AudioContext();
+          await within(ctx.audioWorklet.addModule('/voice/capture-worklet.js'), 8000);
+          await ctx.close();
+          out.worklet = 'loaded';
+        } catch (e) { out.worklet = e.name + ': ' + e.message; }
+        return out;
+      })()`);
+      record('Microphone: getUserMedia fails only for want of a device', mic.secure && (mic.gum === 'granted' || /^NotFoundError/.test(mic.gum)) ? 'pass' : 'fail', `secure context ${mic.secure}; ${mic.inputs} audio inputs; ${mic.gum}`);
+      record('Microphone: voice AudioWorklet loads under the CSP', mic.worklet === 'loaded' ? 'pass' : 'fail', mic.worklet);
     }
 
     // Layers: Notepad over the widget, then the widget's pin button flips top ↔ desktop.
@@ -341,7 +513,7 @@ async function behaviour(app) {
       shot('05-layer-top.png', `${wg.x - 80},${wg.y - 80},${wg.w + 160},${wg.h + 160}`);
 
       if (pg) {
-        await pg.widget.eval(`document.querySelectorAll('.tools button')[1].click()`); // pin: top → desktop
+        await pg.widget.eval(`document.querySelector('.tools button[aria-pressed]').click()`); // pin: top → desktop
         await sleep(1200);
         ps('front', { A: np.hwnd });
         await sleep(800);
@@ -352,17 +524,21 @@ async function behaviour(app) {
         const after = z();
         record(
           'Widget sits on the desktop (below other windows, even when activated)',
-          below && after.widget.z > after.notepad.z ? 'pass' : 'fail',
-          `topmost ${!!(s.widget.exStyle & TOPMOST)}, z widget ${s.widget.z} vs Notepad ${s.notepad.z}; after activating the widget ${after.widget.z} vs ${after.notepad.z}`,
+          s.widget.visible && below && after.widget.z > after.notepad.z ? 'pass' : 'fail',
+          `visible ${s.widget.visible}; topmost ${!!(s.widget.exStyle & TOPMOST)}, z widget ${s.widget.z} vs Notepad ${s.notepad.z}; after activating the widget ${after.widget.z} vs ${after.notepad.z}`,
         );
         shot('06-layer-desktop.png', `${wg.x - 80},${wg.y - 80},${wg.w + 160},${wg.h + 160}`);
+        await sleep(1000); // the planner saves settings 250 ms after a change
+        const sw = savedWidget();
+        record('Widget on the desktop layer is still saved as shown (it reappears after a restart)', sw.visible === true && sw.layer === 'desktop' ? 'pass' : 'fail', `settings.widget ${JSON.stringify(sw)}`);
 
-        await pg.widget.eval(`document.querySelectorAll('.tools button')[1].click()`); // back to top
+        await pg.widget.eval(`document.querySelector('.tools button[aria-pressed]').click()`); // back to top
         await sleep(1200);
         s = z();
-        record('Widget returns to floating on top', s.widget.exStyle & TOPMOST ? 'pass' : 'fail');
+        record('Widget returns to floating on top, still visible', s.widget.visible && s.widget.exStyle & TOPMOST ? 'pass' : 'fail', `visible ${s.widget.visible}; topmost ${!!(s.widget.exStyle & TOPMOST)}`);
       }
-      quit(notepad.pid);
+      taskkill('/PID', String(notepad.pid));
+      if (pg) await blinkCheck(pid, pg);
     }
 
     // Widget double-click opens the planner, and clicks never leave the window stuck to the cursor.
@@ -391,22 +567,304 @@ async function behaviour(app) {
     record('Dragging the widget moves it', Math.abs(dx + 120) < 20 && Math.abs(dy - 60) < 20 ? 'pass' : 'fail', `moved by ${dx},${dy} (expected -120,60)`);
 
     if (pg) {
+      await activityChecks(pid, pg);
+      await exportChecks(pg);
       const errs = [...pg.main.errors.map((e) => `main ${e}`), ...pg.widget.errors.map((e) => `widget ${e}`)];
       record('No console errors or exceptions', errs.length ? 'warn' : 'pass', errs.slice(0, 8).join(' | '));
     }
+    await privacyChecks(pid, pg);
+    if (pg) await reshowChecks(pid, pg);
+    if (pg) await keyboardFocusChecks(pid, pg);
   } finally {
     closeAll(pg);
-    quit(pid);
+    await quit(run);
     await sleep(2000);
   }
+}
+
+// ---- v0.1.5 native pieces: activity sensing, export, privacy mode -----------------------
+
+// Never throws: a command that rejects or never answers (DevTools gives up after 20 s) comes back
+// as { ok: false }, so one stuck call fails its check instead of the whole run.
+const invoke = async (pg, cmd, args = {}) => {
+  try {
+    return await pg.main.eval(`__TAURI_INTERNALS__.invoke(${JSON.stringify(cmd)}, ${JSON.stringify(args)}).then((v) => ({ ok: true, v }), (e) => ({ ok: false, e: String(e) }))`);
+  } catch (e) {
+    return { ok: false, e: `${cmd}: ${e.message}` };
+  }
+};
+
+async function activityChecks(pid, pg) {
+  ps('nudge');
+  const fresh = await invoke(pg, 'activity_idle_seconds');
+  await sleep(6000);
+  const later = await invoke(pg, 'activity_idle_seconds');
+  record(
+    'Activity: idle seconds reset on input and grow without it',
+    fresh.ok && later.ok && fresh.v >= 0 && fresh.v < 4 && later.v >= fresh.v + 4 ? 'pass' : 'fail',
+    `${fresh.ok ? fresh.v : fresh.e} s just after input, ${later.ok ? later.v : later.e} s six seconds later`,
+  );
+
+  const notepad = spawn('notepad.exe', [], { detached: true, stdio: 'ignore' });
+  notepad.unref();
+  const np = await waitFor('Notepad window', () => list(ps('windows')).find((x) => x.pid === notepad.pid && x.visible && x.w > 100), 15_000).catch(() => null);
+  if (!np) return record('Activity: foreground app', 'fail', 'Notepad did not open');
+  ps('front', { A: np.hwnd });
+  await sleep(800);
+  const fg = ps('foreground');
+  const plain = await invoke(pg, 'activity_foreground', { withTitle: false });
+  const titled = await invoke(pg, 'activity_foreground', { withTitle: true });
+  record(
+    'Activity: foreground app is Notepad when it is in front',
+    fg?.hwnd === np.hwnd && plain.ok && /^notepad$/i.test(plain.v?.app ?? '') && plain.v?.title == null ? 'pass' : 'fail',
+    `foreground '${fg?.title}'; withTitle false → ${JSON.stringify(plain.ok ? plain.v : plain.e)}`,
+  );
+  record(
+    'Activity: the window title only when asked',
+    titled.ok && /^notepad$/i.test(titled.v?.app ?? '') && /Notepad/.test(titled.v?.title ?? '') ? 'pass' : 'fail',
+    `withTitle true → ${JSON.stringify(titled.ok ? titled.v : titled.e)}`,
+  );
+  taskkill('/PID', String(notepad.pid));
+}
+
+async function exportChecks(pg) {
+  const dl = ps('downloads');
+  const BYTES = 'a,b\r\n1,2\r\n';
+  const same = (a, b) => a.toLowerCase().replace(/\\+$/, '') === b.toLowerCase().replace(/\\+$/, '');
+  const isFile = (p) => {
+    try {
+      return fs.statSync(p).isFile(); // never read a device name (CON) as a file
+    } catch {
+      return false;
+    }
+  };
+  const save = (name) => invoke(pg, 'export_save', { name, contents: BYTES, then: null });
+  const made = [];
+  const keep = (r) => (r.ok && made.push(r.v), r);
+
+  const r1 = keep(await save('Daybloom test.csv'));
+  const bytes = r1.ok && isFile(r1.v) ? fs.readFileSync(r1.v) : null;
+  record(
+    'Export: saves into Downloads with the exact bytes',
+    r1.ok && same(path.dirname(r1.v), dl) && bytes?.equals(Buffer.from(BYTES)) ? 'pass' : 'fail',
+    r1.ok ? `${r1.v}; ${bytes ? `${bytes.length} bytes` : 'no file'}` : r1.e,
+  );
+
+  const escaped = path.resolve(dl, '..', '..', 'evil.csv');
+  const r2 = keep(await save('..\\..\\evil.csv'));
+  record(
+    'Export: a path in the name stays inside Downloads',
+    r2.ok && same(path.dirname(r2.v), dl) && !isFile(escaped) ? 'pass' : 'fail',
+    `${r2.ok ? r2.v : r2.e}; ${escaped} ${isFile(escaped) ? 'EXISTS' : 'absent'}`,
+  );
+
+  const before = fs.readdirSync(dl).length;
+  const names = ['evil.exe', 'evil.csv.exe', 'evil.bat', 'evil.ps1', 'evil.html.lnk', 'evil'];
+  const written = [];
+  for (const n of names) if (keep(await save(n)).ok) written.push(n);
+  record(
+    'Export: only .html, .csv, .json and .txt are written',
+    !written.length && fs.readdirSync(dl).length === before ? 'pass' : 'fail',
+    written.length ? `written: ${written.join(', ')}` : `refused ${names.join(', ')}`,
+  );
+
+  const r3 = keep(await save('CON.csv'));
+  const con = r3.ok && isFile(r3.v) && fs.readFileSync(r3.v).equals(Buffer.from(BYTES));
+  record('Export: a reserved Windows name (CON.csv) still becomes a real file', con ? 'pass' : 'warn', r3.ok ? `${r3.v}: ${isFile(r3.v) ? 'file' : 'no file (Windows treated CON as a device)'}` : r3.e);
+
+  for (const f of made) {
+    try {
+      if (isFile(f)) fs.unlinkSync(f);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// Two layer changes with nothing but desktop behind the widget, watched every ~10 ms: the widget
+// must not go hidden or blank for longer than a frame or two, and must stay saved as shown.
+async function blinkCheck(pid, pg) {
+  const w = widgetOf(pid);
+  const cx = w.x + Math.round(w.w / 2);
+  const cy = w.y + Math.round(w.h / 2);
+  const watch = psAsync('watch', { A: w.hwnd, B: 7000, C: `${cx},${cy}`, D: WALL.join(',') });
+  if (!(await watch.ready)) return record('Widget layer change: no visible blink', 'warn', 'the watcher did not start');
+  await sleep(500);
+  const pin = `document.querySelector('.tools button[aria-pressed]').click()`;
+  await pg.widget.eval(pin); // to the desktop
+  await sleep(2500);
+  await pg.widget.eval(pin); // back on top
+  const r = await watch.done;
+  const worst = Math.max(r.longestHiddenMs, r.longestBlankMs);
+  record(
+    'Widget layer change: no visible blink',
+    worst <= 40 ? 'pass' : worst < 300 ? 'warn' : 'fail',
+    `${r.samples} samples over 7 s and two changes: not visible ${r.hidden}× (longest ${r.longestHiddenMs} ms), centre blank ${r.blank}× (longest ${r.longestBlankMs} ms)`,
+  );
+  await sleep(1500);
+  const sw = savedWidget();
+  const now = widgetOf(pid);
+  record('Widget back on top: still shown and saved as shown', now?.visible && sw.visible === true && sw.layer === 'top' ? 'pass' : 'fail', `visible ${now?.visible}; settings.widget ${JSON.stringify(sw)}`);
+}
+
+// Typing in Notepad, then in the planner's Quick add box, while the widget and then the screen
+// cues appear: the keys must still land there. The foreground is watched every ~3 ms meanwhile,
+// so any detour (a hand-back flashes the planner's title bar) is measured. The typed words only
+// use letters the planner has no shortcut for, so a stray key cannot change anything.
+async function keyboardFocusChecks(pid, pg) {
+  const notepad = spawn('notepad.exe', [], { detached: true, stdio: 'ignore' });
+  notepad.unref();
+  const np = await waitFor('Notepad window', () => list(ps('windows')).find((x) => x.pid === notepad.pid && x.visible && x.w > 100), 15_000).catch(() => null);
+  if (!np) return record('Keyboard focus while the widget or screen cues appear', 'fail', 'Notepad did not open');
+  const surfaces = [
+    { what: 'the widget appears', cmd: 'widget_show', gone: () => !widgetOf(pid), there: () => widgetOf(pid)?.visible },
+    { what: 'the screen cues appear', cmd: 'overlay_show', gone: () => !cuesOf(), there: () => cuesOf()?.visible },
+  ];
+  const box = `(document.querySelector('input[placeholder^="Try"]') ?? document.querySelector('input[type="text"], input:not([type])'))`;
+  const words = { 'Notepad|widget_show': 'qkzx', 'Notepad|overlay_show': 'qzxj', 'the planner|widget_show': 'kzxj', 'the planner|overlay_show': 'zqjk' };
+  for (const target of ['Notepad', 'the planner']) {
+    for (const s of surfaces) {
+      await invoke(pg, s.cmd, { show: false });
+      await waitFor(`${s.cmd} closed`, s.gone, 10_000).catch(() => null);
+      const word = words[`${target}|${s.cmd}`];
+      if (target === 'Notepad') ps('front', { A: np.hwnd });
+      else {
+        ps('front', { A: mainOf(pid).hwnd });
+        await sleep(500);
+        await pg.main.eval(`(() => { const i = ${box}; i.focus(); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`).catch(() => null);
+      }
+      await sleep(700);
+      const watch = psAsync('watchfg', { A: 3000 });
+      await watch.ready;
+      await sleep(300);
+      const shown = await invoke(pg, s.cmd, { show: true });
+      const appeared = await waitFor(`${s.cmd} shown`, s.there, 8000).catch(() => false);
+      const tl = await watch.done.catch((e) => ({ away: -1, seen: [String(e.message)], initialTitle: '?', longestAwayMs: -1 }));
+      ps('type', { A: word });
+      await sleep(600);
+      const got = (target === 'Notepad' ? ps('edittext', { A: np.hwnd }) : await pg.main.eval(`${box}?.value ?? ''`).catch(() => '')) ?? '';
+      const fgEnd = ps('foreground');
+      const detour = tl.away > 0 ? `the foreground left '${tl.initialTitle}' ${tl.away}× for up to ${tl.longestAwayMs} ms (to ${tl.seen.join(', ')})` : tl.away === 0 ? `the foreground never left '${tl.initialTitle}'` : `foreground not watched: ${tl.seen[0]}`;
+      const ok = appeared && got.includes(word) && fgEnd?.hwnd === (target === 'Notepad' ? np.hwnd : mainOf(pid)?.hwnd);
+      record(
+        `Typing in ${target} while ${s.what}: the keys still land there`,
+        !ok ? 'fail' : tl.longestAwayMs > 50 ? 'warn' : 'pass',
+        `${appeared ? 'shown' : 'NOT shown'}${shown.ok ? '' : ` (${shown.e})`}; ${detour}; typed '${word}' → '${got.slice(-24)}'; foreground now '${fgEnd?.title}'`,
+      );
+      if (target === 'the planner') await pg.main.eval(`(() => { const i = ${box}; i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); })()`).catch(() => null);
+    }
+  }
+  // Leave things as the rest of the run expects: widget shown, cues off.
+  await invoke(pg, 'overlay_show', { show: false });
+  await invoke(pg, 'widget_show', { show: true });
+  await waitFor('widget shown', () => widgetOf(pid)?.visible, 10_000).catch(() => null);
+  taskkill('/PID', String(notepad.pid));
+}
+
+// Hiding and showing the widget again: it draws again and does not take the focus.
+async function reshowChecks(pid, pg) {
+  await invoke(pg, 'widget_show', { show: false });
+  await waitFor('widget to close', () => !widgetOf(pid), 10_000).catch(() => null);
+  ps('front', { A: mainOf(pid).hwnd });
+  await sleep(600);
+  const before = ps('foreground');
+  await invoke(pg, 'widget_show', { show: true });
+  const w = await waitFor('widget to reopen', () => widgetOf(pid)?.visible && widgetOf(pid), 15_000).catch(() => null);
+  await sleep(2500);
+  const after = ps('foreground');
+  if (!w) return record('Widget re-shown: draws and leaves the focus alone', 'fail', 'the widget did not come back');
+  // Over bare desktop again, so its centre can only read as the dial if it draws.
+  const scr = ps('screen');
+  ps('place', { A: w.hwnd, B: `${scr.w - w.w - 60},${Math.round((scr.h - w.h) / 2)},${w.w},${w.h}` });
+  await sleep(1500);
+  const face = drawnAt(widgetOf(pid));
+  shot('09-widget-reshown.png', `${scr.w - w.w - 90},${Math.round((scr.h - w.h) / 2) - 30},${w.w + 60},${w.h + 60}`);
+  record('Widget re-shown: it draws again', face.ok ? 'pass' : 'fail', face.detail);
+  record('Widget re-shown: the focus stays where it was', after?.hwnd === before?.hwnd && after?.hwnd !== w.hwnd ? 'pass' : 'fail', `foreground '${before?.title}' → '${after?.title}'`);
+}
+
+// Privacy mode: privacy_set through DevTools (build leg) carries the capture check; the tray
+// menu item is checked too where the harness can open that menu.
+async function privacyChecks(pid, pg) {
+  await trayClick(pid);
+  await sleep(1200);
+  ps('front', { A: mainOf(pid).hwnd });
+  await sleep(600);
+  const main = mainOf(pid);
+  const patch = `${main.x + Math.round(main.w / 2) - 100},${main.y + Math.round(main.h / 2) - 100},200,200`;
+  const diff = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+  const rgb = (c) => `rgb(${c.r},${c.g},${c.b})`;
+  const affinities = () => Object.fromEntries(windowsOf(pid).filter((w) => w.visible && /^Daybloom/.test(w.title)).map((w) => [w.title, ps('affinity', { A: w.hwnd })]));
+  const hidden = (a) => a === 0x11 || a === 0x1;
+  const allHidden = (a) => Object.keys(a).length > 1 && Object.values(a).every(hidden);
+  const allClear = (a) => Object.values(a).every((v) => v === 0);
+  const shown = ps('corners', { A: patch });
+
+  // 1. The tray menu item, both legs. tray-icon brings its hidden window to the foreground
+  //    before TrackPopupMenu; when Windows refuses that, no menu opens — a harness limit.
+  const m1 = ps('traymenu', { A: pid, B: 'Privacy Mode' });
+  const i1 = list(m1?.items).find((i) => /Privacy Mode/.test(i.text));
+  const trayWorks = !!(m1?.menu && i1 && m1.clicked);
+  if (!trayWorks) {
+    record('Privacy mode: tray menu item', 'warn', !m1?.menu ? `the harness could not open the tray menu (foreground '${m1?.fg ?? '?'}', ${m1?.menus ?? '?'} menu windows)` : `no Privacy Mode item: ${list(m1.items).map((i) => i.text).join(' | ')}`);
+  } else {
+    await sleep(1200);
+    const a1 = affinities();
+    record('Privacy mode: the tray item turns it on for every window', !i1.isChecked && allHidden(a1) ? 'pass' : 'fail', `item was ${i1.isChecked ? 'checked' : 'unchecked'}; display affinity ${JSON.stringify(a1)}`);
+    const m2 = ps('traymenu', { A: pid, B: 'Privacy Mode' });
+    const i2 = list(m2?.items).find((i) => /Privacy Mode/.test(i.text));
+    await sleep(1200);
+    const a2 = affinities();
+    record('Privacy mode: the tray item shows the check and turns it off', i2?.isChecked && m2.clicked && allClear(a2) ? 'pass' : 'fail', `item ${i2?.isChecked ? 'checked' : 'unchecked'}; affinity ${JSON.stringify(a2)}`);
+  }
+
+  if (!pg) return;
+  // 2. privacy_set: every window protected, the planner gone from a screen capture, a widget
+  //    built meanwhile protected (and not focused), and everything back when it is turned off.
+  await invoke(pg, 'privacy_set', { on: true });
+  await sleep(1200);
+  const a3 = affinities();
+  const off = ps('corners', { A: patch });
+  shot('08-privacy-on.png');
+  record('Privacy mode: privacy_set(true) protects every window', allHidden(a3) ? 'pass' : 'fail', `display affinity ${JSON.stringify(a3)}`);
+  record('Privacy mode: the planner is left out of screen captures', diff(off, shown) > 60 ? 'pass' : 'fail', `planner patch ${rgb(shown)} → ${rgb(off)} in a capture`);
+
+  await invoke(pg, 'widget_show', { show: false });
+  await waitFor('widget to close', () => !widgetOf(pid), 10_000).catch(() => null);
+  const fgBefore = ps('foreground');
+  await invoke(pg, 'widget_show', { show: true });
+  const w = await waitFor('widget to reopen', () => widgetOf(pid)?.visible && widgetOf(pid), 15_000).catch(() => null);
+  await sleep(800);
+  const fgAfter = ps('foreground');
+  record('Widget reopened by widget_show does not take the focus', w && fgAfter?.hwnd !== w.hwnd ? 'pass' : 'fail', `foreground '${fgBefore?.title}' → '${fgAfter?.title}'`);
+  const wa = w ? ps('affinity', { A: w.hwnd }) : null;
+  let tray = '';
+  if (trayWorks) {
+    const m3 = ps('traymenu', { A: pid, B: '' });
+    const i3 = list(m3?.items).find((i) => /Privacy Mode/.test(i.text));
+    tray = `; tray item ${i3?.isChecked ? 'checked' : 'unchecked'}`;
+    if (!i3?.isChecked) record('Privacy mode: the tray check follows privacy_set', 'fail', tray.slice(2));
+  }
+  record('Privacy mode: a widget built while it is on is protected', hidden(wa) ? 'pass' : 'fail', `new widget affinity ${wa}${tray}`);
+
+  await invoke(pg, 'privacy_set', { on: false });
+  await sleep(1200);
+  ps('front', { A: mainOf(pid).hwnd });
+  await sleep(600);
+  const a4 = affinities();
+  const back = ps('corners', { A: patch });
+  record('Privacy mode: privacy_set(false) clears every window and the planner is captured again', allClear(a4) && diff(back, shown) < diff(off, shown) / 2 ? 'pass' : 'fail', `affinity ${JSON.stringify(a4)}; planner patch ${rgb(back)} (was ${rgb(shown)}, ${rgb(off)} while on)`);
 }
 
 // ---- phase B: idle CPU (nothing attached while sampling) -----------------------------
 
 async function idle(app) {
-  const pid = launch(app);
+  let run = app;
   try {
-    const { main } = await waitWindows(pid);
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    const { main } = started;
     await sleep(30_000);
     ps('front', { A: main.hwnd });
     const sample = (scenario, seconds = CPU_SECONDS) => {
@@ -420,23 +878,46 @@ async function idle(app) {
     // Chromium's 5-minute mark for intensive throttling (which would stretch the tick to 60 s).
     await hideMain(pid);
     const hiddenAt = Date.now();
-    let pg = await pages();
+    const attach = async (when) => {
+      if (SOURCE === 'release') return null;
+      const pg = await pages();
+      if (!pg) record(`DevTools attach ${when}`, 'fail', await devtoolsWhy(pid));
+      return pg;
+    };
+    // Who is still busy: each page's visibility and the CSS/Web animations it is running.
+    const activity = async (pg, when) => {
+      if (!pg) return;
+      const probe = `({ vis: document.visibilityState, running: document.getAnimations().filter((a) => a.playState === 'running').map((a) => a.animationName || a.constructor.name) })`;
+      const out = [];
+      for (const label of ['main', 'widget']) {
+        const p = await pg[label].eval(probe);
+        const names = [...new Set(p.running)];
+        out.push(`${label}: ${p.vis}, ${p.running.length} running${names.length ? ` (${names.slice(0, 6).join(', ')})` : ''}`);
+      }
+      record(`Pages ${when}`, 'info', out.join('; '));
+    };
+    let pg = await attach('with the planner in the tray');
+    await activity(pg, 'with the planner in the tray');
     await pg?.main.eval(`(() => { const t = (window.__smokeTicks = []); (function tick() { t.push(Date.now()); setTimeout(tick, 5000); })(); })()`);
     closeAll(pg);
     await sleep(5000);
     sample('planner closed to tray + widget', HIDDEN_CPU_SECONDS);
     await sleep(Math.max(0, hiddenAt + 7 * 60_000 - Date.now()));
-    pg = await pages();
+    pg = await attach('after 7 minutes in the tray');
+    if (!pg && SOURCE !== 'release') record('Hidden planner keeps a ~5 s timer cadence after 5+ minutes (on-time notifications)', 'fail', 'not measured: no DevTools connection');
     if (pg) {
-      const ticks = await pg.main.eval('window.__smokeTicks ?? []');
-      const vis = await pg.main.eval('document.visibilityState');
+      const page = await pg.main.eval(`({ ticks: window.__smokeTicks ?? null, vis: document.visibilityState, loadedAt: Math.round(performance.timeOrigin), discarded: !!document.wasDiscarded })`);
+      const ticks = page.ticks ?? [];
       const late = ticks.filter((t) => t > hiddenAt + 5.5 * 60_000);
       const gaps = late.slice(1).map((t, i) => t - late[i]);
       const worst = gaps.length ? Math.max(...gaps) : Infinity;
+      const min = (t) => `${((t - hiddenAt) / 60_000).toFixed(1)} min`;
+      // Why a run has no late ticks: the page reloaded (recorder gone), was discarded, or froze.
+      const why = page.ticks == null ? `recorder gone: page loaded ${min(page.loadedAt)} after hiding${page.discarded ? ', was discarded' : ''}` : `${ticks.length} ticks in all, the last ${ticks.length ? min(ticks.at(-1)) : '–'} after hiding`;
       record(
         'Hidden planner keeps a ~5 s timer cadence after 5+ minutes (on-time notifications)',
         worst < 12_000 ? 'pass' : 'fail',
-        `visibilityState '${vis}'; ${late.length} ticks in minutes 5.5–7, longest gap ${(worst / 1000).toFixed(1)} s`,
+        `visibilityState '${page.vis}'; ${late.length} ticks in minutes 5.5–7, longest gap ${(worst / 1000).toFixed(1)} s; ${why}`,
       );
       closeAll(pg);
     }
@@ -445,19 +926,284 @@ async function idle(app) {
     await sleep(3000);
     ps('show', { A: mainOf(pid).hwnd, B: 6 }); // SW_MINIMIZE
     await sleep(10_000);
+    pg = await attach('with the planner minimised');
+    await activity(pg, 'with the planner minimised');
+    closeAll(pg);
+    await sleep(3000);
     sample('planner minimised + widget');
   } finally {
-    quit(pid);
+    await quit(run);
     await sleep(2000);
   }
+}
+
+// ---- restart on the desktop layer ----------------------------------------------------------
+// The planner shows the widget and then applies its saved layer; "desktop" is a real style change.
+// The widget must come up below other windows and still be saved as shown afterwards.
+async function desktopRestart(app) {
+  const write = (widget) => {
+    const st = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+    st.widget = { ...(st.widget ?? {}), ...widget };
+    fs.writeFileSync(settingsFile(), JSON.stringify(st));
+  };
+  write({ visible: true, layer: 'desktop' });
+  let run = app;
+  try {
+    const started = await start(app);
+    run = started.run;
+    await sleep(4000);
+    const w = widgetOf(run.pid);
+    const sw = savedWidget();
+    const fg = ps('foreground');
+    record(
+      'Restart on the desktop layer: widget shown, below other windows, still saved as shown',
+      w?.visible && !(w.exStyle & TOPMOST) && sw.visible === true && sw.layer === 'desktop' ? 'pass' : 'fail',
+      `visible ${w?.visible}; topmost ${w ? !!(w.exStyle & TOPMOST) : '–'}; settings.widget ${JSON.stringify(sw)}; foreground '${fg?.title}'`,
+    );
+    if (w?.visible) {
+      const face = drawnAt(w);
+      if (!face.ok) record('Restart on the desktop layer: widget draws', 'warn', `${face.detail} (a window behind it can also read as not-desktop)`);
+    }
+  } finally {
+    await quit(run);
+    write({ visible: true, layer: 'top' });
+  }
+}
+
+// ---- phase C: screen cues overlay -------------------------------------------------------
+
+const CUES_TITLE = 'Daybloom Screen Cues';
+const EX = { TOPMOST: 0x8, TRANSPARENT: 0x20, TOOLWINDOW: 0x80, LAYERED: 0x80000, NOACTIVATE: 0x8000000 };
+const cuesOf = () => list(ps('windows')).find((w) => w.title === CUES_TITLE);
+const isDesktop = (w) => w && /^(Progman|WorkerW)$/.test(w.cls);
+const tealAt = (x, y) => {
+  const c = ps('corners', { A: `${x - 15},${y - 15},30,30` });
+  return { ok: c.black < 0.01 && Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]) < 60, c };
+};
+
+// Screen cues on, plus a running focus session, so the planner opens the overlay by itself.
+function seedCues() {
+  const dir = path.join(process.env.APPDATA, IDENTIFIER, 'state');
+  const file = path.join(dir, 'settings.json');
+  const settings = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  settings.privacy = { ...(settings.privacy ?? {}), on: false }; // whatever phase A left
+  settings.screen = { when: 'focus', glow: true, glowStrength: 'medium', bar: true, barDock: 'top', barSize: 'thin', hud: true, hudCorner: 'top-right' };
+  fs.writeFileSync(file, JSON.stringify(settings));
+  const label = 'Smoke focus';
+  fs.writeFileSync(
+    path.join(dir, 'timer.json'),
+    JSON.stringify({
+      active: { kind: 'countdown', label, icon: 'target', category: 'focus', startedAt: Date.now(), segments: [{ kind: 'focus', label, ms: 60 * 60_000 }], pausedAt: null, pausedMs: 0, target: null },
+      doneToday: { date: '', count: 0 },
+    }),
+  );
+}
+
+async function screenCues(app) {
+  seedCues();
+  let run = app;
+  let pg = null;
+  try {
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    const cues = await waitFor('screen cues window', () => cuesOf()?.visible && cuesOf(), 30_000).catch(() => null);
+    if (!cues) throw new Error(diagnose(run, 'screen cues window never appeared'));
+    await sleep(3000);
+    const scr = ps('screen');
+    const ex = cues.exStyle >>> 0;
+    const flags = Object.entries(EX).filter(([, bit]) => ex & bit).map(([k]) => k).join(' ');
+    record('Screen cues: overlay opens for a running focus session', 'pass', `${cues.w}x${cues.h} at ${cues.x},${cues.y} on a ${scr.w}x${scr.h} screen; exStyle 0x${ex.toString(16)} (${flags})`);
+    record('Screen cues: covers the display', cues.x === 0 && cues.y === 0 && cues.w === scr.w && cues.h === scr.h ? 'pass' : 'fail', `${cues.w}x${cues.h} at ${cues.x},${cues.y}`);
+    const fg = ps('foreground');
+    record('Screen cues: never takes focus', fg?.hwnd !== cues.hwnd ? 'pass' : 'fail', `foreground '${fg?.title}' (${fg?.cls})`);
+    shot('07-screen-cues.png');
+    // The HUD (top right) must actually be drawn, not just a transparent frame.
+    const hud = ps('corners', { A: `${scr.w - 200},${42},120,36` });
+    const hudOff = Math.abs(hud.r - WALL[0]) + Math.abs(hud.g - WALL[1]) + Math.abs(hud.b - WALL[2]);
+    record('Screen cues: the HUD is drawn', hudOff > 60 ? 'pass' : 'warn', `HUD area avg rgb(${hud.r},${hud.g},${hud.b}), ${hudOff} from the desktop (top right; a window behind it can also differ)`);
+
+    // With the planner closed, points that hit-test to the desktop must still show it.
+    await hideMain(pid);
+    await sleep(1500);
+    const grid = [];
+    for (const fx of [0.3, 0.5, 0.7]) for (const fy of [0.35, 0.55, 0.75]) grid.push([Math.round(scr.w * fx), Math.round(scr.h * fy)]);
+    const through = grid.filter(([x, y]) => isDesktop(ps('point', { A: x, B: y })));
+    if (!through.length) record('Screen cues: no black box over the desktop', 'fail', 'no point hit-tests through the overlay to the desktop');
+    else {
+      const bad = through.map(([x, y]) => ({ x, y, ...tealAt(x, y) })).filter((p) => !p.ok);
+      record(
+        'Screen cues: no black box over the desktop',
+        bad.length ? 'fail' : 'pass',
+        bad.length ? bad.map((p) => `${p.x},${p.y} rgb(${p.c.r},${p.c.g},${p.c.b})`).join('; ') : `${through.length} desktop points read rgb(${WALL})`,
+      );
+    }
+
+    // A real click lands on the window under the overlay and activates it.
+    const notepad = spawn('notepad.exe', [], { detached: true, stdio: 'ignore' });
+    notepad.unref();
+    const np = await waitFor('Notepad window', () => list(ps('windows')).find((x) => x.pid === notepad.pid && x.visible && x.w > 100), 15_000).catch(() => null);
+    if (!np) record('Screen cues: clicks pass through', 'fail', 'Notepad did not open');
+    else {
+      ps('place', { A: np.hwnd, B: '60,700,320,240' });
+      // Bring the planner forward first, so only a click that reaches Notepad can activate it.
+      await trayClick(pid);
+      await sleep(1500);
+      ps('front', { A: mainOf(pid).hwnd });
+      await sleep(500);
+      const before = ps('foreground');
+      const hit = ps('point', { A: 220, B: 840 });
+      ps('click', { A: 220, B: 840, C: 1 });
+      await sleep(1000);
+      const after = ps('foreground');
+      const detail = `hit-test '${hit?.title}'; foreground '${before?.title}' → '${after?.title}'`;
+      if (before?.hwnd === np.hwnd) record('Screen cues: clicks pass through to the window below', hit?.hwnd === np.hwnd ? 'warn' : 'fail', `${detail} (Notepad was already active, so only the hit-test counts)`);
+      else record('Screen cues: clicks pass through to the window below', after?.hwnd === np.hwnd && hit?.hwnd === np.hwnd ? 'pass' : 'fail', detail);
+      taskkill('/PID', String(notepad.pid));
+    }
+
+    // CPU with the overlay up, the planner in the tray (compare with phase B's same scenario).
+    await hideMain(pid);
+    await sleep(10_000);
+    const r = ps('cpu', { A: pid, B: CPU_SECONDS });
+    cpu.push({ scenario: 'planner closed to tray + widget + screen cues', ...r });
+    record('Idle CPU: planner closed to tray + widget + screen cues', 'info', `${r.oneCore}% of one core (${r.machine}% of ${r.cores} cores), ${r.privateMB} MB private, ${r.seconds} s`);
+
+    if (SOURCE === 'release') {
+      record('Screen cues: overlay_show(false) closes the window', 'warn', 'release builds have no debugging port; skipped');
+      return;
+    }
+    pg = await pages(['main', 'overlay']);
+    if (!pg) return record('Screen cues: overlay_show(false) closes the window', 'fail', 'no DevTools connection to the planner and overlay');
+    const bg = await pg.overlay.eval(`[getComputedStyle(document.documentElement).backgroundColor, getComputedStyle(document.body).backgroundColor]`);
+    record('Screen cues: overlay page background is transparent', bg.every((c) => /rgba\(0, 0, 0, 0\)|transparent/.test(c)) ? 'pass' : 'fail', `html ${bg[0]}, body ${bg[1]}`);
+    await pg.main.eval(`__TAURI_INTERNALS__.invoke('overlay_show', { show: false })`);
+    const gone = await waitFor('screen cues window to close', () => !cuesOf(), 10_000).catch(() => false);
+    record('Screen cues: overlay_show(false) closes the window', gone ? 'pass' : 'fail', gone ? 'HWND destroyed' : `still there: ${JSON.stringify(cuesOf())}`);
+    const errs = [...pg.main.errors.map((e) => `main ${e}`), ...pg.overlay.errors.map((e) => `overlay ${e}`)];
+    record('Screen cues: no console errors', errs.length ? 'warn' : 'pass', errs.slice(0, 6).join(' | '));
+  } finally {
+    closeAll(pg);
+    await quit(run);
+    await sleep(2000);
+  }
+}
+
+// ---- CPU study (SMOKE_MODE=cpu): the same four idle states for any build -----------------
+
+const STUDY_SECONDS = { a: 60, b: 120, c: 60, d: 120 };
+
+function setWidgetVisible(visible) {
+  const file = path.join(process.env.APPDATA, IDENTIFIER, 'state', 'settings.json');
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  settings.widget = { ...(settings.widget ?? {}), visible };
+  fs.writeFileSync(file, JSON.stringify(settings));
+}
+
+// % of one core by kind. Renderers are listed in start order: the planner's starts first.
+function split(r) {
+  const rows = list(r.processes);
+  const sum = (f) => Math.round(rows.filter(f).reduce((t, p) => t + p.cpu, 0) * 100) / 100;
+  const known = ['app', 'browser', 'gpu-process', 'renderer'];
+  return {
+    total: r.oneCore,
+    app: sum((p) => p.role === 'app'),
+    browser: sum((p) => p.role === 'browser'),
+    gpu: sum((p) => p.role === 'gpu-process'),
+    renderers: rows.filter((p) => p.role === 'renderer').sort((x, y) => String(x.started).localeCompare(String(y.started))).map((p) => p.cpu),
+    other: sum((p) => !known.includes(p.role)),
+    privateMB: r.privateMB,
+  };
+}
+
+const ANIMATIONS = `(() => {
+  const n = {};
+  for (const a of document.getAnimations()) {
+    if (a.playState !== 'running') continue;
+    const t = a.effect?.target;
+    const el = t ? t.tagName.toLowerCase() + ((t.getAttribute && t.getAttribute('class')) ? '.' + t.getAttribute('class').trim().split(/\\s+/).slice(0, 2).join('.') : '') : '?';
+    const k = (a.animationName || a.transitionProperty || a.constructor.name) + ' on ' + el;
+    n[k] = (n[k] ?? 0) + 1;
+  }
+  return n;
+})()`;
+
+async function cpuStudy(app) {
+  const label = process.env.SMOKE_LABEL ?? SOURCE;
+  const study = [];
+  const measure = (pid, state, what) => {
+    const r = ps('cpu', { A: pid, B: STUDY_SECONDS[state] });
+    const s = { state, what, ...split(r) };
+    study.push(s);
+    cpu.push({ scenario: `(${state}) ${what}`, ...r });
+    record(`Idle CPU (${state}) ${what}`, 'info', `${s.total}% of one core: app ${s.app}, browser ${s.browser}, GPU ${s.gpu}, renderers ${s.renderers.join(' / ') || '–'}, other ${s.other}; ${s.privateMB} MB`);
+  };
+  const animations = {};
+
+  let run = app;
+  try {
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    await sleep(30_000);
+    ps('front', { A: started.main.hwnd });
+    await sleep(2000);
+    if (SOURCE !== 'release') {
+      const pg = await pages();
+      for (const l of ['main', 'widget']) {
+        if (!pg) break;
+        animations[l] = await pg[l].eval(ANIMATIONS);
+        const list_ = Object.entries(animations[l]).map(([k, v]) => `${v}× ${k}`);
+        record(`Running animations (a), ${l === 'main' ? 'planner' : 'widget'}`, 'info', list_.join('; ') || 'none');
+      }
+      if (!pg) record('Running animations (a)', 'warn', await devtoolsWhy(pid));
+      closeAll(pg);
+      await sleep(3000);
+    }
+    measure(pid, 'a', 'planner + widget shown');
+    await hideMain(pid);
+    await sleep(15_000);
+    measure(pid, 'b', 'planner in the tray + widget');
+    await trayClick(pid);
+    await sleep(3000);
+    ps('show', { A: mainOf(pid).hwnd, B: 6 }); // SW_MINIMIZE
+    await sleep(15_000);
+    measure(pid, 'c', 'planner minimised + widget');
+  } finally {
+    await quit(run);
+    await sleep(2000);
+  }
+
+  // (d) No widget at all: the saved settings say it is off, so it is never built.
+  setWidgetVisible(false);
+  run = app;
+  try {
+    const started = await start(app, { widget: false });
+    run = started.run;
+    const { pid } = run;
+    await sleep(30_000);
+    await hideMain(pid);
+    await sleep(15_000);
+    if (widgetOf(pid)) record('State (d) has no widget', 'fail', 'a widget window exists');
+    measure(pid, 'd', 'planner in the tray, no widget');
+  } finally {
+    await quit(run);
+    setWidgetVisible(true);
+  }
+  fs.writeFileSync(path.join(OUT, 'cpu-study.json'), JSON.stringify({ label, study, animations }, null, 2));
 }
 
 function msiInstall(msi) {
   if (!msi) return record('MSI install', 'fail', 'no .msi built');
   try {
-    execFileSync('msiexec', ['/i', msi, '/qn', '/norestart', '/l*v', path.join(OUT, 'msi-install.log')], { stdio: 'inherit' });
-    const exe = findFiles(path.join(process.env.ProgramFiles, 'Daybloom'), (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n))[0];
-    record('MSI silent install', exe ? 'pass' : 'fail', exe ?? 'exe not found under Program Files\\Daybloom');
+    const logFile = path.join(OUT, 'msi-install.log');
+    execFileSync('msiexec', ['/i', msi, '/qn', '/norestart', '/l*v', logFile], { stdio: 'inherit' });
+    // The verbose log is UTF-16. Tauri's MSI reuses an existing install folder (here the NSIS one).
+    const log = fs.readFileSync(logFile).toString('utf16le');
+    const status = log.match(/Installation success or error status: (\d+)/)?.[1];
+    const dir = log.match(/Property\(S\): INSTALLDIR = (.+)/)?.[1]?.trim();
+    const exe = dir && findFiles(dir, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n))[0];
+    record('MSI silent install', status === '0' && exe ? 'pass' : 'fail', `status ${status}; INSTALLDIR ${dir}; ${exe ?? 'no exe there'}`);
   } catch (e) {
     record('MSI silent install', 'fail', `msiexec exit ${e.status}`);
   }
@@ -484,15 +1230,22 @@ try {
   console.log('screen', ps('resolution', { A: 1920, B: 1080 }));
   ps('wallpaper', { A: WALL.join(',') });
   const app = install();
-  const lnk = findFiles(path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), (n) => /^Daybloom\.lnk$/i.test(n))[0];
-  const aumid = lnk ? ps('aumid', { A: lnk }) : null;
-  record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
   seedState();
-  await behaviour(app);
-  await idle(app);
-  msiInstall(app.msi);
+  if (process.env.SMOKE_MODE === 'cpu') {
+    await cpuStudy(app);
+  } else {
+    const lnk = findFiles(path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), (n) => /^Daybloom\.lnk$/i.test(n))[0];
+    const aumid = lnk ? ps('aumid', { A: lnk }) : null;
+    record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
+    await behaviour(app);
+    await idle(app);
+    await desktopRestart(app);
+    await screenCues(app);
+    msiInstall(app.msi);
+  }
 } catch (e) {
-  record('Smoke test aborted', 'fail', String(e.stack ?? e));
+  const last = results.at(-1)?.check ?? 'the start';
+  record('Smoke test aborted', 'fail', `after '${last}': ${String(e.stack ?? e)}`);
   try {
     shot('99-abort.png');
   } catch {
