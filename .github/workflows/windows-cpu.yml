@@ -3,24 +3,30 @@
 # (scripts/windows-smoke.mjs with SMOKE_MODE=cpu, merged by scripts/windows-cpu-table.mjs).
 # The "plain-show" build shows the widget with tao's plain show() and nothing else (v0.1.5's path:
 # known idle CPU, but it keeps the focus), as the control for whatever the "main" build does.
+# It takes about half an hour of six runners, so it runs only when started by hand
+# (Actions → windows-cpu → Run workflow); the everyday idle numbers are in windows.yml.
 name: windows-cpu
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/windows-cpu.yml'
-      - 'scripts/windows-cpu-table.mjs'
   workflow_dispatch:
+    inputs:
+      tags:
+        description: Releases to measure, as a JSON list ('[]' for none).
+        default: '["v0.1.5","v0.1.6"]'
+      variants:
+        description: Builds of this branch to measure, as a JSON list (main, plain-show; '[]' for none).
+        default: '["main","plain-show"]'
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: inputs.variants != '[]'
     strategy:
       fail-fast: false
       matrix:
-        variant: [main, plain-show]
+        variant: ${{ fromJSON(inputs.variants) }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +38,9 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - run: npm ci
+          shared-key: windows-release
+          save-if: false
+      - run: npm ci --no-audit --no-fund
       - name: Show the widget with tao's plain show()
         if: matrix.variant == 'plain-show'
         shell: bash
@@ -65,11 +73,12 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
 
   releases:
+    if: inputs.tags != '[]'
     strategy:
       fail-fast: false
       matrix:
-        # v0.1.5: shown later with plain show() (focus-stealing); v0.1.6: built visible.
-        tag: [v0.1.5, v0.1.6]
+        # e.g. v0.1.5: shown later with plain show() (focus-stealing); v0.1.6: built visible.
+        tag: ${{ fromJSON(inputs.tags) }}
     name: cpu (${{ matrix.tag }})
     runs-on: windows-latest
     timeout-minutes: 45
@@ -84,7 +93,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # A release is published before its Windows installers are attached; wait for them.
-          for i in $(seq 1 12); do
+          for _ in $(seq 1 12); do
             gh release download "${{ matrix.tag }}" -R "$GITHUB_REPOSITORY" -p '*-setup.exe' -p '*.msi' -D artifact --clobber && exit 0
             echo "installers not attached yet; retrying in 90 s"
             sleep 90
@@ -106,7 +115,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [main, plain-show]
+        variant: ${{ fromJSON(inputs.variants) }}
     name: cpu (build ${{ matrix.variant }})
     runs-on: windows-latest
     timeout-minutes: 45

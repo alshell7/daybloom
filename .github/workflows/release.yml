@@ -1,6 +1,7 @@
 # Tag vX.Y.Z (npm run release) → signed installers for macOS + Windows →
-# a release in this private repo → installers, signatures and the update manifest
-# mirrored to the public feed repo that the app's auto-updater reads.
+# a release in this repo → installers, signatures and the update manifest
+# mirrored to the feed repo that the app's auto-updater reads. The feed is only
+# updated when the frontend checks pass too (they run alongside the builds).
 name: release
 
 on:
@@ -11,12 +12,17 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   FEED_REPO: alshell7/daybloom-releases
   FEED_BASE: https://raw.githubusercontent.com/alshell7/daybloom-releases/main
 
 jobs:
   bundle:
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -35,10 +41,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      # Restores main's cache (windows.yml saves the Windows one); a tag's own cache could
+      # never be read by a later tag, so nothing is saved here.
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - run: npm ci
+          shared-key: ${{ matrix.platform == 'windows-latest' && 'windows-release' || '' }}
+          save-if: false
+      - run: npm ci --no-audit --no-fund
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,8 +66,21 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
 
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
+      - run: npm test
+
   publish:
-    needs: bundle
+    needs: [bundle, check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -677,12 +677,12 @@ npm run release          # 0.1.3 → 0.1.4 (or: npm run release minor | major | 
 The script changes the version in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml`. Then it makes a commit, an annotated tag `vX.Y.Z`, and pushes both. The tag starts `.github/workflows/release.yml`, which:
 
 1. builds the **macOS** (universal) and **Windows** (NSIS and MSI) installers, and signs each update file with the updater key;
-2. publishes a release in this private repo (`alshell7/daybloom`);
-3. copies the installers, their `.sig` files and `latest.json` to the public feed repo [`alshell7/daybloom-releases`](https://github.com/alshell7/daybloom-releases). The source code stays private.
+2. publishes a release in this repo (`alshell7/daybloom`);
+3. copies the installers, their `.sig` files and `latest.json` to the feed repo [`alshell7/daybloom-releases`](https://github.com/alshell7/daybloom-releases). This step runs only when the frontend checks also pass.
 
 Installed apps read `https://raw.githubusercontent.com/alshell7/daybloom-releases/main/latest.json`. They verify each download against the public key in `tauri.conf.json`.
 
-| Secret (private repo) | What it is | Where the original is |
+| Repo secret | What it is | Where the original is |
 |---|---|---|
 | `TAURI_SIGNING_PRIVATE_KEY` | minisign key that signs updates | `~/.tauri/daybloom.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password | `~/.tauri/daybloom.key.password` |
@@ -694,7 +694,16 @@ Installed apps read `https://raw.githubusercontent.com/alshell7/daybloom-release
 
 The installers are not Apple-notarised or Windows code-signed yet. Thus the first install shows a Gatekeeper or SmartScreen prompt. Updates after that install silently.
 
-`.github/workflows/windows.yml` runs smoke tests on a Windows runner for each pull request: install, tray, widget transparency and layers, drag, notifications and CPU use.
+Each workflow runs only when its files change. A newer push stops the older run. Changes to documents only (`*.md`, `docs/`) start no workflow.
+
+| Workflow | When it runs | What it checks | Time |
+|---|---|---|---|
+| `ci.yml` | each push to `main` and each pull request | frontend types and unit tests (Linux); Rust clippy and unit tests (macOS and Windows), only when `src-tauri/` changes | 1–5 min |
+| `windows.yml` | app changes on `main` or in a pull request; after each release | installs the app on a clean Windows runner. Two halves run at the same time: *functional* (tray, widget transparency and layers, drag, focus, notifications, privacy, screen cues, installers) and *idle* (CPU use, the hidden planner's timer) | about 15 min |
+| `windows-cpu.yml` | only when you start it (**Actions → windows-cpu → Run workflow**) | idle CPU of releases and builds, side by side | about 30 min |
+| `release.yml` | each `vX.Y.Z` tag | signed installers, the release and the update feed | about 12 min |
+
+The Rust build cache is saved from `main` only. Pull requests and releases use that copy.
 
 </details>
 

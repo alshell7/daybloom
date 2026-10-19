@@ -3,7 +3,7 @@
 //! PDF; a CSV opens in the spreadsheet app) or showing it in Finder / Explorer.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
@@ -22,7 +22,7 @@ fn clean_name(name: &str) -> Result<String, String> {
     Ok(base)
 }
 
-fn unique(dir: &PathBuf, name: &str) -> PathBuf {
+fn unique(dir: &Path, name: &str) -> PathBuf {
     let first = dir.join(name);
     if !first.exists() {
         return first;

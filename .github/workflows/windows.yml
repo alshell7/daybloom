@@ -1,17 +1,35 @@
 # Windows: install Daybloom on a clean runner and check the transparent widget, its layers,
 # the tray, notifications, the theme reveal and idle CPU (scripts/windows-smoke.mjs).
-# Pull requests build an unsigned installer from source and are tested next to the latest
-# release; a finished release run (or a manual run with `release`) tests that release's
-# own installers. Screenshots and numbers land in the run summary and the smoke artifacts.
+# Pushes to main and pull requests that touch the app build an unsigned installer from source;
+# the test then runs in two halves side by side (functional, idle). A finished release run (or
+# a manual run with `release`) tests that release's own installers instead, and a manual run
+# with `baseline` also tests the latest release next to the build. A newer push cancels the
+# older run. Screenshots and numbers land in the run summary and the smoke artifacts.
 name: windows
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package*.json'
+      - 'vite.config.ts'
+      - 'svelte.config.js'
+      - 'scripts/windows-smoke.mjs'
+      - 'scripts/win32.ps1'
+      - '.github/workflows/windows.yml'
   pull_request:
     paths:
       - 'src/**'
       - 'src-tauri/**'
+      - 'public/**'
       - 'index.html'
       - 'package*.json'
+      - 'vite.config.ts'
+      - 'svelte.config.js'
       - 'scripts/windows-smoke.mjs'
       - 'scripts/win32.ps1'
       - '.github/workflows/windows.yml'
@@ -24,14 +42,27 @@ on:
         description: Release tag to test (e.g. v0.1.0). Leave empty to build this branch.
         required: false
         default: ''
+      baseline:
+        description: Also test the latest release next to the build, as a baseline.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: windows-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_run' }}
+
 jobs:
   build:
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.release == '')
+    # The release commit only bumps versions; its release run is tested once it is published.
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && !startsWith(github.event.head_commit.message, 'Release v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.release == '')
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,10 +70,13 @@ jobs:
           node-version: 24
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      # Shared with the release workflow's Windows build, which restores main's copy.
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-      - run: npm ci
+          shared-key: windows-release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: npm ci --no-audit --no-fund
       # Test build only: unsigned (updater artifacts need the release signing key, which pull
       # requests never get) and with a DevTools port in both windows' WebView2 args, so the
       # smoke test can read page state. WebView2 ignores the env-var/registry overrides for it.
@@ -62,22 +96,24 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 7
 
   smoke:
     needs: build
     if: >-
       always() && (needs.build.result == 'success' ||
-      (needs.build.result == 'skipped' && github.event_name != 'pull_request' &&
+      (needs.build.result == 'skipped' && github.event_name != 'pull_request' && github.event_name != 'push' &&
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled')))
     strategy:
       fail-fast: false
       matrix:
-        source: ${{ fromJSON(needs.build.result == 'success' && '["build","release"]' || '["release"]') }}
-    name: smoke (${{ matrix.source }})
+        source: ${{ fromJSON(needs.build.result == 'success' && (inputs.baseline && '["build","release"]' || '["build"]') || '["release"]') }}
+        part: [functional, idle]
+    name: smoke (${{ matrix.source }}, ${{ matrix.part }})
     runs-on: windows-latest
-    timeout-minutes: 40
-    # On a pull request the release leg is only the baseline to compare against.
-    continue-on-error: ${{ github.event_name == 'pull_request' && matrix.source == 'release' }}
+    timeout-minutes: 30
+    # Next to a build, the release leg is only the baseline to compare against.
+    continue-on-error: ${{ matrix.source == 'release' && needs.build.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -101,8 +137,9 @@ jobs:
       - run: node scripts/windows-smoke.mjs smoke-out artifact
         env:
           SMOKE_SOURCE: ${{ matrix.source }}
+          SMOKE_PART: ${{ matrix.part }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-smoke-${{ matrix.source }}
+          name: windows-smoke-${{ matrix.source }}-${{ matrix.part }}
           path: smoke-out

@@ -9,7 +9,8 @@
 // overlay, and idle CPU. Page state is read over the WebView2 DevTools protocol on a port the
 // workflow builds into pull-request installers (WebView2 ignored the env var and registry
 // overrides for it); published releases have no port, so their page-level checks are skipped.
-// Nothing is attached while CPU is sampled. SMOKE_SOURCE says which kind is under test.
+// Nothing is attached while CPU is sampled. SMOKE_SOURCE says which kind is under test;
+// SMOKE_PART=functional|idle runs one half (the workflow runs both halves side by side).
 // Writes results.json, summary.md and screenshots to <out-dir>.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -21,6 +22,8 @@ const ART = path.resolve(process.argv[3] ?? 'artifact');
 const PS1 = path.resolve(import.meta.dirname, 'win32.ps1');
 const DEBUG_PORT = 9222;
 const SOURCE = process.env.SMOKE_SOURCE ?? 'build'; // 'build' (port built in) | 'release'
+// 'functional' (input, windows, cues, installers), 'idle' (CPU and the hidden planner's timer), or both.
+const PART = process.env.SMOKE_PART ?? 'all';
 const WALL = [0, 128, 128]; // solid teal desktop: anything else in a widget corner is the window itself
 const IDENTIFIER = 'app.daybloom.desktop';
 const CPU_SECONDS = 60;
@@ -1212,7 +1215,8 @@ function msiInstall(msi) {
 function report() {
   fs.writeFileSync(path.join(OUT, 'results.json'), JSON.stringify({ results, cpu }, null, 2));
   const icon = { pass: '✅', fail: '❌', warn: '⚠️', info: 'ℹ️' };
-  let md = '## Daybloom Windows smoke test\n\n| | Check | Detail |\n|---|---|---|\n';
+  const part = PART === 'all' ? '' : `: ${PART}`;
+  let md = `## Daybloom Windows smoke test (${SOURCE}${part})\n\n| | Check | Detail |\n|---|---|---|\n`;
   for (const r of results) md += `| ${icon[r.status]} | ${r.check} | ${String(r.detail).replace(/\|/g, '\\|').replace(/\n/g, ' ')} |\n`;
   if (cpu.length) {
     md += `\n### Idle CPU (GitHub runners have no GPU, so WebView2 renders in software and these run high)\n\n| Scenario | % of one core | % of machine | Private MB | Top processes |\n|---|---|---|---|---|\n`;
@@ -1234,14 +1238,19 @@ try {
   if (process.env.SMOKE_MODE === 'cpu') {
     await cpuStudy(app);
   } else {
-    const lnk = findFiles(path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), (n) => /^Daybloom\.lnk$/i.test(n))[0];
-    const aumid = lnk ? ps('aumid', { A: lnk }) : null;
-    record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
-    await behaviour(app);
-    await idle(app);
-    await desktopRestart(app);
-    await screenCues(app);
-    msiInstall(app.msi);
+    if (PART !== 'idle') {
+      const lnk = findFiles(path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), (n) => /^Daybloom\.lnk$/i.test(n))[0];
+      const aumid = lnk ? ps('aumid', { A: lnk }) : null;
+      record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
+    }
+    // The workflow runs the two halves on separate runners at the same time.
+    if (PART !== 'idle') await behaviour(app);
+    if (PART !== 'functional') await idle(app);
+    if (PART !== 'idle') {
+      await desktopRestart(app);
+      await screenCues(app);
+      msiInstall(app.msi);
+    }
   }
 } catch (e) {
   const last = results.at(-1)?.check ?? 'the start';

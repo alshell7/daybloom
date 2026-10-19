@@ -1,19 +1,89 @@
+# Fast checks for every push to main and every pull request. Each job runs only when its files
+# changed: the frontend (types and unit tests) on Linux, the Rust side (clippy and unit tests)
+# on macOS and Windows, where its platform code lives. Docs-only changes run nothing, and a
+# newer push cancels the older run. The installed-app tests are in windows.yml.
 name: ci
 
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.impeccable/**', 'assets/brand/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', '.impeccable/**', 'assets/brand/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  check:
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'package*.json'
+              - '*.config.*'
+              - 'tsconfig*.json'
+              - '.github/workflows/ci.yml'
+            rust:
+              - 'src-tauri/**'
+              - '.github/workflows/ci.yml'
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      - run: npm ci --no-audit --no-fund
       - run: npm run check
       - run: npm test
+
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    name: rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      # Saved from main only: branch caches would crowd main's out of the repo's 10 GB.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Debug builds load the planner from the dev server, so no frontend build is needed.
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
