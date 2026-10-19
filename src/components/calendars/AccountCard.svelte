@@ -2,12 +2,16 @@
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import { accountName, DEFAULT_SYNC_MIN, SYNC_CADENCES } from '../../lib/calendar/service';
   import type { CalendarAccount } from '../../lib/calendar/types';
-  import { calendarState, connectGoogleAccount, syncNow, upcomingCount } from '../../lib/calendarBridge.svelte';
+  import { calendarState, connectGoogleAccount, syncNow } from '../../lib/calendarBridge.svelte';
+  import Segmented from '../Segmented.svelte';
+  import CalendarRow from './CalendarRow.svelte';
+  import IncludeEvents from './IncludeEvents.svelte';
   import Icon from '../../lib/Icon.svelte';
   import { clock } from '../../lib/stores/clock.svelte';
   import { view } from '../../lib/stores/view.svelte';
-  import { eventCount, SOURCE_ICON, sourceOfDisplayUrl, syncedAgo, type PanelFix } from './guides';
+  import { SOURCE_ICON, sourceOfDisplayUrl, syncedAgo, type PanelFix } from './guides';
   import Spinner from './Spinner.svelte';
 
   let {
@@ -26,10 +30,32 @@
   let fixing = $state(false);
   let fixError = $state('');
   let cancelBtn: HTMLButtonElement | undefined = $state();
+  let renaming = $state(false);
+  let draft = $state('');
+  let nameField: HTMLInputElement | undefined = $state();
+
+  const shownName = $derived(accountName(account));
+  const every = $derived(String(account.syncEveryMin ?? DEFAULT_SYNC_MIN));
+  const CADENCE_LABEL: Record<number, string> = { 5: '5m', 10: '10m', 30: '30m', 60: '1h', 360: '6h', 0: 'Manual' };
+  const cadences = SYNC_CADENCES.map((m) => ({ value: String(m), label: CADENCE_LABEL[m], title: m === 0 ? 'Only when you press Sync now' : `Every ${m < 60 ? `${m} minutes` : m === 60 ? 'hour' : `${m / 60} hours`}` }));
+
+  async function rename() {
+    renaming = true;
+    draft = shownName;
+    await tick();
+    nameField?.select();
+  }
+  function saveName() {
+    if (!renaming) return;
+    renaming = false;
+    if (draft.trim() !== shownName) void svc?.updateAccount(account.id, { name: draft.trim() });
+  }
 
   const svc = $derived(calendarState.service);
   const rm = $derived(view.reducedMotion);
   const isGoogle = $derived(account.provider === 'google');
+  // Google's own .ics links refresh on Google's side only every few hours.
+  const googleFeed = $derived(!isGoogle && sourceOfDisplayUrl(account.displayUrl) === 'google');
   const icon = $derived(isGoogle ? 'google' : SOURCE_ICON[sourceOfDisplayUrl(account.displayUrl)]);
   const syncing = $derived(calendarState.status === 'syncing' && account.enabled);
   const problem = $derived(account.enabled ? (account.error ?? null) : null);
@@ -78,11 +104,29 @@
   }
 </script>
 
-<article class="card" class:paused={!account.enabled} aria-label={account.label}>
+<article class="card" class:paused={!account.enabled} aria-label={shownName}>
   <div class="head">
     <span class="mark"><Icon name={icon} size={16} /></span>
     <div class="who">
-      <p class="label" title={account.label}>{account.label}</p>
+      {#if renaming}
+        <input
+          bind:this={nameField}
+          class="field rename"
+          bind:value={draft}
+          placeholder={account.label}
+          maxlength="80"
+          aria-label="Account name"
+          onblur={saveName}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') saveName();
+            else if (e.key === 'Escape') (e.stopPropagation(), (renaming = false));
+          }}
+        />
+      {:else}
+        <p class="label" title={account.name ? `${shownName} · ${account.label}` : account.label}>
+          <button class="name-btn" onclick={rename} title="Rename">{shownName}<span class="pen"><Icon name="pen" size={11} /></span></button>
+        </p>
+      {/if}
       {#if !account.enabled}
         <p class="status">Paused. Its events are hidden.</p>
       {:else if problem}
@@ -109,24 +153,19 @@
   </div>
 
   {#if account.calendars.length}
-    <div class="cals" role="group" aria-label={`Calendars in ${account.label}`}>
+    <div class="cals" role="group" aria-label={`Calendars in ${shownName}`}>
       <div class="cals-head" aria-hidden="true"><span>Calendar</span><span>Next 2 weeks</span></div>
       {#each account.calendars as cal (cal.id)}
-        {@const n = upcomingCount(account.id, cal.id)}
-        <label class="cal" class:off={!cal.enabled}>
-          <i class="dot" style:background={cal.color}></i>
-          <span class="name" title={cal.name}>{cal.name}</span>
-          <span class="count tnum">{n === null ? 'Hidden' : eventCount(n)}</span>
-          <input
-            type="checkbox"
-            class="switch"
-            checked={cal.enabled}
-            disabled={!account.enabled}
-            aria-label={`Show ${cal.name}`}
-            onchange={(e) => svc?.setCalendarEnabled(account.id, cal.id, e.currentTarget.checked)}
-          />
-        </label>
+        <CalendarRow {account} {cal} />
       {/each}
+    </div>
+  {/if}
+
+  {#if account.enabled}
+    <IncludeEvents {account} />
+    <div class="cadence">
+      <span class="c-lbl">Checks for changes{#if googleFeed}<small>Google refreshes these links every few hours</small>{/if}</span>
+      <Segmented label="How often it syncs" options={cadences} value={every} onchange={(v) => svc?.updateAccount(account.id, { syncEveryMin: Number(v) })} />
     </div>
   {/if}
 
@@ -228,42 +267,52 @@
     font-size: var(--t-xs);
     color: var(--ink-3);
   }
-  .cal {
-    display: flex;
+  .name-btn {
+    display: inline-flex;
     align-items: center;
-    gap: var(--s-2);
-    min-height: 36px;
-    border-top: 1px solid var(--line);
+    gap: 6px;
+    max-width: 100%;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    border-radius: 6px;
+  }
+  .name-btn:hover {
+    color: var(--ink);
+  }
+  .pen {
+    display: grid;
+    color: var(--ink-3);
+    opacity: 0;
+    transition: opacity var(--dur-1) var(--ease-out);
+  }
+  .name-btn:hover .pen,
+  .name-btn:focus-visible .pen {
+    opacity: 1;
+  }
+  .rename {
+    height: 30px;
+    width: 100%;
     font-size: var(--t-sm);
-    cursor: pointer;
+    font-weight: 500;
   }
-  .dot {
-    flex: none;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    transition: opacity var(--dur-2) var(--ease-out);
+  .cadence {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-2);
+    padding: var(--s-2) var(--s-3);
+    border-top: 1px solid var(--line);
   }
-  .name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    transition: color var(--dur-2) var(--ease-out);
-  }
-  .count {
-    flex: none;
-    margin-right: var(--s-1);
-    font-size: var(--t-xs);
+  .c-lbl {
+    display: grid;
+    font-size: var(--t-sm);
     color: var(--ink-2);
   }
-  .cal.off .name,
-  .cal.off .count {
+  .c-lbl small {
+    font-size: var(--t-xs);
     color: var(--ink-3);
-  }
-  .cal.off .dot {
-    opacity: 0.35;
   }
   .foot {
     display: flex;
@@ -300,47 +349,4 @@
     opacity: 0.6;
   }
 
-  /* Switch, as in Settings: the thumb squishes while pressed. */
-  .switch {
-    appearance: none;
-    flex: none;
-    width: 38px;
-    height: 22px;
-    margin: 0;
-    border-radius: 11px;
-    background: var(--line-strong);
-    position: relative;
-    cursor: pointer;
-    transition: background var(--dur-2) var(--ease-out);
-  }
-  .switch::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: white;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
-    transition:
-      transform var(--dur-2) var(--ease-settle),
-      width var(--dur-1) var(--ease-out);
-  }
-  .switch:checked {
-    background: var(--focus-ring);
-  }
-  .switch:checked::after {
-    transform: translateX(16px);
-  }
-  .switch:active::after {
-    width: 23px;
-  }
-  .switch:checked:active::after {
-    transform: translateX(11px);
-  }
-  .switch:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
 </style>

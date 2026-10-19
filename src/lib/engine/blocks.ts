@@ -45,7 +45,8 @@ export function taskBlocks(task: Task, from: ISODate, to: ISODate, dark = false)
 }
 
 export function eventBlock(ev: CalendarEvent, dark = false): Block {
-  const category = ev.color ? nearestCategory(ev.color) : 'focus';
+  // The colour picked for the calendar wins; else the provider's colour snaps to a category.
+  const category = ev.category ?? (ev.color ? nearestCategory(ev.color) : 'focus');
   return {
     key: `cal:${ev.accountId}:${ev.id}`,
     kind: 'event',
@@ -60,7 +61,7 @@ export function eventBlock(ev: CalendarEvent, dark = false): Block {
     endMs: ev.endMs,
     floating: ev.allDay,
     done: false,
-    recurring: false,
+    recurring: !!ev.series && ev.series !== ev.id.slice(ev.calendarId.length + 1),
     readOnly: true,
   };
 }

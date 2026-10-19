@@ -1,7 +1,7 @@
 // Calendar-integration types. Domain events use `CalendarEvent` from the engine so
 // the dial can render them next to tasks without conversion.
 
-import type { CalendarEvent } from '../engine/types';
+import type { CalendarEvent, CategoryId } from '../engine/types';
 
 export type ProviderKind = CalendarEvent['provider'];
 
@@ -19,6 +19,10 @@ export interface CalendarInfo {
   /** User toggle; disabled calendars are neither fetched nor shown. */
   enabled: boolean;
   primary?: boolean;
+  /** The user's name for it (the provider's `name` stays as it is, refreshed on every sync). */
+  customName?: string;
+  /** The category its events take, i.e. their colour on the dial and in the rail. */
+  category?: CategoryId;
 }
 
 export interface CalendarAccount {
@@ -39,6 +43,12 @@ export interface CalendarAccount {
   urlInKeychain?: boolean;
   calendars: CalendarInfo[];
   enabled: boolean;
+  /** The user's name for the account (else `label`). */
+  name?: string;
+  /** Minutes between automatic syncs; 0 = only when asked (Sync now). Unset = the default. */
+  syncEveryMin?: number;
+  /** Events left out of Daybloom, by series (`seriesKey`): repeats of one go together. */
+  hidden?: string[];
   lastSyncAt?: number;
   /**
    * Last sync problem, or null when healthy. `'reconnect'` (see `RECONNECT`) means the

@@ -105,6 +105,12 @@ export interface CalendarEvent {
   htmlLink?: string;
   /** The same event also appears in these other accounts (merged into this one). */
   alsoIn?: string[];
+  /** Repeats of one event share this (ICS UID, Google recurringEventId); else the event's own id. */
+  series?: string;
+  /** Set by the calendar service: the calendar's name as shown (the user's rename, if any). */
+  calendarName?: string;
+  /** Set by the calendar service: the category (colour) the user picked for this calendar. */
+  category?: CategoryId;
 }
 
 /**

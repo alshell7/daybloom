@@ -2,7 +2,8 @@
 // that survives restarts so the widget can render offline. Framework-agnostic —
 // wrap `subscribe` with Svelte runes in the UI layer.
 
-import type { CalendarEvent } from '../engine/types';
+import type { CalendarEvent, CategoryId } from '../engine/types';
+import { CATEGORIES } from '../engine/categories';
 import { platform } from '../platform';
 import { createGoogleProvider, getGoogleClient, setGoogleClient as applyGoogleClient, type GoogleClientConfig } from './google';
 import { createIcsProvider, icsSecretKey, redactIcsUrl, scrubUrls } from './ics';
@@ -29,7 +30,34 @@ export type SyncStatus = 'idle' | 'syncing' | 'error';
 export interface SyncOptions {
   /** Ignore the per-account throttle (and retry accounts that need reconnecting). */
   force?: boolean;
+  /** An automatic sync (timer, window shown, back online): each account's own cadence applies,
+   *  and accounts set to sync only when asked are skipped. */
+  auto?: boolean;
+  /** For `auto`: the cadence of accounts that haven't picked one. */
+  everyMs?: number;
 }
+
+/** The cadences offered for automatic sync, in minutes (0 = only when asked). */
+export const SYNC_CADENCES = [5, 10, 30, 60, 360, 0] as const;
+export const DEFAULT_SYNC_MIN = 10;
+
+/** Which events go together when one is left out: every repeat of a series. */
+export function seriesKey(ev: CalendarEvent): string {
+  return `${ev.calendarId}:${ev.series ?? ev.id.slice(ev.calendarId.length + 1)}`;
+}
+
+/** The account's name as shown. */
+export function accountName(a: Pick<CalendarAccount, 'name' | 'label'>): string {
+  return a.name?.trim() || a.label;
+}
+
+/** A calendar's name as shown. */
+export function calendarName(c: Pick<CalendarInfo, 'customName' | 'name'>): string {
+  return c.customName?.trim() || c.name;
+}
+
+const MAX_HIDDEN = 500;
+const isCategory = (x: unknown): x is CategoryId => CATEGORIES.some((c) => c.id === x);
 
 export interface CalendarServiceOptions {
   providers?: Partial<Record<ProviderKind, CalendarProvider>>;
@@ -59,6 +87,14 @@ export interface CalendarService {
   removeAccount(id: string): Promise<void>;
   setAccountEnabled(id: string, on: boolean): Promise<void>;
   setCalendarEnabled(accountId: string, calendarId: string, on: boolean): Promise<void>;
+  /** Rename an account, or change how often it syncs by itself (minutes; 0 = only when asked). */
+  updateAccount(id: string, change: { name?: string; syncEveryMin?: number }): Promise<void>;
+  /** Rename a calendar or pick the category (colour) its events take. `null` clears. */
+  updateCalendar(accountId: string, calendarId: string, change: { name?: string | null; category?: CategoryId | null }): Promise<void>;
+  /** Include or leave out event series (`seriesKey`) for an account. */
+  setSeriesIncluded(accountId: string, keys: string[], on: boolean): Promise<void>;
+  /** An account's cached events in a range, left-out ones too (for choosing what to include). */
+  accountEvents(accountId: string, startMs: number, endMs: number): CalendarEvent[];
   /** Fetch enabled calendars for `range` (default: yesterday → +14 days). Never rejects for account errors. */
   sync(range?: TimeRange, options?: SyncOptions): Promise<void>;
   /** Cached events overlapping [startMs, endMs) from enabled accounts/calendars, sorted. */
@@ -96,11 +132,17 @@ function compareEvents(a: CalendarEvent, b: CalendarEvent): number {
   );
 }
 
-/** Take the provider's fresh list but keep the user's on/off choices. */
+/** Take the provider's fresh list but keep the user's choices (on/off, name, colour). */
 function mergeCalendars(previous: CalendarInfo[], fresh: CalendarInfo[]): CalendarInfo[] {
   return fresh.map((c) => {
     const old = previous.find((p) => p.id === c.id);
-    return old ? { ...c, enabled: old.enabled } : c;
+    if (!old) return c;
+    return {
+      ...c,
+      enabled: old.enabled,
+      ...(old.customName ? { customName: old.customName } : {}),
+      ...(old.category ? { category: old.category } : {}),
+    };
   });
 }
 
@@ -130,8 +172,15 @@ function storable(a: CalendarAccount, legacyUrl?: string): CalendarAccount {
       color: c.color,
       enabled: c.enabled !== false,
       ...(c.primary ? { primary: true } : {}),
+      ...(typeof c.customName === 'string' && c.customName.trim() ? { customName: c.customName.trim().slice(0, 80) } : {}),
+      ...(isCategory(c.category) ? { category: c.category } : {}),
     })),
     enabled: a.enabled !== false,
+    ...(typeof a.name === 'string' && a.name.trim() ? { name: a.name.trim().slice(0, 80) } : {}),
+    ...(Number.isFinite(a.syncEveryMin) && a.syncEveryMin! >= 0 ? { syncEveryMin: Math.round(a.syncEveryMin!) } : {}),
+    ...(Array.isArray(a.hidden) && a.hidden.length
+      ? { hidden: [...new Set(a.hidden.filter((k) => typeof k === 'string' && k))].slice(-MAX_HIDDEN) }
+      : {}),
     ...(a.lastSyncAt ? { lastSyncAt: a.lastSyncAt } : {}),
     error: a.error ? scrubUrls(a.error) : null,
     errorCode: a.errorCode ?? null,
@@ -341,11 +390,14 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
 
   // -- sync -----------------------------------------------------------------
 
-  function isDue(a: CalendarAccount, range: TimeRange, t: number): boolean {
+  function isDue(a: CalendarAccount, range: TimeRange, t: number, every = minInterval): boolean {
     if (a.error === RECONNECT) return false;
     const last = attempted.get(a.id);
-    return !last || !contains(last.range, range) || t - last.at >= minInterval;
+    return !last || !contains(last.range, range) || t - last.at >= every;
   }
+
+  /** How often an account syncs by itself (ms); 0 = only when asked. */
+  const cadenceOf = (a: CalendarAccount, fallbackMs: number) => (a.syncEveryMin == null ? fallbackMs : a.syncEveryMin * 60_000);
 
   function replaceRange(bucket: Map<string, CalendarEvent>, calendarId: string, range: TimeRange, events: CalendarEvent[]) {
     for (const [key, ev] of bucket) {
@@ -408,10 +460,16 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
     }
   }
 
-  async function runSync(range: TimeRange, { force = false }: SyncOptions): Promise<void> {
+  async function runSync(range: TimeRange, { force = false, auto = false, everyMs = DEFAULT_SYNC_MIN * 60_000 }: SyncOptions): Promise<void> {
     await init();
     const t = now();
-    const due = accounts.filter((a) => a.enabled && providers[a.provider] && (force || isDue(a, range, t)));
+    const due = accounts.filter((a) => {
+      if (!a.enabled || !providers[a.provider]) return false;
+      if (!auto) return force || isDue(a, range, t);
+      const every = cadenceOf(a, everyMs);
+      if (every <= 0) return false;
+      return force ? a.error !== RECONNECT : isDue(a, range, t, Math.max(every, minInterval));
+    });
     if (!due.length) return;
     syncing = true;
     notify();
@@ -549,6 +607,66 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
       if (on) syncInBackground();
     },
 
+    async updateAccount(id, change) {
+      await init();
+      const acc = accounts.find((a) => a.id === id);
+      if (!acc) return;
+      const next: Partial<CalendarAccount> = {};
+      if (change.name !== undefined) next.name = change.name.trim().slice(0, 80) || undefined;
+      if (change.syncEveryMin !== undefined) next.syncEveryMin = Math.max(0, Math.round(change.syncEveryMin));
+      patch(id, next);
+      notify();
+      await saveAccounts();
+    },
+
+    async updateCalendar(accountId, calendarId, change) {
+      await init();
+      const acc = accounts.find((a) => a.id === accountId);
+      if (!acc?.calendars.some((c) => c.id === calendarId)) return;
+      patch(accountId, {
+        calendars: acc.calendars.map((c) => {
+          if (c.id !== calendarId) return c;
+          const out = { ...c };
+          if (change.name !== undefined) {
+            const n = change.name?.trim().slice(0, 80);
+            if (n && n !== c.name) out.customName = n;
+            else delete out.customName;
+          }
+          if (change.category !== undefined) {
+            if (change.category && isCategory(change.category)) out.category = change.category;
+            else delete out.category;
+          }
+          return out;
+        }),
+      });
+      notify();
+      await saveAccounts();
+    },
+
+    async setSeriesIncluded(accountId, keys, on) {
+      await init();
+      const acc = accounts.find((a) => a.id === accountId);
+      if (!acc || !keys.length) return;
+      const hidden = new Set(acc.hidden ?? []);
+      for (const k of keys) {
+        if (on) hidden.delete(k);
+        else hidden.add(k);
+      }
+      patch(accountId, { hidden: [...hidden].slice(-MAX_HIDDEN) });
+      notify();
+      await saveAccounts();
+    },
+
+    accountEvents(accountId, startMs, endMs) {
+      const a = accounts.find((x) => x.id === accountId);
+      const bucket = a && cache.get(a.id);
+      if (!a || !bucket) return [];
+      const shown = new Map(a.calendars.filter((c) => c.enabled).map((c) => [c.id, c]));
+      const out: CalendarEvent[] = [];
+      for (const ev of bucket.values()) if (shown.has(ev.calendarId) && overlaps(ev, startMs, endMs)) out.push(ev);
+      return out.sort(compareEvents);
+    },
+
     sync,
 
     eventsBetween(startMs, endMs) {
@@ -557,22 +675,30 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
         if (!a.enabled) continue;
         const bucket = cache.get(a.id);
         if (!bucket) continue;
-        const shown = new Set(a.calendars.filter((c) => c.enabled).map((c) => c.id));
-        for (const ev of bucket.values()) if (shown.has(ev.calendarId) && overlaps(ev, startMs, endMs)) out.push(ev);
+        const shown = new Map(a.calendars.filter((c) => c.enabled).map((c) => [c.id, c]));
+        const hidden = new Set(a.hidden ?? []);
+        for (const ev of bucket.values()) {
+          const cal = shown.get(ev.calendarId);
+          if (!cal || !overlaps(ev, startMs, endMs) || (hidden.size && hidden.has(seriesKey(ev)))) continue;
+          // What the user called the calendar, and the colour they gave it, travel with its events.
+          out.push({ ...ev, calendarName: calendarName(cal), ...(cal.category ? { category: cal.category } : {}) });
+        }
       }
       return out.sort(compareEvents);
     },
 
-    startAutoSync(intervalMs = 10 * 60_000) {
+    startAutoSync(intervalMs = DEFAULT_SYNC_MIN * 60_000) {
       const doc = typeof document !== 'undefined' ? document : null;
       const win = typeof window !== 'undefined' ? window : null;
+      // Each account syncs at its own cadence (`syncEveryMin`, else `intervalMs`); the check runs
+      // at least once a minute so a short cadence is honoured.
       const run = (force = false) => {
-        if (!doc?.hidden) void sync(undefined, { force }).catch((e) => console.warn('[calendar] sync failed', e));
+        if (!doc?.hidden) void sync(undefined, { auto: true, force, everyMs: intervalMs }).catch((e) => console.warn('[calendar] sync failed', e));
       };
       const onVisibility = () => run();
       const onOnline = () => run(true);
       run();
-      const timer = setInterval(() => run(), intervalMs);
+      const timer = setInterval(() => run(), Math.min(intervalMs, 60_000));
       doc?.addEventListener('visibilitychange', onVisibility);
       win?.addEventListener('online', onOnline);
       return () => {

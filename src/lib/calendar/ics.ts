@@ -853,6 +853,7 @@ export function createIcsProvider(): CalendarProvider {
           endMs: o.endMs,
           allDay: o.allDay,
           color: calendar.color,
+          series: o.uid,
           ...(o.location ? { location: o.location } : {}),
           ...(o.url ? { htmlLink: o.url } : {}),
         }),

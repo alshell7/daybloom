@@ -180,13 +180,16 @@
       <span class="dot">·</span>
       {live && !drag ? `${formatDuration(block.endMs - clock.now)} left` : formatDuration(len)}
       {#if block.recurring}<span class="glyph" title="Repeats"><Icon name="repeat" size={12} /></span>{/if}
-      {#if block.kind === 'event'}<span class="glyph" title="From your calendar"><Icon name="calendar" size={12} /></span>{/if}
     </span>
     {#if missed && !acked}
       <span class="waiting">check in?</span>
     {/if}
     {#if block.event}
-      <span class="src">{accountLabel(block.event.accountId)}{block.event.alsoIn?.length ? ` + ${block.event.alsoIn.length} more` : ''}</span>
+      <span class="src" title={`From your calendar${block.event.calendarName ? `: ${block.event.calendarName}` : ''} · read-only`}>
+        <Icon name="calendar" size={11} stroke={2.2} />
+        <span>{block.event.calendarName ?? accountLabel(block.event.accountId)}</span>
+        {#if block.event.alsoIn?.length}<span class="also">+{block.event.alsoIn.length}</span>{/if}
+      </span>
     {/if}
     {#if overlaps.length}
       <span class="clash"><Icon name="shuffle" size={11} /> same time as {overlaps[0].title}{overlaps.length > 1 ? ` +${overlaps.length - 1}` : ''}</span>
@@ -396,8 +399,17 @@
       transform: scale(1);
     }
   }
+  /* From a calendar: a striped glass with an outline, never a solid fill like your own blocks,
+     so the two read apart at a glance (stripes mean "from a calendar, read-only"). */
   .event .capsule {
-    background: repeating-linear-gradient(135deg, var(--c) 0 7px, color-mix(in srgb, var(--c) 82%, white) 7px 11px);
+    background:
+      repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 42%, transparent) 0 3px, transparent 3px 8px),
+      var(--c-soft);
+    color: color-mix(in srgb, var(--c) 72%, var(--ink));
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 72%, transparent);
+  }
+  .event .title .t {
+    font-weight: 400;
   }
   .missed .capsule {
     background: var(--c-soft);
@@ -490,6 +502,24 @@
     align-items: center;
     gap: 4px;
     font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .src {
+    justify-self: start;
+    max-width: 100%;
+    height: 20px;
+    padding: 0 7px 0 6px;
+    border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--c) 12%, transparent);
+    color: color-mix(in srgb, var(--c) 62%, var(--ink));
+  }
+  .src span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .src .also {
+    flex: none;
     color: var(--ink-3);
   }
   .clash {

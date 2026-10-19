@@ -83,9 +83,15 @@ describe('mapGoogleEvent', () => {
       endMs: utc(2026, 10, 20, 14, 30),
       allDay: false,
       color: calendar.color,
+      series: 'evt1',
       location: 'Room 4',
       htmlLink: 'https://calendar.google.com/event?eid=x',
     });
+  });
+
+  it('gives every instance of a repeating event its series id', () => {
+    const e = mapGoogleEvent({ ...base, id: 'evt1_20261020T130000Z', recurringEventId: 'evt1', start: { dateTime: '2026-10-20T09:00:00Z' }, end: { dateTime: '2026-10-20T10:00:00Z' } }, account.id, calendar);
+    expect(e?.series).toBe('evt1');
   });
 
   it('maps all-day events to local midnights with an exclusive end', () => {

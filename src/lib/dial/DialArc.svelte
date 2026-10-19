@@ -113,13 +113,19 @@
   const E = $derived(Math.min(A1, A0 + Math.max(0, elapsed - gap)));
 
   const missed = $derived(!block.done && elapsed >= a1 - a0 - 0.01 && block.kind === 'task');
+  const isEvent = $derived(block.kind === 'event');
+  // From a calendar: a tinted, striped insert with an outline (never solid like your own blocks),
+  // the same language as the rail's capsule.
   const baseFill = $derived(
     block.done
       ? mix(block.color, finish.face, finish.dark ? 0.42 : 0.5)
       : missed
         ? mix(block.color, finish.bezel, 0.68)
-        : block.color,
+        : isEvent
+          ? mix(block.color, finish.bezel, finish.dark ? 0.62 : 0.66)
+          : block.color,
   );
+  const hatchId = `hatch-${Math.random().toString(36).slice(2, 9)}`;
   const elapsedFill = $derived(mix(block.color, finish.bezel, finish.dark ? 0.6 : 0.55));
   const ink = $derived(onColor(baseFill));
 
@@ -240,8 +246,14 @@
     <path d={sectorPath(A0, E, rIn.current, rOut.current)} fill={elapsedFill} class="elapsed" />
   {/if}
 
-  {#if block.kind === 'event'}
-    <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill="url(#dial-hatch)" class="hatch" />
+  {#if isEvent}
+    <defs>
+      <pattern id={hatchId} width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="6" height="16" fill={block.color} opacity={finish.dark ? 0.5 : 0.42} />
+      </pattern>
+    </defs>
+    <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill={`url(#${hatchId})`} class="hatch" />
+    <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill="none" stroke={block.color} stroke-width="3.5" stroke-opacity="0.85" class="outline" />
   {/if}
 
 
@@ -330,7 +342,8 @@
     pointer-events: none;
     user-select: none;
   }
-  .hatch {
+  .hatch,
+  .outline {
     pointer-events: none;
   }
 

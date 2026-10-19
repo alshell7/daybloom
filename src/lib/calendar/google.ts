@@ -83,6 +83,8 @@ export interface GoogleEvent {
   start?: GoogleEventTime;
   end?: GoogleEventTime;
   attendees?: { self?: boolean; responseStatus?: string }[];
+  /** Instances of a repeating event (singleEvents=true) name the series they belong to. */
+  recurringEventId?: string;
 }
 
 export interface GoogleCalendarListEntry {
@@ -160,6 +162,7 @@ export function mapGoogleEvent(e: GoogleEvent, accountId: string, calendar: Cale
     endMs: Math.max(end?.ms ?? start.ms, start.ms),
     allDay: start.allDay,
     color: (e.colorId && GOOGLE_EVENT_COLORS[e.colorId]) || calendar.color,
+    series: e.recurringEventId ?? e.id,
     ...(e.location ? { location: e.location } : {}),
     ...(e.htmlLink ? { htmlLink: e.htmlLink } : {}),
   };

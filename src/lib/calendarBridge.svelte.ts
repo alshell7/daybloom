@@ -124,6 +124,7 @@ googleModules['./calendar/google.ts']?.().then((m: any) => {
 export function accountLabel(accountId: string): string {
   const acc = calendarState.accounts.find((a) => a.id === accountId);
   if (!acc) return 'Calendar';
+  if (acc.name?.trim()) return acc.name.trim();
   return acc.label.includes('@') ? acc.label.split('@')[0] : acc.label;
 }
 

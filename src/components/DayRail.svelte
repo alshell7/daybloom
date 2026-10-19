@@ -86,12 +86,16 @@
         <h2>Anytime</h2>
         <div class="chips">
           {#each view.floating as b (b.key)}
-            <div class="any" class:done={b.done} style:--c={b.color}>
-              <button class="tick" onclick={(e) => anytimeToggle(b, e)} aria-label={b.done ? `Mark ${b.title} not done` : `Mark ${b.title} done`} aria-pressed={b.done}>
-                {#if b.done}<Icon name="check" size={13} stroke={3} />{/if}
-              </button>
+            <div class="any" class:done={b.done} class:event={b.kind === 'event'} style:--c={b.color} title={b.kind === 'event' ? `All day · from your calendar${b.event?.calendarName ? `: ${b.event.calendarName}` : ''}` : undefined}>
+              {#if b.kind === 'event'}
+                <span class="cal-mark" aria-hidden="true"><Icon name="calendar" size={12} stroke={2.2} /></span>
+              {:else}
+                <button class="tick" onclick={(e) => anytimeToggle(b, e)} aria-label={b.done ? `Mark ${b.title} not done` : `Mark ${b.title} done`} aria-pressed={b.done}>
+                  {#if b.done}<Icon name="check" size={13} stroke={3} />{/if}
+                </button>
+              {/if}
               <button class="any-title" onclick={() => { view.selected = b.key; if (b.kind === 'task') view.sheet = { kind: 'edit', key: b.key }; }}>
-                <Icon name={b.icon} size={14} />
+                {#if b.kind !== 'event'}<Icon name={b.icon} size={14} />{/if}
                 <span>{b.title}</span>
               </button>
             </div>
@@ -254,6 +258,20 @@
   }
   .any.done {
     opacity: 0.6;
+  }
+  /* All-day calendar events: the same stripes as calendar blocks, a calendar mark, no tick. */
+  .any.event {
+    background:
+      repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, transparent) 0 3px, transparent 3px 8px),
+      color-mix(in srgb, var(--c) 8%, var(--raised));
+    border-color: color-mix(in srgb, var(--c) 55%, transparent);
+  }
+  .cal-mark {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    color: color-mix(in srgb, var(--c) 72%, var(--ink));
   }
   .any.done .any-title span {
     text-decoration: line-through;

@@ -28,7 +28,7 @@ vi.mock('../platform', () => ({
 import type { CalendarEvent } from '../engine/types';
 import { platform } from '../platform';
 import { icsAccountId, icsSecretKey, normalizeIcsUrl } from './ics';
-import { ACCOUNTS_KEY, CACHE_KEY, createCalendarService, defaultSyncWindow, type CalendarService } from './service';
+import { ACCOUNTS_KEY, CACHE_KEY, createCalendarService, defaultSyncWindow, seriesKey, type CalendarService } from './service';
 import {
   CalendarError,
   RECONNECT,
@@ -311,6 +311,96 @@ describe('calendar service: sync scheduling', () => {
     await vi.advanceTimersByTimeAsync(300_000);
     expect(syncs()).toBe(2);
     expect(doc.removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+  });
+});
+
+describe('calendar service: your names, colours and choices', () => {
+  it('renames accounts and calendars, picks a colour, and keeps it all across syncs and restarts', async () => {
+    const { g, service } = await setupTwoAccounts();
+    await service.updateAccount('google:work', { name: '  Office  ' });
+    await service.updateCalendar('google:work', 'work-team', { name: 'Squad', category: 'social' });
+    await service.sync(undefined, { force: true });
+    const work = service.getAccounts().find((a) => a.id === 'google:work')!;
+    expect(work.name).toBe('Office');
+    const team = work.calendars.find((c) => c.id === 'work-team')!;
+    expect(team).toMatchObject({ name: 'Team', customName: 'Squad', category: 'social' });
+    // Events carry the calendar's shown name and the picked category.
+    const retro = service.eventsBetween(at(1, 0), at(2, 0)).find((e) => e.title === 'retro')!;
+    expect(retro).toMatchObject({ calendarName: 'Squad', category: 'social' });
+
+    // Restart: the choices were saved.
+    const again = makeService(g.provider);
+    await again.init();
+    const saved = again.getAccounts().find((a) => a.id === 'google:work')!;
+    expect(saved.name).toBe('Office');
+    expect(saved.calendars.find((c) => c.id === 'work-team')).toMatchObject({ customName: 'Squad', category: 'social' });
+
+    // Clearing goes back to the provider's name and colour.
+    await service.updateCalendar('google:work', 'work-team', { name: null, category: null });
+    const cleared = service.getAccounts().find((a) => a.id === 'google:work')!.calendars.find((c) => c.id === 'work-team')!;
+    expect(cleared.customName).toBeUndefined();
+    expect(cleared.category).toBeUndefined();
+  });
+
+  it('leaves out every repeat of a series, and brings it back', async () => {
+    const g = fakeGoogle();
+    const standup = (day: number) => event('google:a', 'c', `standup_${day}`, at(day, 9), 0.25, { series: 'standup' });
+    g.remote.set('google:a', {
+      label: 'a',
+      calendars: [{ id: 'c', name: 'C', color: '#000000', enabled: true }],
+      events: { c: [standup(0), standup(1), event('google:a', 'c', 'lunch', at(0, 12))] },
+    });
+    g.connectQueue.push('google:a');
+    const service = makeService(g.provider);
+    await service.connectGoogle();
+    await service.sync(undefined, { force: true });
+    const range = [at(0, 0), at(2, 0)] as const;
+    expect(titles(service.eventsBetween(...range)).sort()).toEqual(['lunch', 'standup_0', 'standup_1']);
+
+    const key = seriesKey(service.eventsBetween(...range).find((e) => e.title === 'standup_0')!);
+    await service.setSeriesIncluded('google:a', [key], false);
+    expect(titles(service.eventsBetween(...range))).toEqual(['lunch']);
+    // Still listed for choosing.
+    expect(service.accountEvents('google:a', ...range)).toHaveLength(3);
+
+    await service.setSeriesIncluded('google:a', [key], true);
+    expect(titles(service.eventsBetween(...range))).toHaveLength(3);
+  });
+
+  it('syncs each account at its own cadence, and never by itself when set to only when asked', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const g = fakeGoogle();
+    for (const id of ['google:fast', 'google:manual']) g.remote.set(id, { label: id, calendars: [{ id: 'c', name: 'C', color: '#000000', enabled: true }], events: {} });
+    h.store.set(
+      ACCOUNTS_KEY,
+      JSON.stringify({
+        version: 1,
+        accounts: [
+          { id: 'google:fast', provider: 'google', label: 'fast', calendars: [], enabled: true, syncEveryMin: 5 },
+          { id: 'google:manual', provider: 'google', label: 'manual', calendars: [], enabled: true, syncEveryMin: 0 },
+        ],
+      }),
+    );
+    const service = createCalendarService({ providers: { google: g.provider } });
+    services.push(service);
+    await service.init();
+    const syncsOf = (id: string) => vi.mocked(g.provider.listCalendars).mock.calls.filter(([a]) => a.id === id).length;
+
+    const stop = service.startAutoSync();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(syncsOf('google:fast')).toBe(1);
+    expect(syncsOf('google:manual')).toBe(0);
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(syncsOf('google:fast')).toBe(1);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(syncsOf('google:fast')).toBe(2);
+    expect(syncsOf('google:manual')).toBe(0);
+
+    // Sync now still reaches it.
+    await service.sync(undefined, { force: true });
+    expect(syncsOf('google:manual')).toBe(1);
+    stop();
   });
 });
 
