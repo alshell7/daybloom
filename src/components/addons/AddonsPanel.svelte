@@ -58,8 +58,12 @@
           </ul>
           {#if on}
             <div class="go" in:fly={{ y: -4, duration: view.reducedMotion ? 0 : 220 }}>
-              <button class="btn btn-soft" onclick={() => (view.sheet = { kind: a.sheet })}>Open {a.name} <Icon name="arrow-right" size={14} /></button>
-              <span class="hint">Also in the top bar</span>
+              {#if a.sheet}
+                <button class="btn btn-soft" onclick={() => (view.sheet = { kind: a.sheet! })}>Open {a.name} <Icon name="arrow-right" size={14} /></button>
+                <span class="hint">Also in the top bar</span>
+              {:else}
+                <span class="hint where"><Icon name="sparkles" size={13} /> {a.where}</span>
+              {/if}
             </div>
           {/if}
         </article>

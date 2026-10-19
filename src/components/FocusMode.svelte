@@ -13,6 +13,8 @@
   import { tasks } from '../lib/stores/tasks.svelte';
   import { timer } from '../lib/stores/timer.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { isOn } from '../lib/addons/registry';
+  import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
 
   // One thing fills the screen; the next is a glance away.
   const cur = $derived(view.now.current);
@@ -100,6 +102,8 @@
               </li>
             {/each}
           </ul>
+        {:else if task && isOn('smaller') && !cur.done && task.title.trim()}
+          <div class="smaller"><MakeSmaller {task} blockKey={cur.key} minutes={Math.round((cur.endMs - cur.startMs) / MINUTE)} tone="focus" /></div>
         {/if}
         <div class="actions">
           {#if cur.kind === 'task'}
@@ -149,6 +153,10 @@
 </div>
 
 <style>
+  .smaller {
+    max-width: 460px;
+    margin: var(--s-4) 0 var(--s-2);
+  }
   .focus {
     position: fixed;
     inset: 0;

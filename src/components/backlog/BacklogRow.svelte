@@ -22,6 +22,7 @@
   import { addDays, formatDuration, formatMinutes, MINUTE, minutesOfDay, weekday } from '../../lib/engine/time';
   import type { BacklogList, ISODate, Task } from '../../lib/engine/types';
   import Icon from '../../lib/Icon.svelte';
+  import { isOn } from '../../lib/addons/registry';
   import { sounds } from '../../lib/sound';
   import { view } from '../../lib/stores/view.svelte';
 
@@ -345,6 +346,9 @@
           <Icon name="sun" size={14} />Today
         </button>
         <button tabindex={tabbable ? 0 : -1} class="tool" class:on={tray === 'time'} onclick={() => open('time')} title="Pick a time today" aria-label="Pick a time today"><Icon name="clock" size={15} /></button>
+        {#if isOn('smaller') && !task.subtasks.length}
+          <button tabindex={tabbable ? 0 : -1} class="tool" onclick={() => (view.sheet = { kind: 'edit', key: `later:${task.id}`, smaller: true })} title="Too big? Make it smaller" aria-label="Make it smaller"><Icon name="layers" size={15} /></button>
+        {/if}
         <button tabindex={tabbable ? 0 : -1} class="tool" class:on={tray === 'move'} onclick={() => open('move')} title="Move to another list" aria-label="Move to another list"><Icon name="move-later" size={15} /></button>
         <button tabindex={tabbable ? 0 : -1} class="tool" onclick={() => onremove?.()} title="Delete (⌫)" aria-label="Delete"><Icon name="trash-ui" size={15} /></button>
       {/if}

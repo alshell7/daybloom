@@ -12,7 +12,7 @@ import { timer } from './timer.svelte';
 
 export type Sheet =
   | null
-  | { kind: 'edit'; key: string }
+  | { kind: 'edit'; key: string; smaller?: boolean }
   | { kind: 'new'; date: ISODate | null; start: Minutes | null; duration: Minutes }
   | { kind: 'settings'; section?: string }
   | { kind: 'insights' }
@@ -23,7 +23,9 @@ export type Sheet =
   | { kind: 'calendars'; add?: 'ics' | 'google' }
   | { kind: 'addons'; id?: string }
   | { kind: 'work'; tab?: string }
-  | { kind: 'tracker'; tab?: string };
+  | { kind: 'tracker'; tab?: string }
+  | { kind: 'crumbs' }
+  | { kind: 'reality' };
 
 export interface Spark {
   id: number;

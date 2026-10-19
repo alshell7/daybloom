@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality';
 
 export interface AddonMeta {
   id: AddonId;
@@ -16,8 +16,10 @@ export interface AddonMeta {
   /** The addon's own accent (its tile and its charts). */
   accent: string;
   features: { icon: string; text: string }[];
-  /** Sheet that opens the addon. */
-  sheet: 'work' | 'tracker';
+  /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality';
+  /** Where to find an addon that has no panel of its own. */
+  where?: string;
   shortcut?: string;
 }
 
@@ -49,6 +51,48 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'app-window', text: 'Optional app activity and weekly timesheets' },
     ],
     sheet: 'tracker',
+  },
+  {
+    id: 'crumbs',
+    name: 'Breadcrumbs',
+    tagline: 'Pick up where you left off',
+    description: 'When you step away from a task, leave yourself one line about where you were. When you come back, it is the first thing you see. Stray thoughts during focus wait in a parking spot.',
+    icon: 'pin',
+    accent: '#B07E06',
+    features: [
+      { icon: 'pen', text: 'A gentle “where did you leave off?” when you leave or stop a focus session' },
+      { icon: 'focus', text: 'Your last note waits in focus mode and on the block' },
+      { icon: 'inbox', text: 'Park a stray thought mid-focus; send it to the backlog later' },
+    ],
+    sheet: 'crumbs',
+  },
+  {
+    id: 'smaller',
+    name: 'Make it smaller',
+    tagline: 'For tasks that feel too big to start',
+    description: 'One tap splits a task into a few small, friendly steps. The first one always takes two minutes, so starting is easy.',
+    icon: 'layers',
+    accent: '#138FA6',
+    features: [
+      { icon: 'sparkles', text: 'Steps that fit the task: writing, calls, cleaning, code and more' },
+      { icon: 'pen', text: 'Change, remove or add steps before you keep them' },
+      { icon: 'timer', text: 'Start the first step as a 2-minute focus' },
+    ],
+    where: 'Find “Too big?” on any task, in the backlog and in focus mode.',
+  },
+  {
+    id: 'reality',
+    name: 'Reality check',
+    tagline: 'Plan with the time things really take',
+    description: 'Daybloom quietly learns how long your blocks really take, from finished blocks, focus sessions and tracked time. Then it shows you, kindly, and offers a better length when you plan.',
+    icon: 'hourglass',
+    accent: '#8670E6',
+    features: [
+      { icon: 'chart-column', text: 'Planned and real time, side by side, by kind of task' },
+      { icon: 'clock', text: '“Usually ~45m” when you set a length, one tap to use it' },
+      { icon: 'shield', text: 'It never changes your plans by itself' },
+    ],
+    sheet: 'reality',
   },
 ];
 

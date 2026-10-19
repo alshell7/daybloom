@@ -147,10 +147,10 @@
       <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' })} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
         <Icon name="chart" size={18} />
       </button>
-      {#each enabledAddons() as a (a.id)}
+      {#each enabledAddons().filter((x) => x.sheet) as a (a.id)}
         <button
           class="icon-btn fold-a"
-          onclick={() => (view.sheet = view.sheet?.kind === a.sheet ? null : { kind: a.sheet })}
+          onclick={() => (view.sheet = view.sheet?.kind === a.sheet ? null : { kind: a.sheet! })}
           aria-pressed={view.sheet?.kind === a.sheet}
           aria-label={a.name}
           title={a.name}
@@ -193,8 +193,8 @@
             <button class="item b" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'insights' }))}>
               <Icon name="chart" size={16} /><span>Your week</span><kbd>I</kbd>
             </button>
-            {#each enabledAddons() as a (a.id)}
-              <button class="item a" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: a.sheet }))}>
+            {#each enabledAddons().filter((x) => x.sheet) as a (a.id)}
+              <button class="item a" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: a.sheet! }))}>
                 <Icon name={a.icon} size={16} /><span>{a.name}</span>
               </button>
             {/each}

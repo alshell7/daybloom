@@ -14,8 +14,15 @@
   import { view } from '../lib/stores/view.svelte';
   import Panel from './Panel.svelte';
   import AddonBlockFields from './addons/AddonBlockFields.svelte';
+  import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
+  import { isOn } from '../lib/addons/registry';
 
   const sheetKey = $derived(view.sheet?.kind === 'edit' ? view.sheet.key : null);
+  // Opened from the backlog's "Too big?" tool: the step breaker starts open.
+  let smallerOpen = $state(false);
+  $effect(() => {
+    smallerOpen = view.sheet?.kind === 'edit' && !!view.sheet.smaller;
+  });
   const target = $derived.by(() => {
     if (!sheetKey) return null;
     if (sheetKey.startsWith('later:')) {
@@ -342,6 +349,11 @@
       <form onsubmit={addStep}>
         <input class="field step-add" bind:value={newStep} placeholder="Break it into a small first step…" aria-label="Add a step" />
       </form>
+      {#if isOn('smaller') && task.title.trim()}
+        <div class="smaller">
+          <MakeSmaller {task} blockKey={sheetKey && !sheetKey.startsWith('later:') ? sheetKey : null} minutes={duration} bind:open={smallerOpen} />
+        </div>
+      {/if}
     </section>
 
     <section class="group">
@@ -558,6 +570,9 @@
     height: 36px;
     font-size: var(--t-sm);
     color: var(--ink-2);
+  }
+  .smaller {
+    margin-top: var(--s-3);
   }
   .durations,
   .repeat {
