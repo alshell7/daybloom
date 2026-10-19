@@ -417,13 +417,26 @@ switch ($Cmd) {
   }
   'cpu' {
     # -A root pid, -B seconds. CPU is summed over the app and every WebView2 child process;
-    # `oneCore` uses the same unit as macOS top / Activity Monitor (100 = one core).
+    # `oneCore` uses the same unit as macOS top / Activity Monitor (100 = one core). `dwm` and
+    # `everything` (all processes) are sampled too: where WebView2 composes through
+    # DirectComposition, the work of drawing it lands in dwm.exe, outside the app's tree.
     $tree = @(Get-Tree ([int]$A))
     $t0 = @{}
     foreach ($p in $tree) { try { $t0[[int]$p.ProcessId] = (Get-Process -Id $p.ProcessId).TotalProcessorTime.TotalMilliseconds } catch { } }
+    $all0 = @{}
+    foreach ($q in Get-Process) { if ($q.Id -ne 0) { try { $all0[$q.Id] = $q.TotalProcessorTime.TotalMilliseconds } catch { } } }
     $sw = [Diagnostics.Stopwatch]::StartNew()
     Start-Sleep -Seconds ([int]$B)
     $el = $sw.Elapsed.TotalMilliseconds
+    $allMs = 0; $dwmMs = 0
+    foreach ($q in Get-Process) {
+      if (-not $all0.ContainsKey($q.Id)) { continue }
+      try {
+        $delta = $q.TotalProcessorTime.TotalMilliseconds - $all0[$q.Id]
+        $allMs += $delta
+        if ($q.ProcessName -eq 'dwm') { $dwmMs += $delta }
+      } catch { }
+    }
     $rows = @(foreach ($p in $tree) {
       try {
         $gp = Get-Process -Id $p.ProcessId
@@ -443,6 +456,7 @@ switch ($Cmd) {
     Out-Json @{
       seconds = [math]::Round($el / 1000, 1); cores = $cores
       oneCore = [math]::Round($sum, 2); machine = [math]::Round($sum / $cores, 2)
+      dwm = [math]::Round(100 * $dwmMs / $el, 2); everything = [math]::Round(100 * $allMs / $el, 2)
       privateMB = [math]::Round($mem, 1); processes = $rows
     }
   }

@@ -873,7 +873,7 @@ async function idle(app) {
     const sample = (scenario, seconds = CPU_SECONDS) => {
       const r = ps('cpu', { A: pid, B: seconds });
       cpu.push({ scenario, ...r });
-      record(`Idle CPU: ${scenario}`, 'info', `${r.oneCore}% of one core (${r.machine}% of ${r.cores} cores), ${r.privateMB} MB private, ${r.seconds} s`);
+      record(`Idle CPU: ${scenario}`, 'info', `${r.oneCore}% of one core (${r.machine}% of ${r.cores} cores), ${r.privateMB} MB private, ${r.seconds} s; dwm.exe ${r.dwm}%, whole machine ${r.everything}%`);
     };
     sample('planner + widget shown');
 
@@ -1115,6 +1115,8 @@ function split(r) {
     gpu: sum((p) => p.role === 'gpu-process'),
     renderers: rows.filter((p) => p.role === 'renderer').sort((x, y) => String(x.started).localeCompare(String(y.started))).map((p) => p.cpu),
     other: sum((p) => !known.includes(p.role)),
+    dwm: r.dwm,
+    everything: r.everything,
     privateMB: r.privateMB,
   };
 }
@@ -1139,7 +1141,7 @@ async function cpuStudy(app) {
     const s = { state, what, ...split(r) };
     study.push(s);
     cpu.push({ scenario: `(${state}) ${what}`, ...r });
-    record(`Idle CPU (${state}) ${what}`, 'info', `${s.total}% of one core: app ${s.app}, browser ${s.browser}, GPU ${s.gpu}, renderers ${s.renderers.join(' / ') || '–'}, other ${s.other}; ${s.privateMB} MB`);
+    record(`Idle CPU (${state}) ${what}`, 'info', `${s.total}% of one core: app ${s.app}, browser ${s.browser}, GPU ${s.gpu}, renderers ${s.renderers.join(' / ') || '–'}, other ${s.other}; dwm.exe ${s.dwm}, whole machine ${s.everything}; ${s.privateMB} MB`);
   };
   const animations = {};
 
@@ -1219,10 +1221,10 @@ function report() {
   let md = `## Daybloom Windows smoke test (${SOURCE}${part})\n\n| | Check | Detail |\n|---|---|---|\n`;
   for (const r of results) md += `| ${icon[r.status]} | ${r.check} | ${String(r.detail).replace(/\|/g, '\\|').replace(/\n/g, ' ')} |\n`;
   if (cpu.length) {
-    md += `\n### Idle CPU (GitHub runners have no GPU, so WebView2 renders in software and these run high)\n\n| Scenario | % of one core | % of machine | Private MB | Top processes |\n|---|---|---|---|---|\n`;
+    md += `\n### Idle CPU (GitHub runners have no GPU, so WebView2 renders in software and these run high)\n\n| Scenario | % of one core | % of machine | dwm.exe | Whole machine | Private MB | Top processes |\n|---|---|---|---|---|---|---|\n`;
     for (const s of cpu) {
       const top = list(s.processes).sort((a, b) => b.cpu - a.cpu).slice(0, 4).map((p) => `${p.role} ${p.cpu}%`).join(', ');
-      md += `| ${s.scenario} | ${s.oneCore} | ${s.machine} | ${s.privateMB} | ${top} |\n`;
+      md += `| ${s.scenario} | ${s.oneCore} | ${s.machine} | ${s.dwm ?? '–'} | ${s.everything ?? '–'} | ${s.privateMB} | ${top} |\n`;
     }
   }
   fs.writeFileSync(path.join(OUT, 'summary.md'), md);

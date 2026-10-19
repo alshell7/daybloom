@@ -37,9 +37,9 @@ for (const s of studies) {
   md += `| ${s.label} | ${cells.join(' | ')} |\n`;
 }
 
-md += '\n### By process\n\n| Build | State | Total | daybloom.exe | WebView2 browser | GPU | Renderers (planner / widget / …) | Other | Private MB |\n|---|---|---:|---:|---:|---:|---|---:|---:|\n';
+md += '\n### By process\n\ndwm.exe and the whole machine are outside the app\'s processes: where WebView2 composes through DirectComposition, drawing it costs dwm.exe, so compare those columns too.\n\n| Build | State | Total | daybloom.exe | WebView2 browser | GPU | Renderers (planner / widget / …) | Other | dwm.exe | Whole machine | Private MB |\n|---|---|---:|---:|---:|---:|---|---:|---:|---:|---:|\n';
 for (const s of studies) {
-  for (const r of s.study) md += `| ${s.label} | (${r.state}) ${STATES[r.state]} | ${r.total} | ${r.app} | ${r.browser} | ${r.gpu} | ${r.renderers.join(' / ') || '–'} | ${r.other} | ${r.privateMB} |\n`;
+  for (const r of s.study) md += `| ${s.label} | (${r.state}) ${STATES[r.state]} | ${r.total} | ${r.app} | ${r.browser} | ${r.gpu} | ${r.renderers.join(' / ') || '–'} | ${r.other} | ${r.dwm ?? '–'} | ${r.everything ?? '–'} | ${r.privateMB} |\n`;
 }
 
 const anim = studies.filter((s) => s.animations && Object.keys(s.animations).length);
