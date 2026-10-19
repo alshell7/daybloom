@@ -326,6 +326,8 @@ async function behaviour(app) {
         `html ${probeWidget.htmlBg}, body ${probeWidget.bodyBg}`,
       );
     }
+    const fg0 = ps('foreground');
+    record('Widget does not take the focus when it appears', fg0?.hwnd !== widget.hwnd ? 'pass' : 'fail', `foreground '${fg0?.title}'`);
     record('Widget window styles', 'info', `exStyle 0x${(widget.exStyle >>> 0).toString(16)}, ${widget.w}x${widget.h} at ${widget.x},${widget.y}`);
     shot('01-launch.png');
 
@@ -648,8 +650,12 @@ async function privacyChecks(pid, pg) {
   await invoke(pg, 'privacy_set', { on: true });
   await invoke(pg, 'widget_show', { show: false });
   await waitFor('widget to close', () => !widgetOf(pid), 10_000).catch(() => null);
+  const fgBefore = ps('foreground');
   await invoke(pg, 'widget_show', { show: true });
   const w = await waitFor('widget to reopen', () => widgetOf(pid)?.visible && widgetOf(pid), 15_000).catch(() => null);
+  await sleep(800);
+  const fgAfter = ps('foreground');
+  record('Widget reopened by widget_show does not take the focus', w && fgAfter?.hwnd !== w.hwnd ? 'pass' : 'fail', `foreground '${fgBefore?.title}' → '${fgAfter?.title}'`);
   const m3 = ps('traymenu', { A: pid, B: '' });
   const i3 = list(m3?.items).find((i) => /Privacy Mode/.test(i.text));
   const wa = w ? ps('affinity', { A: w.hwnd }) : null;
@@ -691,15 +697,18 @@ async function idle(app) {
     await sleep(Math.max(0, hiddenAt + 7 * 60_000 - Date.now()));
     pg = await attach();
     if (pg) {
-      const ticks = await pg.main.eval('window.__smokeTicks ?? []');
-      const vis = await pg.main.eval('document.visibilityState');
+      const page = await pg.main.eval(`({ ticks: window.__smokeTicks ?? null, vis: document.visibilityState, loadedAt: Math.round(performance.timeOrigin), discarded: !!document.wasDiscarded })`);
+      const ticks = page.ticks ?? [];
       const late = ticks.filter((t) => t > hiddenAt + 5.5 * 60_000);
       const gaps = late.slice(1).map((t, i) => t - late[i]);
       const worst = gaps.length ? Math.max(...gaps) : Infinity;
+      const min = (t) => `${((t - hiddenAt) / 60_000).toFixed(1)} min`;
+      // Why a run has no late ticks: the page reloaded (recorder gone), was discarded, or froze.
+      const why = page.ticks == null ? `recorder gone: page loaded ${min(page.loadedAt)} after hiding${page.discarded ? ', was discarded' : ''}` : `${ticks.length} ticks in all, the last ${ticks.length ? min(ticks.at(-1)) : '–'} after hiding`;
       record(
         'Hidden planner keeps a ~5 s timer cadence after 5+ minutes (on-time notifications)',
         worst < 12_000 ? 'pass' : 'fail',
-        `visibilityState '${vis}'; ${late.length} ticks in minutes 5.5–7, longest gap ${(worst / 1000).toFixed(1)} s`,
+        `visibilityState '${page.vis}'; ${late.length} ticks in minutes 5.5–7, longest gap ${(worst / 1000).toFixed(1)} s; ${why}`,
       );
       closeAll(pg);
     }
