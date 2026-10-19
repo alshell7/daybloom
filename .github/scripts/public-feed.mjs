@@ -28,12 +28,15 @@ A visual, sectograph-style day planner and timer. Installed copies update themse
 ## macOS (Apple silicon + Intel)
 ${pick(/\.dmg$/)}
 
-Not notarised yet: the first time, right-click the app → **Open** → **Open**.
+Not notarised yet. The first time, macOS stops the app:
+
+1. Open **System Settings › Privacy & Security**.
+2. Scroll to **Security**. Click **Open Anyway** next to the Daybloom message.
 
 ## Windows
 ${pick(/setup\.exe$|\.msi$/)}
 
-Not code-signed yet: if SmartScreen appears, choose **More info** → **Run anyway**.
+Not code-signed yet. If SmartScreen shows a warning, click **More info**, then **Run anyway**.
 
 ---
 Every update is signed; the app refuses any download that doesn't match its built-in key.
