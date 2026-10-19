@@ -54,9 +54,6 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .ok_or("widget window config missing")?
         .clone();
     let w = tauri::WebviewWindowBuilder::from_config(app, &config)
-        // Windows: shown after it is built, a window is activated and takes the focus despite
-        // `"focus": false`; built visible, it appears without activation.
-        .map(|b| if cfg!(windows) { b.visible(true) } else { b })
         .and_then(|b| b.build())
         .map_err(|e| e.to_string())?;
     apply_layer(&w, layer(app))?;
@@ -76,7 +73,8 @@ pub fn layer(app: &AppHandle) -> Layer {
 pub fn set_visible(app: &AppHandle, show: Option<bool>) -> Result<bool, String> {
     let show = show.unwrap_or_else(|| !is_visible(app));
     if show {
-        ensure(app)?.show().map_err(|e| e.to_string())?;
+        // Never steals the keyboard focus (see `show_quietly`).
+        crate::show_quietly(&ensure(app)?)?;
     } else if let Some(w) = window(app) {
         // Closing (not hiding) frees the webview; `Destroyed` then calls `changed`.
         w.close().map_err(|e| e.to_string())?;
