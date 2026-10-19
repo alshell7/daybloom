@@ -32,17 +32,17 @@ export type TrayAction = 'new-block' | 'focus-now' | 'open-settings';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-export type WindowLabel = 'main' | 'widget' | 'overlay';
+export type WindowLabel = 'main' | 'widget' | 'overlay' | 'capture';
 
-/** Label of the current window. Browser dev uses `?view=widget` / `?view=overlay`. */
+/** Label of the current window. Browser dev uses `?view=widget` / `?view=overlay` / `?view=capture`. */
 export function windowLabel(): WindowLabel {
   if (isTauri) {
     const label = (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label;
-    if (label === 'widget' || label === 'overlay') return label;
+    if (label === 'widget' || label === 'overlay' || label === 'capture') return label;
     return 'main';
   }
   const v = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('view') : null;
-  return v === 'widget' || v === 'overlay' ? v : 'main';
+  return v === 'widget' || v === 'overlay' || v === 'capture' ? v : 'main';
 }
 
 export interface ScreenMetrics {
@@ -124,6 +124,14 @@ export const platform = {
       dead = true;
       off?.();
     };
+  },
+
+  /** The quick-capture card (also opened from the tray / menu bar). */
+  async openCapture(): Promise<void> {
+    if (isTauri) await invoke('capture_show');
+  },
+  async closeCapture(): Promise<void> {
+    if (isTauri) await invoke('capture_close');
   },
 
   /** Ask the planner window to do what a tray item does (from the widget, say). */

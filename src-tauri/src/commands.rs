@@ -113,6 +113,17 @@ pub async fn overlay_show(app: AppHandle, show: bool) -> Result<bool, String> {
     crate::overlay::set_visible(&app, show)
 }
 
+/// The quick-capture card (async: it builds a window).
+#[tauri::command]
+pub async fn capture_show(app: AppHandle) -> Result<(), String> {
+    crate::capture::show(&app)
+}
+
+#[tauri::command]
+pub async fn capture_close(app: AppHandle) -> Result<(), String> {
+    crate::capture::close(&app)
+}
+
 /// Privacy mode on or off for every window (also mirrored in the tray menu).
 #[tauri::command]
 pub fn privacy_set(app: AppHandle, on: bool) {

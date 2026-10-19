@@ -31,7 +31,7 @@ fn place(app: &AppHandle, w: &WebviewWindow) -> Result<(), String> {
 
 /// The planner's WebView2 browser args from tauri.conf.json. Every webview shares one WebView2
 /// environment, which refuses a window whose args differ, so the overlay must not keep its own copy.
-fn browser_args(app: &AppHandle) -> Option<String> {
+pub(crate) fn browser_args(app: &AppHandle) -> Option<String> {
     app.config().app.windows.iter().find(|w| w.label == crate::MAIN)?.additional_browser_args.clone()
 }
 

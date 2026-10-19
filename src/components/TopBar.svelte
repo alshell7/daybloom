@@ -17,6 +17,7 @@
   import { enabledAddons, isOn } from '../lib/addons/registry';
   import TrackerPill from './addons/tracker/TrackerPill.svelte';
   import SessionPill from './focus/SessionPill.svelte';
+  import BacklogButton from './backlog/BacklogButton.svelte';
 
   let { mac = false, ontogglewidget }: { mac?: boolean; ontogglewidget: () => void } = $props();
 
@@ -142,10 +143,7 @@
         <Icon name="sparkles" size={18} />
       </button>
       <span class="fold-b wrap"><ThemeToggle /></span>
-      <button class="icon-btn" onclick={() => (view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' })} aria-pressed={view.sheet?.kind === 'backlog'} aria-label="Backlog (B)" title="Backlog · B">
-        <Icon name="inbox" size={18} />
-        {#if view.later.length}<span class="badge tnum">{view.later.length > 99 ? '99+' : view.later.length}</span>{/if}
-      </button>
+      <BacklogButton />
       <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' })} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
         <Icon name="chart" size={18} />
       </button>
@@ -386,22 +384,6 @@
   }
   .actions .icon-btn {
     position: relative;
-  }
-  .badge {
-    position: absolute;
-    top: 2px;
-    right: 1px;
-    min-width: 15px;
-    height: 15px;
-    padding: 0 4px;
-    border-radius: 8px;
-    background: var(--ink);
-    color: var(--ink-inverse);
-    font-size: 9.5px;
-    font-weight: 600;
-    line-height: 15px;
-    text-align: center;
-    pointer-events: none;
   }
   .actions {
     grid-area: actions;

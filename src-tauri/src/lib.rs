@@ -1,5 +1,6 @@
 mod activity;
 mod assistant;
+mod capture;
 mod commands;
 mod export;
 mod oauth;
@@ -92,7 +93,7 @@ pub fn run() {
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
                 // The cues window always covers the planner's display; nothing to remember.
-                .with_denylist(&[overlay::LABEL])
+                .with_denylist(&[overlay::LABEL, capture::LABEL])
                 .build(),
         )
         .manage(oauth::Listeners::default())
@@ -106,7 +107,9 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             // The planner hides instead of quitting; Daybloom lives on in the tray / menu bar.
             // The widget really closes, releasing its webview until it is shown again.
-            WindowEvent::CloseRequested { api, .. } if window.label() != widget::LABEL && window.label() != overlay::LABEL => {
+            WindowEvent::CloseRequested { api, .. }
+                if window.label() != widget::LABEL && window.label() != overlay::LABEL && window.label() != capture::LABEL =>
+            {
                 api.prevent_close();
                 let _ = window.hide();
                 #[cfg(windows)]
@@ -140,6 +143,8 @@ pub fn run() {
             commands::widget_set_layer,
             commands::overlay_show,
             commands::overlay_metrics,
+            commands::capture_show,
+            commands::capture_close,
             commands::privacy_set,
             export::export_save,
             activity::activity_idle_seconds,

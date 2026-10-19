@@ -17,6 +17,7 @@
   import MainView from './views/MainView.svelte';
   import WidgetView from './views/WidgetView.svelte';
   import OverlayView from './views/OverlayView.svelte';
+  import CaptureView from './views/CaptureView.svelte';
   import { cuePreview, startScreenCues } from './lib/screenCues.svelte';
   import { startAddons } from './lib/addons/runtime.svelte';
 
@@ -141,6 +142,8 @@
       <WidgetView />
     {:else if label === 'overlay'}
       <OverlayView />
+    {:else if label === 'capture'}
+      <CaptureView />
     {:else}
       <MainView />
     {/if}

@@ -35,6 +35,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .separator()
         .item(&privacy)
         .separator()
+        .item(&MenuItemBuilder::with_id("capture", "Add to Backlog…").build(app)?)
         .item(&MenuItemBuilder::with_id("new-block", "New Block…").build(app)?)
         .item(&MenuItemBuilder::with_id("focus-now", "Focus on Now").build(app)?)
         .item(&MenuItemBuilder::with_id("open-settings", "Settings…").build(app)?)
@@ -105,6 +106,13 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
             let _ = app.emit("daybloom://tray", json!({ "action": action }));
         }
         "privacy" => crate::privacy::set(app, !crate::privacy::is_on(app)),
+        // Off the main thread: building a webview from a menu handler deadlocks WebView2.
+        "capture" => {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = crate::capture::show(&app);
+            });
+        }
         "quit" => app.exit(0),
         _ => {}
     }
