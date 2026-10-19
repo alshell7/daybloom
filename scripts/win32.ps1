@@ -197,8 +197,9 @@ switch ($Cmd) {
   }
   'wallpaper' {
     # Solid colour desktop (no image) so transparency is measurable: -A "r,g,b".
-    $c = $A -split ',' | ForEach-Object { [int]$_ }
-    [void][W]::SetSysColors(1, @(1), @($c[0] + ($c[1] -shl 8) + ($c[2] -shl 16)))
+    # (Not `$c`: PowerShell names are case-insensitive, so that is the [string] parameter $C.)
+    $rgb = $A -split ',' | ForEach-Object { [int]$_ }
+    [void][W]::SetSysColors(1, @(1), @($rgb[0] + ($rgb[1] -shl 8) + ($rgb[2] -shl 16)))
     Set-ItemProperty 'HKCU:\Control Panel\Desktop' -Name Wallpaper -Value ''
     [void][W]::SystemParametersInfo(0x14, 0, '', 3)
     Out-Json $true
