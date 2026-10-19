@@ -16,6 +16,8 @@
   import { voice } from '../lib/voice/voice.svelte';
   import LiveWords from './voice/LiveWords.svelte';
   import MicButton from './voice/MicButton.svelte';
+  import { isOn } from '../lib/addons/registry';
+  import { realityHint } from '../lib/addons/reality/reality.svelte';
 
   // Type a block the way you'd say it: "gym 5pm 45m", "meds every day 8am". Or say it: the
   // mic dictates into the field, the preview reads it live, and Enter adds it.
@@ -63,6 +65,9 @@
     const gap = freeGaps(busy, from, end, duration * MINUTE).find((g) => g.endMs - g.startMs >= duration * MINUTE);
     return { date, start: Math.round(minutesOfDay(gap ? gap.startMs : from)), duration };
   });
+
+  // Reality check addon: what blocks like this usually take.
+  const usually = $derived(isOn('reality') && parsed?.title && plan ? realityHint({ title: parsed.title, category: hint?.category ?? 'focus', minutes: plan.duration }) : null);
 
   const when = $derived.by(() => {
     if (!plan) return '';
@@ -146,6 +151,7 @@
     <span class="chip">{when}</span>
     {#if plan.start != null}<span class="chip">{formatDuration(plan.duration * MINUTE)}</span>{/if}
     {#if parsed.recurrence}<span class="chip"><Icon name="repeat" size={11} /> {describeRecurrence(parsed.recurrence, plan.date)}</span>{/if}
+    {#if usually}<span class="chip usually" title="Reality check: how long blocks like this usually take"><Icon name="hourglass" size={11} /> usually ~{formatDuration(usually.minutes * MINUTE)}</span>{/if}
   </div>
 {/if}
 
@@ -257,6 +263,10 @@
     background: var(--sunken);
     font-size: var(--t-xs);
     color: var(--ink-2);
+  }
+  .chip.usually {
+    color: var(--ink-2);
+    background: color-mix(in srgb, #8670e6 12%, var(--sunken));
   }
   .chip.strong {
     color: var(--ink);

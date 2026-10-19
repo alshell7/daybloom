@@ -16,6 +16,7 @@
   import AddonBlockFields from './addons/AddonBlockFields.svelte';
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
   import CrumbFields from './addons/crumbs/CrumbFields.svelte';
+  import { realityHint } from '../lib/addons/reality/reality.svelte';
   import { isOn } from '../lib/addons/registry';
 
   const sheetKey = $derived(view.sheet?.kind === 'edit' ? view.sheet.key : null);
@@ -44,6 +45,9 @@
   const duration = $derived(task ? (override.duration ?? task.duration) : 30);
   const color = $derived(task ? categoryColor(task.category, view.finish.dark) : undefined);
   const done = $derived(!!task && !!occDate && task.completions.includes(occDate));
+  // Reality check addon: "usually ~45m" for tasks like this one.
+  let usedHint = $state('');
+  const hint = $derived(isOn('reality') && task && !done && task.title.trim() && usedHint !== task.id ? realityHint({ title: task.title, category: task.category, minutes: duration }) : null);
 
   let iconOpen = $state(false);
   let iconTouched = $state(false);
@@ -274,6 +278,13 @@
         <p class="ends tnum">
           {formatMinutes(start, view.hour12)} → {formatMinutes((start + duration) % 1440, view.hour12)}
         </p>
+        {#if hint}
+          <div class="usually" transition:slide={{ duration: view.reducedMotion ? 0 : 200 }}>
+            <Icon name="hourglass" size={13} />
+            <span>{hint.est.scope === 'title' ? 'This usually takes' : `${hint.est.label} blocks usually take`} <b class="tnum">~{formatDuration(hint.minutes * MINUTE)}</b></span>
+            <button class="chip" onclick={() => (setTime({ duration: hint.minutes }), (usedHint = task.id))}>Use {formatDuration(hint.minutes * MINUTE)}</button>
+          </div>
+        {/if}
         {#if task.recurrence && occDate}
           <div class="scope">
             <span>Time changes apply to</span>
@@ -572,6 +583,27 @@
     height: 36px;
     font-size: var(--t-sm);
     color: var(--ink-2);
+  }
+  .usually {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: var(--s-2);
+    padding: 6px 6px 6px 10px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-xs);
+    color: var(--ink-2);
+    background: color-mix(in srgb, #8670e6 9%, transparent);
+  }
+  .usually span {
+    flex: 1;
+  }
+  .usually b {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .usually .chip {
+    height: 24px;
   }
   .smaller {
     margin-top: var(--s-3);

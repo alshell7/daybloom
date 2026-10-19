@@ -5,6 +5,7 @@ import { isOn } from './registry';
 import { startFollowingFocus, startTracker, tracker, trackerFile } from './tracker/tracker.svelte';
 import { work } from './work/work.svelte';
 import { crumbsFile, startCrumbs } from './crumbs/crumbs.svelte';
+import { realityFile, startReality } from './reality/reality.svelte';
 import { view } from '../stores/view.svelte';
 
 export function startAddons(): () => void {
@@ -15,6 +16,7 @@ export function startAddons(): () => void {
   let stopTracker: (() => void) | null = null;
   let stopFocus: (() => void) | null = null;
   let stopCrumbs: (() => void) | null = null;
+  let stopReality: (() => void) | null = null;
   const root = $effect.root(() => {
     $effect(() => {
       if (isOn('work') && !work.ready) void work.load();
@@ -28,6 +30,17 @@ export function startAddons(): () => void {
       } else if (!on && stopCrumbs) {
         stopCrumbs();
         stopCrumbs = null;
+      }
+    });
+    $effect(() => {
+      const on = isOn('reality');
+      if (on && !stopReality) {
+        void realityFile.load().then(() => {
+          if (isOn('reality') && !stopReality) stopReality = startReality();
+        });
+      } else if (!on && stopReality) {
+        stopReality();
+        stopReality = null;
       }
     });
     $effect(() => {
@@ -50,6 +63,7 @@ export function startAddons(): () => void {
   return () => {
     root();
     stopCrumbs?.();
+    stopReality?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();

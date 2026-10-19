@@ -37,6 +37,7 @@
   import TrackerPanel from '../components/addons/tracker/TrackerPanel.svelte';
   import CrumbsPanel from '../components/addons/crumbs/CrumbsPanel.svelte';
   import CrumbPrompt from '../components/addons/crumbs/CrumbPrompt.svelte';
+  import RealityPanel from '../components/addons/reality/RealityPanel.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
   import { voice, type VoiceSurface } from '../lib/voice/voice.svelte';
@@ -306,6 +307,7 @@
   {#if isOn('work')}<WorkPanel />{/if}
   {#if isOn('tracker')}<TrackerPanel />{/if}
   {#if isOn('crumbs')}<CrumbsPanel /><CrumbPrompt />{/if}
+  {#if isOn('reality')}<RealityPanel />{/if}
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />
