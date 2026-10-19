@@ -15,6 +15,7 @@
   import Panel from './Panel.svelte';
   import AddonBlockFields from './addons/AddonBlockFields.svelte';
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
+  import CrumbFields from './addons/crumbs/CrumbFields.svelte';
   import { isOn } from '../lib/addons/registry';
 
   const sheetKey = $derived(view.sheet?.kind === 'edit' ? view.sheet.key : null);
@@ -366,6 +367,7 @@
     </section>
 
     <AddonBlockFields taskId={task.id} blockKey={sheetKey && !sheetKey.startsWith('later:') ? sheetKey : null} minutes={duration} {done} />
+    {#if isOn('crumbs')}<CrumbFields taskId={task.id} />{/if}
 
     <section class="group">
       <textarea class="field notes" placeholder="Notes, links, how you'll know it's done…" bind:value={task.notes} rows="3" aria-label="Notes"></textarea>

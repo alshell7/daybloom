@@ -15,6 +15,8 @@
   import { view } from '../lib/stores/view.svelte';
   import { isOn } from '../lib/addons/registry';
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
+  import CrumbNote from './addons/crumbs/CrumbNote.svelte';
+  import ParkSpot from './addons/crumbs/ParkSpot.svelte';
 
   // One thing fills the screen; the next is a glance away.
   const cur = $derived(view.now.current);
@@ -83,6 +85,7 @@
       {#if cur}
         <h2><Icon name={cur.icon} size={26} stroke={2} /> {cur.title || 'Untitled block'}</h2>
         <p class="when tnum">until {formatTime(cur.endMs, view.hour12)} · {formatDuration(cur.endMs - clock.now)} left</p>
+        {#if task && isOn('crumbs')}<div class="crumb"><CrumbNote taskId={task.id} tone="focus" /></div>{/if}
         {#if task?.subtasks.length}
           <ul class="steps">
             {#each task.subtasks as s (s.id)}
@@ -128,11 +131,16 @@
         <p class="when tnum">
           {#if timer.active.kind === 'cycles'}Round {Math.floor(ts.index / 2) + 1} of {Math.ceil(timer.active.segments.length / 2)} · {/if}ends {formatTime(clock.now + ts.remainingMs, view.hour12)}
         </p>
+        {#if timer.active.target?.taskId && isOn('crumbs')}<div class="crumb"><CrumbNote taskId={timer.active.target.taskId} tone="focus" /></div>{/if}
         <div class="actions">
           <button class="btn btn-soft big" onclick={() => timer.addMinutes(5)}>+5 min</button>
           <button class="btn btn-quiet big" onclick={() => timer.stop()}>Stop timer</button>
         </div>
-      {:else}
+      {/if}
+      {#if isOn('crumbs') && (cur || (ts && !ts.finished && timer.active))}
+        <div class="park"><ParkSpot from={cur?.title ?? timer.active?.label} /></div>
+      {/if}
+      {#if !cur && !(ts && !ts.finished && timer.active)}
         <h2>Free time</h2>
         <p class="when">{next ? `${formatDuration(next.startMs - clock.now)} until ${next.title}` : 'Nothing else planned today.'}</p>
         <div class="actions">
@@ -153,6 +161,14 @@
 </div>
 
 <style>
+  .crumb {
+    max-width: 460px;
+    margin: var(--s-3) 0 var(--s-2);
+  }
+  .park {
+    max-width: 460px;
+    margin-top: var(--s-4);
+  }
   .smaller {
     max-width: 460px;
     margin: var(--s-4) 0 var(--s-2);

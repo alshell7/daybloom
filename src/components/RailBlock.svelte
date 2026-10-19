@@ -9,6 +9,8 @@
   import { tasks } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
   import { accountLabel } from '../lib/calendarBridge.svelte';
+  import { isOn } from '../lib/addons/registry';
+  import { crumbs } from '../lib/addons/crumbs/crumbs.svelte';
 
   let { block }: { block: Block } = $props();
 
@@ -114,6 +116,8 @@
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     toggleDone(block.key, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
   }
+  // Breadcrumbs addon: the last note left on this task.
+  const crumb = $derived(isOn('crumbs') && block.taskId ? crumbs.latest(block.taskId) : null);
 </script>
 
 <div
@@ -180,6 +184,7 @@
       <span class="dot">·</span>
       {live && !drag ? `${formatDuration(block.endMs - clock.now)} left` : formatDuration(len)}
       {#if block.recurring}<span class="glyph" title="Repeats"><Icon name="repeat" size={12} /></span>{/if}
+      {#if crumb}<span class="glyph crumb" title={`Where you left off: ${crumb.text}`}><Icon name="pin" size={12} /></span>{/if}
     </span>
     {#if missed && !acked}
       <span class="waiting">check in?</span>
@@ -495,6 +500,12 @@
   .glyph {
     display: inline-grid;
     margin-left: 2px;
+  }
+  .glyph.crumb {
+    color: #b07e06;
+  }
+  :global([data-theme='dark']) .glyph.crumb {
+    color: #e2b44a;
   }
   .src,
   .clash {

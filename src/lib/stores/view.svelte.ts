@@ -56,6 +56,8 @@ class View {
   railPreview = $state<null | { key: string; startMs: number; endMs: number }>(null);
   /** Direction of the last day change (for the dial's turn animation). */
   dayDir = $state<1 | -1>(1);
+  /** Height of a card at the foot of the rail (e.g. a breadcrumb prompt); toasts rise above it. */
+  dockLift = $state(0);
   /** Breathing guide start time (0 = off). Four 16-second cycles (see breath.svelte.ts). */
   breatheAt = $state(0);
   breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < BREATH_MS);

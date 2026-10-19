@@ -25,7 +25,7 @@ import { MicError, startCapture, type Capture, type MicProblem } from './capture
 import { normalizeSpoken } from './spoken';
 
 export type VoicePhase = 'idle' | 'needs-model' | 'downloading' | 'opening' | 'listening' | 'finishing' | 'thinking' | 'result' | 'error';
-export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd';
+export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd' | 'note';
 
 export interface SpokenToken {
   id: number;
@@ -321,7 +321,7 @@ class Voice {
     if (settings.value.voice.chimes && settings.value.sound) sounds.heard();
     // Commands go to the assistant: wake Needle now (not while you talk, where it would slow
     // the live words down), so it's ready by the time the words are.
-    if (this.surface !== 'quickadd') void sessionLoader().then((m) => m.session.open());
+    if (this.surface === 'overlay' || this.surface === 'assistant') void sessionLoader().then((m) => m.session.open());
     const engine = this.engine!;
     let text = '';
     try {
@@ -362,7 +362,7 @@ class Voice {
       this.#closeLater(3500);
       return;
     }
-    if (this.surface === 'quickadd' || this.surface === 'assistant') {
+    if (this.surface !== 'overlay') {
       this.phase = 'idle';
       if (this.surface === 'assistant') void sessionLoader().then((m) => m.session.ask(text, { spoken: true }));
       return;

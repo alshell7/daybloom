@@ -4,6 +4,7 @@
 import { isOn } from './registry';
 import { startFollowingFocus, startTracker, tracker, trackerFile } from './tracker/tracker.svelte';
 import { work } from './work/work.svelte';
+import { crumbsFile, startCrumbs } from './crumbs/crumbs.svelte';
 import { view } from '../stores/view.svelte';
 
 export function startAddons(): () => void {
@@ -13,9 +14,21 @@ export function startAddons(): () => void {
   });
   let stopTracker: (() => void) | null = null;
   let stopFocus: (() => void) | null = null;
+  let stopCrumbs: (() => void) | null = null;
   const root = $effect.root(() => {
     $effect(() => {
       if (isOn('work') && !work.ready) void work.load();
+    });
+    $effect(() => {
+      const on = isOn('crumbs');
+      if (on && !stopCrumbs) {
+        void crumbsFile.load().then(() => {
+          if (isOn('crumbs') && !stopCrumbs) stopCrumbs = startCrumbs();
+        });
+      } else if (!on && stopCrumbs) {
+        stopCrumbs();
+        stopCrumbs = null;
+      }
     });
     $effect(() => {
       const on = isOn('tracker');
@@ -36,6 +49,7 @@ export function startAddons(): () => void {
   });
   return () => {
     root();
+    stopCrumbs?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();

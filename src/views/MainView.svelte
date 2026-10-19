@@ -35,6 +35,8 @@
   import CalendarsPanel from '../components/calendars/CalendarsPanel.svelte';
   import WorkPanel from '../components/addons/work/WorkPanel.svelte';
   import TrackerPanel from '../components/addons/tracker/TrackerPanel.svelte';
+  import CrumbsPanel from '../components/addons/crumbs/CrumbsPanel.svelte';
+  import CrumbPrompt from '../components/addons/crumbs/CrumbPrompt.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
   import { voice, type VoiceSurface } from '../lib/voice/voice.svelte';
@@ -189,7 +191,7 @@
   /** The voice surface a field belongs to (`data-voice` on its form), else the capsule. */
   function voiceSurfaceAt(target: EventTarget | null): VoiceSurface {
     const at = target instanceof Element ? target.closest<HTMLElement>('[data-voice]')?.dataset.voice : undefined;
-    return at === 'quickadd' || at === 'assistant' ? at : view.sheet?.kind === 'assistant' ? 'assistant' : 'overlay';
+    return at === 'quickadd' || at === 'assistant' || at === 'note' ? at : view.sheet?.kind === 'assistant' ? 'assistant' : 'overlay';
   }
 
   function togglePrivacy() {
@@ -303,6 +305,7 @@
   <CalendarsPanel />
   {#if isOn('work')}<WorkPanel />{/if}
   {#if isOn('tracker')}<TrackerPanel />{/if}
+  {#if isOn('crumbs')}<CrumbsPanel /><CrumbPrompt />{/if}
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />
