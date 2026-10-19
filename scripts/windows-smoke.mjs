@@ -5,9 +5,9 @@
 // Installs the NSIS bundle silently, launches Daybloom, and checks with real Win32 input,
 // window styles and screenshots: the transparent widget (no black box), float-on-top vs
 // sit-on-desktop, the tray left click, the widget double-click and drag, notifications, the
-// theme reveal, and idle CPU. Page state is read over the WebView2 DevTools protocol: the app is
-// launched with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS set to the browser args baked into the exe
-// plus a debugging port, and nothing is attached while CPU is sampled.
+// theme reveal, and idle CPU. Page state is read over the WebView2 DevTools protocol: a debugging
+// port is appended to the app's own browser args (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, or the
+// WebView2 registry policy if that does not open it), and nothing is attached while CPU is sampled.
 // Writes results.json, summary.md and screenshots to <out-dir>.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -177,12 +177,7 @@ function install() {
   const exe = dirs.flatMap((d) => findFiles(d, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n)))[0];
   if (!exe) throw new Error(`installed exe not found in ${dirs.join(', ')}`);
   record('NSIS silent install', 'pass', `${exe}; WebView2 runtime ${ps('webview2') || 'not found'}`);
-  // tauri.conf.json is compiled into the exe; reuse its WebView2 args so the debug launch
-  // differs from a normal one only by the port (the env var replaces the app's own args).
-  const found = fs.readFileSync(exe).toString('latin1').match(/--disable-features=[\w,]+/g) ?? [];
-  const args = found.sort((a, b) => b.length - a.length)[0] ?? '--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection';
-  record('WebView2 browser args in the build', 'info', args);
-  return { exe, msi, webviewArgs: `${args} --remote-debugging-port=${DEBUG_PORT}` };
+  return { exe, msi, devtools: 'env' };
 }
 
 function seedState() {
@@ -196,8 +191,10 @@ const exits = new Map();
 let launches = 0;
 
 // The app's stdout/stderr go to app-N.log: a GUI-subsystem exe still writes a panic there.
-function launch({ exe, webviewArgs }) {
-  const env = { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: webviewArgs };
+function launch({ exe, devtools }) {
+  const env = { ...process.env };
+  if (devtools === 'env') env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${DEBUG_PORT}`;
+  else delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
   const log = path.join(OUT, `app-${++launches}.log`);
   const fd = fs.openSync(log, 'w');
   const child = spawn(exe, [], { env, detached: true, stdio: ['ignore', fd, fd] });
@@ -280,17 +277,48 @@ async function trayClick(pid) {
 
 // ---- phase A: behaviour ----------------------------------------------------------------
 
+async function devtoolsWhy(pid) {
+  let version;
+  try {
+    version = JSON.stringify(await (await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/version`)).json()).slice(0, 200);
+  } catch (e) {
+    version = String(e.cause?.code ?? e.message);
+  }
+  return `port ${DEBUG_PORT} listeners ${JSON.stringify(ps('port', { A: DEBUG_PORT }))}; /json/version ${version}; browser flags '${ps('browserargs', { A: pid })}'`;
+}
+
+// Starts the app with a DevTools port: the env var first, then WebView2's registry policy.
+async function startWithDevtools(app) {
+  for (const via of ['env', 'policy']) {
+    app.devtools = via;
+    if (via === 'policy') ps('policy', { A: `--remote-debugging-port=${DEBUG_PORT}` });
+    const started = await start(app);
+    await sleep(8000); // fonts, first springs, sample day
+    const pg = await pages();
+    if (pg) {
+      record('DevTools connection to the WebView2 pages', 'pass', `via ${via}; browser flags '${ps('browserargs', { A: started.run.pid })}'`);
+      return { started, pg };
+    }
+    record(`DevTools port via ${via === 'env' ? 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS' : 'registry policy'}`, 'warn', await devtoolsWhy(started.run.pid));
+    quit(started.run);
+    await sleep(3000);
+  }
+  record('DevTools connection to the WebView2 pages', 'fail', 'no debugging port; page-level checks skipped');
+  app.devtools = 'policy';
+  const started = await start(app);
+  await sleep(8000);
+  return { started, pg: null };
+}
+
 async function behaviour(app) {
   let run = app;
   let pg = null;
   try {
-    const started = await start(app);
+    const { started, pg: pages0 } = await startWithDevtools(app);
+    pg = pages0;
     run = started.run;
     const { pid } = run;
     const { widget } = started;
-    await sleep(8000); // fonts, first springs, sample day
-    pg = await pages();
-    if (!pg) record('DevTools connection to the WebView2 pages', 'fail', 'debug port never offered both pages; page-level checks skipped');
 
     if (pg) {
       const probeMain = await pg.main.eval(PROBE);
@@ -314,10 +342,23 @@ async function behaviour(app) {
       const vis = await pg.main.eval('document.visibilityState');
       record('Planner closed to the tray reports document.hidden', vis === 'hidden' ? 'pass' : 'fail', `visibilityState '${vis}'`);
     }
-    const w = widgetOf(pid);
-    const c = ps('corners', { A: rect(w) });
-    const near = Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]) < 60;
-    record('Transparent widget: no black box', c.black < 0.05 && near ? 'pass' : 'fail', `corner pixels avg rgb(${c.r},${c.g},${c.b}), ${(c.black * 100).toFixed(1)}% near-black; desktop is rgb(${WALL})`);
+    // Over desktop checked to be bare first: the runner's own console window sits top left.
+    let w = widgetOf(pid);
+    const scr = ps('screen');
+    const teal = (c) => c.black < 0.01 && Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]) < 60;
+    const spot = [
+      [scr.w - w.w - 60, Math.round((scr.h - w.h) / 2)],
+      [scr.w - w.w - 60, 60],
+      [Math.round((scr.w - w.w) / 2), scr.h - w.h - 90],
+    ].find(([x, y]) => teal(ps('corners', { A: `${x},${y},${w.w},${w.h}` })));
+    if (!spot) record('Transparent widget: no black box', 'warn', 'no bare patch of desktop to test over');
+    else {
+      ps('place', { A: w.hwnd, B: `${spot[0]},${spot[1]},${w.w},${w.h}` });
+      await sleep(1500);
+      w = widgetOf(pid);
+      const c = ps('corners', { A: rect(w) });
+      record('Transparent widget: no black box', teal(c) ? 'pass' : 'fail', `corners over bare desktop avg rgb(${c.r},${c.g},${c.b}), ${(c.black * 100).toFixed(1)}% near-black; desktop is rgb(${WALL})`);
+    }
     shot('02-widget-over-desktop.png', `${w.x - 30},${w.y - 30},${w.w + 60},${w.h + 60}`);
 
     // Tray: a left click (button up) opens the planner.
@@ -503,9 +544,14 @@ async function idle(app) {
 function msiInstall(msi) {
   if (!msi) return record('MSI install', 'fail', 'no .msi built');
   try {
-    execFileSync('msiexec', ['/i', msi, '/qn', '/norestart', '/l*v', path.join(OUT, 'msi-install.log')], { stdio: 'inherit' });
-    const exe = findFiles(path.join(process.env.ProgramFiles, 'Daybloom'), (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n))[0];
-    record('MSI silent install', exe ? 'pass' : 'fail', exe ?? 'exe not found under Program Files\\Daybloom');
+    const logFile = path.join(OUT, 'msi-install.log');
+    execFileSync('msiexec', ['/i', msi, '/qn', '/norestart', '/l*v', logFile], { stdio: 'inherit' });
+    // The verbose log is UTF-16. Tauri's MSI reuses an existing install folder (here the NSIS one).
+    const log = fs.readFileSync(logFile).toString('utf16le');
+    const status = log.match(/Installation success or error status: (\d+)/)?.[1];
+    const dir = log.match(/Property\(S\): INSTALLDIR = (.+)/)?.[1]?.trim();
+    const exe = dir && findFiles(dir, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n))[0];
+    record('MSI silent install', status === '0' && exe ? 'pass' : 'fail', `status ${status}; INSTALLDIR ${dir}; ${exe ?? 'no exe there'}`);
   } catch (e) {
     record('MSI silent install', 'fail', `msiexec exit ${e.status}`);
   }

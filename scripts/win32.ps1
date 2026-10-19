@@ -214,6 +214,20 @@ switch ($Cmd) {
       @{ pid = $_.Id; responding = $_.Responding; title = $_.MainWindowTitle; started = $_.StartTime.ToString('HH:mm:ss') }
     })
   }
+  'browserargs' {
+    # The WebView2 browser process's switches (the one without --type), as the app really runs.
+    $proc = @(Get-Tree ([int]$A) | Where-Object { $_.Name -like 'msedgewebview2*' -and $_.CommandLine -notmatch '--type=' }) | Select-Object -First 1
+    Out-Json ([string]$(if ($proc) { ([regex]::Matches($proc.CommandLine, '--(disable-features|enable-features|remote-debugging-port)=\S+') | ForEach-Object { $_.Value }) -join ' ' }))
+  }
+  'port' {
+    Out-Json @(Get-NetTCPConnection -LocalPort ([int]$A) -State Listen -ErrorAction SilentlyContinue | ForEach-Object { $_.OwningProcess })
+  }
+  'policy' {
+    # WebView2's registry override for browser args (read when no WEBVIEW2_* env var is set).
+    $k = 'HKEY_CURRENT_USER\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+    foreach ($name in '*', 'daybloom.exe') { [Microsoft.Win32.Registry]::SetValue($k, $name, $A) }
+    Out-Json $true
+  }
   'webview2' {
     $key = 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
     $pv = foreach ($root in 'HKLM:', 'HKCU:') { (Get-ItemProperty "$root\$key" -ErrorAction SilentlyContinue).pv }
