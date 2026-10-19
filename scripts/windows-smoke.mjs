@@ -5,9 +5,10 @@
 // Installs the NSIS bundle silently, launches Daybloom, and checks with real Win32 input,
 // window styles and screenshots: the transparent widget (no black box), float-on-top vs
 // sit-on-desktop, the tray left click, the widget double-click and drag, notifications, the
-// theme reveal, and idle CPU. Page state is read over the WebView2 DevTools protocol: a debugging
-// port is appended to the app's own browser args (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, or the
-// WebView2 registry policy if that does not open it), and nothing is attached while CPU is sampled.
+// theme reveal, and idle CPU. Page state is read over the WebView2 DevTools protocol on a port the
+// workflow builds into pull-request installers (WebView2 ignored the env var and registry
+// overrides for it); published releases have no port, so their page-level checks are skipped.
+// Nothing is attached while CPU is sampled. SMOKE_SOURCE says which kind is under test.
 // Writes results.json, summary.md and screenshots to <out-dir>.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -18,6 +19,7 @@ const OUT = path.resolve(process.argv[2] ?? 'smoke-out');
 const ART = path.resolve(process.argv[3] ?? 'artifact');
 const PS1 = path.resolve(import.meta.dirname, 'win32.ps1');
 const DEBUG_PORT = 9222;
+const SOURCE = process.env.SMOKE_SOURCE ?? 'build'; // 'build' (port built in) | 'release'
 const WALL = [0, 128, 128]; // solid teal desktop: anything else in a widget corner is the window itself
 const IDENTIFIER = 'app.daybloom.desktop';
 const CPU_SECONDS = 60;
@@ -177,7 +179,7 @@ function install() {
   const exe = dirs.flatMap((d) => findFiles(d, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n)))[0];
   if (!exe) throw new Error(`installed exe not found in ${dirs.join(', ')}`);
   record('NSIS silent install', 'pass', `${exe}; WebView2 runtime ${ps('webview2') || 'not found'}`);
-  return { exe, msi, devtools: 'env' };
+  return { exe, msi };
 }
 
 function seedState() {
@@ -191,13 +193,10 @@ const exits = new Map();
 let launches = 0;
 
 // The app's stdout/stderr go to app-N.log: a GUI-subsystem exe still writes a panic there.
-function launch({ exe, devtools }) {
-  const env = { ...process.env };
-  if (devtools === 'env') env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${DEBUG_PORT}`;
-  else delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
+function launch({ exe }) {
   const log = path.join(OUT, `app-${++launches}.log`);
   const fd = fs.openSync(log, 'w');
-  const child = spawn(exe, [], { env, detached: true, stdio: ['ignore', fd, fd] });
+  const child = spawn(exe, [], { detached: true, stdio: ['ignore', fd, fd] });
   child.on('exit', (code) => exits.set(child.pid, `0x${(code >>> 0).toString(16)}`));
   child.unref();
   return { pid: child.pid, log };
@@ -287,27 +286,21 @@ async function devtoolsWhy(pid) {
   return `port ${DEBUG_PORT} listeners ${JSON.stringify(ps('port', { A: DEBUG_PORT }))}; /json/version ${version}; browser flags '${ps('browserargs', { A: pid })}'`;
 }
 
-// Starts the app with a DevTools port: the env var first, then WebView2's registry policy.
+// Starts the app and attaches to its pages when the build has a debugging port.
 async function startWithDevtools(app) {
-  for (const via of ['env', 'policy']) {
-    app.devtools = via;
-    if (via === 'policy') ps('policy', { A: `--remote-debugging-port=${DEBUG_PORT}` });
-    const started = await start(app);
-    await sleep(8000); // fonts, first springs, sample day
-    const pg = await pages();
-    if (pg) {
-      record('DevTools connection to the WebView2 pages', 'pass', `via ${via}; browser flags '${ps('browserargs', { A: started.run.pid })}'`);
-      return { started, pg };
-    }
-    record(`DevTools port via ${via === 'env' ? 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS' : 'registry policy'}`, 'warn', await devtoolsWhy(started.run.pid));
-    quit(started.run);
-    await sleep(3000);
-  }
-  record('DevTools connection to the WebView2 pages', 'fail', 'no debugging port; page-level checks skipped');
-  app.devtools = 'policy';
   const started = await start(app);
-  await sleep(8000);
-  return { started, pg: null };
+  await sleep(8000); // fonts, first springs, sample day
+  if (SOURCE === 'release') {
+    record('DevTools connection to the WebView2 pages', 'warn', 'release builds have no debugging port; page-level checks skipped');
+    return { started, pg: null };
+  }
+  const pg = await pages();
+  record(
+    'DevTools connection to the WebView2 pages',
+    pg ? 'pass' : 'fail',
+    pg ? `browser flags '${ps('browserargs', { A: started.run.pid })}'` : `${await devtoolsWhy(started.run.pid)}; page-level checks skipped`,
+  );
+  return { started, pg };
 }
 
 async function behaviour(app) {
@@ -518,13 +511,14 @@ async function idle(app) {
     // Chromium's 5-minute mark for intensive throttling (which would stretch the tick to 60 s).
     await hideMain(pid);
     const hiddenAt = Date.now();
-    let pg = await pages();
+    const attach = () => (SOURCE === 'release' ? null : pages());
+    let pg = await attach();
     await pg?.main.eval(`(() => { const t = (window.__smokeTicks = []); (function tick() { t.push(Date.now()); setTimeout(tick, 5000); })(); })()`);
     closeAll(pg);
     await sleep(5000);
     sample('planner closed to tray + widget', HIDDEN_CPU_SECONDS);
     await sleep(Math.max(0, hiddenAt + 7 * 60_000 - Date.now()));
-    pg = await pages();
+    pg = await attach();
     if (pg) {
       const ticks = await pg.main.eval('window.__smokeTicks ?? []');
       const vis = await pg.main.eval('document.visibilityState');

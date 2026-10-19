@@ -43,8 +43,18 @@ jobs:
         with:
           workspaces: src-tauri -> target
       - run: npm ci
-      # Unsigned: updater artifacts need the release signing key, which pull requests never get.
-      - run: npx tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      # Test build only: unsigned (updater artifacts need the release signing key, which pull
+      # requests never get) and with a DevTools port in both windows' WebView2 args, so the
+      # smoke test can read page state. WebView2 ignores the env-var/registry overrides for it.
+      - name: Tauri config for the test build
+        shell: bash
+        run: |
+          node -e "
+            const c = require('./src-tauri/tauri.conf.json');
+            const windows = c.app.windows.map((w) => ({ ...w, additionalBrowserArgs: (w.additionalBrowserArgs ?? '') + ' --remote-debugging-port=9222' }));
+            require('fs').writeFileSync('smoke.conf.json', JSON.stringify({ bundle: { createUpdaterArtifacts: false }, app: { windows } }));
+          "
+      - run: npx tauri build --config smoke.conf.json
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
@@ -89,6 +99,8 @@ jobs:
           echo "Testing release $TAG"
           gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*-setup.exe' -p '*.msi' -D artifact
       - run: node scripts/windows-smoke.mjs smoke-out artifact
+        env:
+          SMOKE_SOURCE: ${{ matrix.source }}
       - if: always()
         uses: actions/upload-artifact@v4
         with:
