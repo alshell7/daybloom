@@ -1,5 +1,5 @@
 // npm run release [patch|minor|major|x.y.z]
-// Bumps the version everywhere, commits, tags vX.Y.Z and pushes — CI does the rest.
+// Bumps the version everywhere (Cargo.lock too), commits, tags vX.Y.Z and pushes — CI does the rest.
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -29,8 +29,16 @@ if (lock.packages?.['']) lock.packages[''].version = next;
 writeFileSync('package-lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 const cargo = readFileSync('src-tauri/Cargo.toml', 'utf8').replace(/^version = ".*"$/m, `version = "${next}"`);
 writeFileSync('src-tauri/Cargo.toml', cargo);
+// The lockfile records the crate's own version too; CI builds with --locked.
+const cargoLock = readFileSync('src-tauri/Cargo.lock', 'utf8');
+const bumped = cargoLock.replace(/(\[\[package\]\]\nname = "daybloom"\nversion = )".*"/, `$1"${next}"`);
+if (bumped === cargoLock) {
+  console.error('Could not find the daybloom entry in src-tauri/Cargo.lock.');
+  process.exit(1);
+}
+writeFileSync('src-tauri/Cargo.lock', bumped);
 
-sh('git add package.json package-lock.json src-tauri/Cargo.toml');
+sh('git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock');
 sh(`git commit -m "Release v${next}"`);
 sh(`git tag -a v${next} -m "Daybloom v${next}"`);
 sh('git push');
