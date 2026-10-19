@@ -130,6 +130,7 @@
   class:pouring
   style:--from={pourFrom}
   class:event={block.kind === 'event'}
+  class:prayer={block.event?.provider === 'salah'}
   style:--c={block.color}
   style:--c-soft={mix(block.color, view.finish.dark ? '#131a27' : '#ffffff', 0.8)}
   style:--fg={fg}
@@ -190,8 +191,8 @@
       <span class="waiting">check in?</span>
     {/if}
     {#if block.event}
-      <span class="src" title={`From your calendar${block.event.calendarName ? `: ${block.event.calendarName}` : ''} · read-only`}>
-        <Icon name="calendar" size={11} stroke={2.2} />
+      <span class="src" title={block.event.provider === 'salah' ? 'Salah · from Waqt' : `From your calendar${block.event.calendarName ? `: ${block.event.calendarName}` : ''} · read-only`}>
+        <Icon name={block.event.provider === 'salah' ? 'moon' : 'calendar'} size={11} stroke={2.2} />
         <span>{block.event.calendarName ?? accountLabel(block.event.accountId)}</span>
         {#if block.event.alsoIn?.length}<span class="also">+{block.event.alsoIn.length}</span>{/if}
       </span>
@@ -415,6 +416,24 @@
   }
   .event .title .t {
     font-weight: 400;
+  }
+  /* Salah (Waqt addon): a calm glass with a faint eight-point star pattern, not calendar stripes. */
+  .prayer .capsule {
+    background: var(--c-soft);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent);
+  }
+  .prayer .capsule::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--c);
+    opacity: 0.3;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M4 4h6v6H4zM7 2.8 11.2 7 7 11.2 2.8 7z'/%3E%3C/svg%3E") 0 0 / 14px 14px repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M4 4h6v6H4zM7 2.8 11.2 7 7 11.2 2.8 7z'/%3E%3C/svg%3E") 0 0 / 14px 14px repeat;
+    pointer-events: none;
+  }
+  .prayer .title .t {
+    font-weight: 500;
   }
   .missed .capsule {
     background: var(--c-soft);

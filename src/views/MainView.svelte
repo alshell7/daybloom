@@ -38,6 +38,9 @@
   import CrumbsPanel from '../components/addons/crumbs/CrumbsPanel.svelte';
   import CrumbPrompt from '../components/addons/crumbs/CrumbPrompt.svelte';
   import RealityPanel from '../components/addons/reality/RealityPanel.svelte';
+  import WaqtPanel from '../components/addons/waqt/WaqtPanel.svelte';
+  import WaqtMoment from '../components/addons/waqt/WaqtMoment.svelte';
+  import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
   import { voice, type VoiceSurface } from '../lib/voice/voice.svelte';
@@ -271,6 +274,8 @@
           ondroptask={onDropTask}
           breathing={view.breathing}
           breathStart={view.breatheAt}
+          prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
+          prayerBloom={waqt.bloom}
         >
           <Readout
             state={view.now}
@@ -308,6 +313,7 @@
   {#if isOn('tracker')}<TrackerPanel />{/if}
   {#if isOn('crumbs')}<CrumbsPanel /><CrumbPrompt />{/if}
   {#if isOn('reality')}<RealityPanel />{/if}
+  {#if isOn('waqt')}<WaqtPanel /><WaqtMoment />{/if}
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />

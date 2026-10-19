@@ -6,6 +6,7 @@ import { startFollowingFocus, startTracker, tracker, trackerFile } from './track
 import { work } from './work/work.svelte';
 import { crumbsFile, startCrumbs } from './crumbs/crumbs.svelte';
 import { realityFile, startReality } from './reality/reality.svelte';
+import { startWaqt, waqtFile } from './waqt/waqt.svelte';
 import { view } from '../stores/view.svelte';
 
 export function startAddons(): () => void {
@@ -17,6 +18,7 @@ export function startAddons(): () => void {
   let stopFocus: (() => void) | null = null;
   let stopCrumbs: (() => void) | null = null;
   let stopReality: (() => void) | null = null;
+  let stopWaqt: (() => void) | null = null;
   const root = $effect.root(() => {
     $effect(() => {
       if (isOn('work') && !work.ready) void work.load();
@@ -44,6 +46,17 @@ export function startAddons(): () => void {
       }
     });
     $effect(() => {
+      const on = isOn('waqt');
+      if (on && !stopWaqt) {
+        void waqtFile.load().then(() => {
+          if (isOn('waqt') && !stopWaqt) stopWaqt = startWaqt();
+        });
+      } else if (!on && stopWaqt) {
+        stopWaqt();
+        stopWaqt = null;
+      }
+    });
+    $effect(() => {
       const on = isOn('tracker');
       if (on && !stopTracker) {
         void tracker.load().then(() => {
@@ -64,6 +77,7 @@ export function startAddons(): () => void {
     root();
     stopCrumbs?.();
     stopReality?.();
+    stopWaqt?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();

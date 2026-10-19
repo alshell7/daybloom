@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { blocksInRange, floatingBlocks, nowState, parseBlockKey } from '../engine/blocks';
 import { addDays, DAY, HOUR, startOfDayMs, todayISO } from '../engine/time';
 import type { Block, CalendarEvent, ISODate, Minutes, Task } from '../engine/types';
@@ -25,7 +26,10 @@ export type Sheet =
   | { kind: 'work'; tab?: string }
   | { kind: 'tracker'; tab?: string }
   | { kind: 'crumbs' }
-  | { kind: 'reality' };
+  | { kind: 'reality' }
+  | { kind: 'waqt' };
+
+const DOCK_ORDER = ['crumb', 'waqt'];
 
 export interface Spark {
   id: number;
@@ -45,7 +49,15 @@ class View {
   selected = $state<string | null>(null);
   sheet = $state<Sheet>(null);
   focus = $state(false);
-  events = $state<CalendarEvent[]>([]);
+  /** Events from your calendars (set by the calendar bridge). */
+  calendarEvents = $state<CalendarEvent[]>([]);
+  /** Events an addon adds to the day (e.g. prayer blocks), by addon. */
+  addonEvents = $state<Record<string, CalendarEvent[]>>({});
+  /** Everything with a time that isn't a task: calendars and addons. */
+  events = $derived.by(() => {
+    const extra = Object.values(this.addonEvents).flat();
+    return extra.length ? [...this.calendarEvents, ...extra].sort((a, b) => a.startMs - b.startMs) : this.calendarEvents;
+  });
   sparks = $state<Spark[]>([]);
   toast = $state<null | { id: number; text: string; ms: number; action?: { label: string; run: () => void } }>(null);
   /** Key of the block currently in its heads-up window (drives the dial pulse). */
@@ -56,8 +68,26 @@ class View {
   railPreview = $state<null | { key: string; startMs: number; endMs: number }>(null);
   /** Direction of the last day change (for the dial's turn animation). */
   dayDir = $state<1 | -1>(1);
-  /** Height of a card at the foot of the rail (e.g. a breadcrumb prompt); toasts rise above it. */
-  dockLift = $state(0);
+  /** Cards at the foot of the rail (e.g. a breadcrumb prompt, the adhan's moment), by id, with
+   *  their heights. They stack in DOCK_ORDER; toasts rise above them all. */
+  dock = $state<Record<string, number>>({});
+  dockLift = $derived(Object.values(this.dock).reduce((a, h) => (h > 0 ? a + h + 10 : a), 0));
+  /** How far up a dock card sits: the heights of the cards before it. */
+  dockBelow(id: string): number {
+    let y = 0;
+    for (const k of DOCK_ORDER) {
+      if (k === id) break;
+      const h = this.dock[k] ?? 0;
+      if (h > 0) y += h + 10;
+    }
+    return y;
+  }
+  setDock(id: string, h: number) {
+    // Read without tracking: callers are effects that would otherwise re-run on their own write.
+    untrack(() => {
+      if ((this.dock[id] ?? 0) !== h) this.dock = { ...this.dock, [id]: h };
+    });
+  }
   /** Breathing guide start time (0 = off). Four 16-second cycles (see breath.svelte.ts). */
   breatheAt = $state(0);
   breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < BREATH_MS);

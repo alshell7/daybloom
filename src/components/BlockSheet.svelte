@@ -401,12 +401,21 @@
     {/snippet}
   </Panel>
 {:else if event}
-  <Panel title="From your calendar" onclose={() => (view.sheet = null)} accent={event.color}>
-    <p class="event-title">{event.title}</p>
-    <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)} · {formatDuration(event.endMs - event.startMs)}</p>
-    {#if event.event?.location}<p class="note">{event.event.location}</p>{/if}
-    <p class="note">Calendar events are read-only here. Edit them in their calendar.</p>
-  </Panel>
+  {#if event.event?.provider === 'salah'}
+    <Panel title="Salah" onclose={() => (view.sheet = null)} accent={event.color}>
+      <p class="event-title">{event.title}</p>
+      <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)}{event.event.calendarName && event.event.calendarName !== 'Salah' ? ` · ${event.event.calendarName}` : ''}</p>
+      <p class="note">Time kept free for salah. Times, jamaat and how much time to keep are set in Waqt.</p>
+      <button class="btn btn-soft" onclick={() => (view.sheet = { kind: 'waqt' })}><Icon name="moon" size={14} /> Open Waqt</button>
+    </Panel>
+  {:else}
+    <Panel title="From your calendar" onclose={() => (view.sheet = null)} accent={event.color}>
+      <p class="event-title">{event.title}</p>
+      <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)} · {formatDuration(event.endMs - event.startMs)}</p>
+      {#if event.event?.location}<p class="note">{event.event.location}</p>{/if}
+      <p class="note">Calendar events are read-only here. Edit them in their calendar.</p>
+    </Panel>
+  {/if}
 {/if}
 
 <style>

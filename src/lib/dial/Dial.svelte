@@ -43,6 +43,8 @@
     ondroptask,
     breathing = false,
     breathStart = 0,
+    prayers = [],
+    prayerBloom = 0,
     children,
   }: {
     presetId: PresetId;
@@ -75,6 +77,10 @@
     breathing?: boolean;
     /** When the breathing minute began (app clock), so the orb joins it in step. */
     breathStart?: number;
+    /** Salah times (Waqt addon): each prayer's window, adhan and jamaat. */
+    prayers?: { id: string; name: string; at: number; end: number; jamaat: number | null; current: boolean }[];
+    /** Bumped at each adhan: the current prayer's band blooms once. */
+    prayerBloom?: number;
     children?: Snippet;
   } = $props();
 
@@ -232,6 +238,23 @@
       end: toDeg(e),
       color: wedge.color,
     };
+  });
+
+  // ---- salah (Waqt addon): the current prayer's window as a soft band under the minute track,
+  // a small mark at each adhan, a bead at jamaat. 60-minute faces show only the marks.
+  const prayerColor = $derived(categoryColor('care', finish.dark));
+  const prayerLayer = $derived.by(() => {
+    if (!prayers.length) return null;
+    const inWin = (t: number) => t >= w.startMs && t <= w.endMs;
+    const longFace = w.spanMs > 2 * 3_600_000;
+    const cur = prayers.find((p) => p.current);
+    const band =
+      cur && longFace && cur.end > w.startMs && cur.at < w.endMs
+        ? sectorPath(toDeg(Math.max(cur.at, w.startMs)), toDeg(Math.min(cur.end, w.endMs)), R.trackMajor - 4, R.trackOut + 5)
+        : '';
+    const marks = prayers.filter((p) => inWin(p.at)).map((p) => ({ ...p, pt: polar((R.trackOut + R.trackMajor) / 2, toDeg(p.at)) }));
+    const bead = cur?.jamaat && inWin(cur.jamaat) ? polar((R.trackOut + R.trackMajor) / 2, toDeg(cur.jamaat)) : null;
+    return { band, marks, bead, cur };
   });
 
   // ---- minute track as one path (cheap to paint) ---------------------------
@@ -529,7 +552,26 @@
     <!-- face -->
     <circle cx={C} cy={C} r={R.bezelIn - 8} fill={finish.face} />
     <circle cx={C} cy={C} r={R.bezelIn - 8} fill="url(#face-depth)" />
+    {#if prayerLayer?.band}
+      {#key prayerBloom}
+        <path d={prayerLayer.band} fill={prayerColor} opacity={finish.dark ? 0.22 : 0.15} class="prayer-band" class:bloom={prayerBloom > 0 && !reduced} />
+      {/key}
+    {/if}
     <path d={trackPath} stroke={finish.track} stroke-width={compact ? 5 : 3} stroke-linecap="round" />
+    {#if prayerLayer}
+      <g class="prayers" aria-hidden="true">
+        {#if prayerLayer.bead}
+          <circle cx={prayerLayer.bead[0]} cy={prayerLayer.bead[1]} r={compact ? 6 : 4} fill={finish.face} stroke={prayerColor} stroke-width="2.5" />
+        {/if}
+        {#each prayerLayer.marks as m (m.id)}
+          <g class="prayer-mark" class:now={m.current}>
+            <title>{m.name} · {formatTime(m.at, hour12)}</title>
+            {#if m.current}<circle cx={m.pt[0]} cy={m.pt[1]} r={compact ? 17 : 13} fill={prayerColor} opacity="0.2" />{/if}
+            <circle cx={m.pt[0]} cy={m.pt[1]} r={compact ? 10 : m.current ? 7.5 : 6} fill={prayerColor} stroke={finish.face} stroke-width={compact ? 4 : 3} />
+          </g>
+        {/each}
+      </g>
+    {/if}
     {#if finish.dark}
       <path d={majorPath} stroke={finish.lume} stroke-width={compact ? 7 : 5} stroke-linecap="round" opacity="0.5" />
     {/if}
@@ -815,6 +857,17 @@
     to {
       stroke-dashoffset: -1.1;
       opacity: 0;
+    }
+  }
+  /* Salah: at each adhan the current prayer's band blooms in, once. */
+  .prayer-band.bloom {
+    transform-origin: 500px 500px;
+    animation: prayer-bloom 1400ms var(--ease-out);
+  }
+  @keyframes prayer-bloom {
+    0% {
+      opacity: 0;
+      transform: scale(0.97);
     }
   }
   .tip {

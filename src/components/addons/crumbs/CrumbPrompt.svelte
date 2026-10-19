@@ -32,8 +32,8 @@
   // Toasts rise above the card while it is up.
   let cardH = $state(0);
   $effect(() => {
-    view.dockLift = ask && cardH ? cardH + 10 : 0;
-    return () => (view.dockLift = 0);
+    view.setDock('crumb', ask && cardH ? cardH : 0);
+    return () => view.setDock('crumb', 0);
   });
 
   // A fresh card each time: empty field, focus in it, a new example.

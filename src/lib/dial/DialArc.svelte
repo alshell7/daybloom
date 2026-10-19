@@ -114,6 +114,7 @@
 
   const missed = $derived(!block.done && elapsed >= a1 - a0 - 0.01 && block.kind === 'task');
   const isEvent = $derived(block.kind === 'event');
+  const isPrayer = $derived(block.event?.provider === 'salah');
   // From a calendar: a tinted, striped insert with an outline (never solid like your own blocks),
   // the same language as the rail's capsule.
   const baseFill = $derived(
@@ -248,9 +249,16 @@
 
   {#if isEvent}
     <defs>
-      <pattern id={hatchId} width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width="6" height="16" fill={block.color} opacity={finish.dark ? 0.5 : 0.42} />
-      </pattern>
+      {#if isPrayer}
+        <!-- Salah: a faint eight-point star pattern, not calendar stripes -->
+        <pattern id={hatchId} width="26" height="26" patternUnits="userSpaceOnUse">
+          <path d="M7 7h12v12H7zM13 4.5 21.5 13 13 21.5 4.5 13z" fill={block.color} opacity={finish.dark ? 0.42 : 0.34} />
+        </pattern>
+      {:else}
+        <pattern id={hatchId} width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="16" fill={block.color} opacity={finish.dark ? 0.5 : 0.42} />
+        </pattern>
+      {/if}
     </defs>
     <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill={`url(#${hatchId})`} class="hatch" />
     <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill="none" stroke={block.color} stroke-width="3.5" stroke-opacity="0.85" class="outline" />

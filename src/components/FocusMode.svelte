@@ -17,6 +17,7 @@
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
   import CrumbNote from './addons/crumbs/CrumbNote.svelte';
   import ParkSpot from './addons/crumbs/ParkSpot.svelte';
+  import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
 
   // One thing fills the screen; the next is a glance away.
   const cur = $derived(view.now.current);
@@ -66,6 +67,8 @@
         reduced={view.reducedMotion}
         interactive={false}
         label="Focus dial"
+        prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
+        prayerBloom={waqt.bloom}
       >
         <Readout
           state={view.now}

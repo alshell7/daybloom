@@ -92,7 +92,8 @@ export type BacklogList = 'inbox' | 'next' | 'someday';
 export interface CalendarEvent {
   /** Provider-unique id (stable across syncs). */
   id: string;
-  provider: 'google' | 'ics';
+  /** 'salah': a prayer block from the Waqt addon (not from a calendar). */
+  provider: 'google' | 'ics' | 'salah';
   accountId: string;
   calendarId: string;
   title: string;
@@ -111,6 +112,8 @@ export interface CalendarEvent {
   calendarName?: string;
   /** Set by the calendar service: the category (colour) the user picked for this calendar. */
   category?: CategoryId;
+  /** Its own icon (addon events, e.g. a prayer); calendar events show the calendar glyph. */
+  icon?: string;
 }
 
 /**

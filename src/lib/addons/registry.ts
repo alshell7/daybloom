@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt';
 
 export interface AddonMeta {
   id: AddonId;
@@ -17,7 +17,7 @@ export interface AddonMeta {
   accent: string;
   features: { icon: string; text: string }[];
   /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
-  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality';
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt';
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
@@ -93,6 +93,20 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'shield', text: 'It never changes your plans by itself' },
     ],
     sheet: 'reality',
+  },
+  {
+    id: 'waqt',
+    name: 'Waqt',
+    tagline: 'Salah, woven into your day',
+    description: 'The five salah times on your dial and in your plans, with adhan, jamaat and Jumu’ah. Gentle reminders, the Hijri date, the Qibla, and a calm way to mark each prayer.',
+    icon: 'moon',
+    accent: '#25976A',
+    features: [
+      { icon: 'dial', text: 'Each prayer’s time on the dial, with its adhan and jamaat' },
+      { icon: 'bell', text: 'Gentle reminders before the adhan, at it, and before jamaat' },
+      { icon: 'globe', text: 'Your mosque’s times or calculated ones, the Hijri date, the Qibla' },
+    ],
+    sheet: 'waqt',
   },
 ];
 

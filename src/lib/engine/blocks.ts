@@ -53,7 +53,7 @@ export function eventBlock(ev: CalendarEvent, dark = false): Block {
     event: ev,
     date: isoOf(ev.startMs),
     title: ev.title || '(busy)',
-    icon: 'calendar',
+    icon: ev.icon ?? 'calendar',
     category,
     // Provider colours snap to the nearest category so colour keeps one meaning everywhere.
     color: categoryColor(category, dark),

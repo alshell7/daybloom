@@ -22,6 +22,7 @@
   const acked = $derived(!!task?.acks?.includes(block.date));
 
   const status = $derived.by(() => {
+    if (block.event?.provider === 'salah') return { tone: 'quiet', icon: 'moon', text: block.event.calendarName ?? 'Salah' };
     if (block.kind === 'event') return { tone: 'quiet', icon: 'calendar', text: 'From your calendar' };
     if (block.done) {
       const spent = Math.min(block.endMs, block.doneAt ?? block.endMs) - block.startMs;

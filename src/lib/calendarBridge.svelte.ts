@@ -60,7 +60,7 @@ function refreshFromService(svc: Service) {
   calendarState.upcoming = countUpcoming(svc);
   calendarState.googleConfigured = svc.googleConfigured;
   const r = range();
-  view.events = dedupeEvents(svc.eventsBetween(r.startMs, r.endMs));
+  view.calendarEvents = dedupeEvents(svc.eventsBetween(r.startMs, r.endMs));
 }
 
 /**

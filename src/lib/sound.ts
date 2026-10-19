@@ -116,6 +116,12 @@ export const sounds = {
   breatheOut() {
     bell(293.66, 0, 4.2, 0.045);
   },
+  /** The adhan's time: three soft, low bells rising, unhurried. */
+  adhan() {
+    bell(293.66, 0, 3.2, 0.07);
+    bell(349.23, 0.55, 3.2, 0.065);
+    bell(440, 1.1, 4.2, 0.06);
+  },
   /** Last block of the day finished. */
   dayComplete() {
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => bell(f, i * 0.11, 2.4, 0.11));
