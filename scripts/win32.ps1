@@ -222,9 +222,14 @@ public static class W {
   }
 
   // Foreground-lock workaround: a synthetic Alt press lets a background process activate a window.
+  // A lone Alt tap would also open the window's menu mode, which eats the next key typed (and
+  // holds its thread in a modal loop), so an unassigned key (0xE8, AutoHotkey's menu mask key)
+  // is pressed inside it.
   public static bool Front(IntPtr h) {
     keybd_event(0x12, 0, 0, UIntPtr.Zero);
     bool ok = SetForegroundWindow(h);
+    keybd_event(0xE8, 0, 0, UIntPtr.Zero);
+    keybd_event(0xE8, 0, 2, UIntPtr.Zero);
     keybd_event(0x12, 0, 2, UIntPtr.Zero);
     return ok;
   }
