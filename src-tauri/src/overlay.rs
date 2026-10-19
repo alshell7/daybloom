@@ -29,11 +29,17 @@ fn place(app: &AppHandle, w: &WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+/// The planner's WebView2 browser args from tauri.conf.json. Every webview shares one WebView2
+/// environment, which refuses a window whose args differ, so the overlay must not keep its own copy.
+fn browser_args(app: &AppHandle) -> Option<String> {
+    app.config().app.windows.iter().find(|w| w.label == crate::MAIN)?.additional_browser_args.clone()
+}
+
 fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
     if let Some(w) = window(app) {
         return Ok(w);
     }
-    let b = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?view=overlay".into()))
+    let mut b = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html?view=overlay".into()))
         .title("Daybloom Screen Cues")
         .transparent(true)
         .decorations(false)
@@ -44,8 +50,18 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .focused(false)
         .focusable(false)
         .visible(false)
-        .visible_on_all_workspaces(true)
-        .additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling");
+        .visible_on_all_workspaces(true);
+    // Windows: a window shown after it is built is activated (SW_SHOW) and takes the focus from
+    // whatever you are typing in, `focused(false)` notwithstanding; one built visible is shown
+    // without activation. It starts as one pixel and covers the display only once it ignores
+    // the mouse, so it never catches a click on the way.
+    #[cfg(windows)]
+    {
+        b = b.visible(true).inner_size(1.0, 1.0).position(0.0, 0.0);
+    }
+    if let Some(args) = browser_args(app) {
+        b = b.additional_browser_args(&args);
+    }
     let w = b.build().map_err(|e| e.to_string())?;
     w.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
     crate::privacy::apply(app, &w);
