@@ -1,7 +1,8 @@
-# Tag vX.Y.Z (npm run release) → signed installers for macOS + Windows →
-# a release in this repo → installers, signatures and the update manifest
-# mirrored to the feed repo that the app's auto-updater reads. The feed is only
-# updated when the frontend checks pass too (they run alongside the builds).
+# Tag vX.Y.Z (npm run release) → signed installers for macOS + Windows, uploaded to a draft
+# release in this repo with the update manifest (latest.json). The release is published only
+# when both builds and the frontend checks pass; from then on installed copies see it at
+# releases/latest. Copies older than v0.1.8 still read the old feed repo, so v0.1.8 is
+# mirrored there once (the `bridge` job).
 name: release
 
 on:
@@ -60,7 +61,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: Daybloom v__VERSION__
           releaseBody: Signed builds for macOS (Apple silicon + Intel) and Windows. Installed apps update themselves.
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
@@ -81,6 +82,18 @@ jobs:
 
   publish:
     needs: [bundle, check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release (installed copies update from it from now on)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft=false --latest
+
+  # Copies before v0.1.8 read alshell7/daybloom-releases. Mirror v0.1.8 there once so they
+  # update; v0.1.8 itself reads this repo's releases. Later tags skip this.
+  bridge:
+    if: github.ref_name == 'v0.1.8'
+    needs: publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

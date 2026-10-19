@@ -215,7 +215,7 @@ A small, transparent dial floats over your work or sits on the desktop. On macOS
 
 ## Install
 
-Get the newest installers from [**daybloom-releases**](https://github.com/alshell7/daybloom-releases).
+Get the newest installers from [**Releases**](https://github.com/alshell7/daybloom/releases/latest).
 
 ### macOS
 
@@ -244,7 +244,7 @@ Daybloom checks for updates when it starts and every 6 hours. When an update is 
 2. Wait while the chip fills. Daybloom downloads the update and checks its signature.
 3. Daybloom restarts with the new version.
 
-To check manually, open **Settings › Updates** and click **Check now**.
+To check manually, open **Settings › App › Updates** and click **Check now**.
 
 > [!IMPORTANT]
 > Daybloom installs only updates that have a valid signature. It rejects all other files.
@@ -331,7 +331,15 @@ When a block ends without a tick, Daybloom asks “Did you finish?”. Select on
 
 ### Use the backlog
 
-1. Click the **Backlog** button in the top bar, or press <kbd>B</kbd>.
+**Add a task quickly:**
+
+- Click the **Backlog** button (tray) in the top bar. Type the task and push <kbd>Enter</kbd>. The card stays open for the next task.
+- From anywhere: open the Daybloom menu in the menu bar (macOS) or the notification area (Windows) and select **Add to Backlog…**. A small card opens over your work. Type, push <kbd>Enter</kbd>, and it closes. You do not have to open the planner.
+- Write durations, due dates and priority in the text, for example “Renew passport by fri 20m !”.
+
+**Sort the backlog:**
+
+1. Push <kbd>B</kbd>, or click **Open the backlog** in the capture card.
 2. Type in **Brain dump**. Put one task on each line.
 3. Sort the tasks into **Inbox**, **Next** and **Someday**.
 4. To schedule a task, drag it onto the dial. You can also click **Plan my day**.
@@ -359,7 +367,7 @@ You can also speak your request. See [Talk to Daybloom](#talk-to-daybloom).
 
 The assistant works in **basic mode** without a download. For better understanding of requests, download **Needle**:
 
-1. Open **Settings › Assistant**.
+1. Open **Settings › Voice**.
 2. Click **Download** (35 MB, one time).
 
 Needle is a small on-device model by [Cactus Compute](https://cactuscompute.com/needle) (Apache-2.0). Daybloom checks the download with SHA-256. After the download, the assistant works offline. It does not send your requests to a server.
@@ -379,14 +387,16 @@ Needle is a small on-device model by [Cactus Compute](https://cactuscompute.com/
 
 The voice capsule shows your words while you speak. When you stop, the assistant does the action and shows its card. Push <kbd>Enter</kbd> to send immediately, or <kbd>Esc</kbd> to cancel.
 
-You can also click the microphone in **Quick add** or in **Ask Daybloom**. In Quick add, your words go into the field. Look at the preview, then push <kbd>Enter</kbd>.
+You can also use the microphone in **Quick add** or in **Ask Daybloom**. Push and hold it to talk, and release it to finish. Or click it one time to talk hands-free. In a text field, push and hold <kbd>⌥</kbd> <kbd>V</kbd> (<kbd>Alt</kbd> <kbd>V</kbd> on Windows). In Quick add, your words show in the field while you speak. Look at the preview, then push <kbd>Enter</kbd>.
+
+If your computer has no microphone, the voice capsule tells you. Connect a microphone (for example a headset) and try again.
 
 The first time, Daybloom asks to download **Whistle** (17 MB, one time). Whistle is a speech model by [Cactus Compute](https://cactuscompute.com/blog/whistle) (Apache-2.0). It runs on your computer. Daybloom checks the download with SHA-256.
 
 > [!NOTE]
 > The microphone is on only while the capsule shows “Listening”. The first time, macOS or Windows asks for permission to use the microphone.
 
-To change the language, open **Settings › Assistant › Voice**. Commands are understood in English.
+To change the language, open **Settings › Voice**. Commands are understood in English.
 
 ### See your week
 
@@ -400,7 +410,7 @@ Click the **Your week** button in the top bar, or press <kbd>I</kbd>.
 
 ### Get gentle support
 
-Open **Settings › Gentle support**. You can turn on or turn off each item.
+Open **Settings › Rhythm › Gentle support**. You can turn on or turn off each item.
 
 | Setting | What it does |
 |---|---|
@@ -410,9 +420,9 @@ Open **Settings › Gentle support**. You can turn on or turn off each item.
 | Time anchors | Gives a soft tick each hour or each 30 minutes. |
 | Offer a wind-down at | In the evening, shows what you did and moves open blocks to tomorrow. |
 
-Open **Settings › Transitions** to set the heads-up before a block ends (2, 5 or 10 minutes), notifications and sounds.
+Open **Settings › Rhythm › Transitions** to set the heads-up before a block ends (2, 5 or 10 minutes), notifications and sounds.
 
-In free time, click **Breathe · 1 min** in the centre of the dial for a one-minute breathing guide.
+In free time, click **Breathe · 1 min** in the centre of the dial for a one-minute breathing guide. A soft orb of light fills while you breathe in (4 seconds), stays full while you hold (4 seconds), and empties slowly while you breathe out (6 seconds). Then you rest for 2 seconds. This repeats four times. The words in the centre tell you what to do.
 
 ### Start a focus session
 
@@ -426,14 +436,15 @@ In free time, click **Breathe · 1 min** in the centre of the dial for a one-min
 Focus mode then shows only the session, the steps of the task and the next block. When the session ends, Daybloom asks if the task is done.
 
 - To pause, skip a round or stop, use the buttons in the centre of the dial.
-- To go back to the planner, push <kbd>Esc</kbd>. The session continues. Push <kbd>F</kbd> to see it again.
+- To go back to the planner, push <kbd>Esc</kbd> or click the shrink button. The session continues.
+- To see the session again, click its timer in the top bar, push <kbd>F</kbd>, or double-click the desktop widget.
 - A backlog task that you focus on becomes a block on today's dial.
 
 ### Use screen cues
 
 Screen cues are optional signals on your desktop. They help you keep the time in view, also when Daybloom is behind other windows. They do not take clicks or the keyboard.
 
-1. Open **Settings › Screen cues**.
+1. Open **Settings › Screen › Screen cues**.
 2. Under **Show them**, select **In focus sessions** or **For every block**.
 3. Turn on the cues that you want:
 
@@ -452,14 +463,14 @@ Privacy mode keeps Daybloom's windows out of screenshots, screen recordings and 
 
 1. Push <kbd>⇧</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd> on Windows). You can also open the **More** menu (…) in the top bar, or the Daybloom icon in the menu bar or notification area, and select **Privacy mode**.
 2. A **Private** pill shows in the top bar. Click it to turn privacy mode off.
-3. Optional: open **Settings › Privacy** and turn on **Hide block names**. The widget, the HUD and the menu bar then show the category (for example “Focus”) instead of the block name.
+3. Optional: open **Settings › Screen › Privacy** and turn on **Hide block names**. The widget, the HUD and the menu bar then show the category (for example “Focus”) instead of the block name.
 
 > [!NOTE]
 > Windows leaves protected windows out of captures. On macOS, screenshots leave them out, but some screen recorders can still capture them. Use **Hide block names** as a second layer when you share your screen on a Mac.
 
 ### Use addons
 
-1. Click the **Addons** button (puzzle) in the top bar. You can also open **Settings › Addons**.
+1. Click the **Addons** button (puzzle) in the top bar. You can also open **Settings › Connect › Addons**.
 2. Turn on an addon with its switch.
 3. The addon adds its own button to the top bar and its fields to the block editor.
 
@@ -510,7 +521,7 @@ Exports go to your **Downloads** folder.
 2. Drag the widget to a position on your screen.
 3. Double-click the widget to open the planner.
 
-Open **Settings › Desktop widget** to change these options:
+Open **Settings › Screen › Desktop widget** to change these options:
 
 - **Position:** **Float on top** keeps the widget above other windows. **On desktop** keeps it below other windows.
 - **Dial:** the dial type of the widget.
@@ -522,13 +533,13 @@ When you close the planner, Daybloom stays in the menu bar (macOS) or in the not
 ### Change the theme
 
 - To switch between light and dark, click the sun or moon button in the top bar.
-- To select a theme, open **Settings › Theme**.
+- To select a theme, open **Settings › Look › Theme**.
 
 | Light | Dark |
 |---|---|
 | Fog, Linen, Mist, Sage | Midnight, Black (true black), Graphite, Forest, Plum, Cocoa |
 
-Open **Settings › Comfort** to set **Calm** motion or the **Hyperlegible** reading font.
+Open **Settings › Look › Comfort** to set **Calm** motion or the **Hyperlegible** reading font.
 
 ### Change the time zone
 
@@ -540,7 +551,7 @@ Repeating blocks keep their clock times. Calendar events keep their real moments
 
 ### Connect calendars
 
-Open the **More** menu (…) in the top bar and select **Calendars**. You can also open **Settings › Calendars**.
+Open the **More** menu (…) in the top bar and select **Calendars**. You can also open **Settings › Connect › Calendars**.
 
 **Add a calendar link (Google, iCloud, Outlook and others):**
 
@@ -560,7 +571,15 @@ Open the **More** menu (…) in the top bar and select **Calendars**. You can al
 
 **Sign in with Google:** click **Google account**. You can add more than one account, for example work and personal. Daybloom needs a Google OAuth client of the type “Desktop app”. See [docs/calendar.md](docs/calendar.md).
 
-Calendar events are read-only. When the same event is in two accounts, Daybloom shows it one time. Each calendar has a switch to show or hide it.
+Calendar events are read-only. In the timeline they have a striped, outlined capsule and a chip with the calendar name. Your own blocks have a solid capsule. When the same event is in two accounts, Daybloom shows it one time.
+
+**Change a calendar** (in the Calendars panel):
+
+- **Name:** click the account name, or the pencil next to a calendar.
+- **Colour:** click the colour dot next to a calendar. Select a category colour, or **Auto** for the calendar's own colour.
+- **Show or hide:** use the switch next to the calendar.
+- **Events to include:** open the list and clear the box next to an event. Daybloom then hides that event and all its repeats from the dial, the timeline and tracking. All events are included at first.
+- **Checks for changes:** select how often Daybloom gets new events: 5 or 10 minutes, 30 minutes, 1 hour, 6 hours, or **Manual** (only when you click **Sync now**). Google refreshes its own calendar links only every few hours.
 
 ### Sync with GitHub
 
@@ -577,7 +596,7 @@ Sync keeps your blocks, settings, badges, Work projects and bills, and Time Trac
 
 **Do these steps on each computer:**
 
-1. Open **Settings › Sync with GitHub**.
+1. Open **Settings › Connect › Sync with GitHub**.
 2. Enter the repository as `owner/name`.
 3. Paste the token.
 4. Click **Test connection**.
@@ -590,6 +609,21 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
 
 > [!WARNING]
 > Use a private repository. In a public repository, everybody can read your tasks.
+
+### Find a setting
+
+Push <kbd>,</kbd> or click the **Settings** button in the top bar. Settings has six tabs:
+
+| Tab | What it has |
+|---|---|
+| **Look** | Theme, dial and reading comfort |
+| **Rhythm** | Your waking day, alerts and gentle support |
+| **Screen** | Screen cues, the desktop widget and privacy |
+| **Voice** | The assistant and speech |
+| **Connect** | Calendars, Sync with GitHub and addons |
+| **App** | Updates, your data and keys |
+
+To find a setting fast, type a word in **Find a setting**, for example “sound” or “widget”.
 
 ### Keyboard shortcuts
 
@@ -605,6 +639,7 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
 | <kbd>I</kbd> | Your week |
 | <kbd>F</kbd> | Start a focus session (or show the running session) |
 | <kbd>V</kbd> | Hold to talk, or tap to talk hands-free |
+| <kbd>⌥</kbd>/<kbd>Alt</kbd> <kbd>V</kbd> | Hold to talk while you type in a field |
 | <kbd>W</kbd> | Desktop widget |
 | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>K</kbd> | Ask Daybloom |
 | <kbd>⇧</kbd><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>P</kbd> | Privacy mode on or off |
@@ -622,7 +657,7 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
 - Work and Time Tracker data stay on your computer, and sync with GitHub when you turn sync on. App activity tracking is a setting for each computer and never syncs.
 - Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
 - Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
-- To make a backup, open **Settings › Your data** and click **Export**. To restore, click **Import**.
+- To make a backup, open **Settings › App › Your data** and click **Export**. To restore, click **Import**.
 
 <br>
 
@@ -677,16 +712,18 @@ npm run release          # 0.1.3 → 0.1.4 (or: npm run release minor | major | 
 The script changes the version in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml`. Then it makes a commit, an annotated tag `vX.Y.Z`, and pushes both. The tag starts `.github/workflows/release.yml`, which:
 
 1. builds the **macOS** (universal) and **Windows** (NSIS and MSI) installers, and signs each update file with the updater key;
-2. publishes a release in this repo (`alshell7/daybloom`);
-3. copies the installers, their `.sig` files and `latest.json` to the feed repo [`alshell7/daybloom-releases`](https://github.com/alshell7/daybloom-releases). This step runs only when the frontend checks also pass.
+2. uploads them, their `.sig` files and `latest.json` to a draft release in this repo;
+3. publishes the release when both builds and the frontend checks pass.
 
-Installed apps read `https://raw.githubusercontent.com/alshell7/daybloom-releases/main/latest.json`. They verify each download against the public key in `tauri.conf.json`.
+Installed apps read `https://github.com/alshell7/daybloom/releases/latest/download/latest.json`. They verify each download against the public key in `tauri.conf.json`.
+
+Versions before 0.1.8 read the old feed repo [`alshell7/daybloom-releases`](https://github.com/alshell7/daybloom-releases). The release workflow copied v0.1.8 there one time. Thus old copies update to 0.1.8, and then use this repo. Keep the feed repo: copies that were not opened for a long time still need it.
 
 | Repo secret | What it is | Where the original is |
 |---|---|---|
 | `TAURI_SIGNING_PRIVATE_KEY` | minisign key that signs updates | `~/.tauri/daybloom.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password | `~/.tauri/daybloom.key.password` |
-| `RELEASES_DEPLOY_KEY` | SSH deploy key with write access to the feed repo only | `~/.tauri/daybloom-releases-deploy` |
+| `RELEASES_DEPLOY_KEY` | SSH deploy key for the old feed repo (used only for the v0.1.8 bridge) | `~/.tauri/daybloom-releases-deploy` |
 | `VITE_GOOGLE_CLIENT_ID` / `_SECRET` (optional) | Google OAuth desktop client for builds | — |
 
 > [!CAUTION]

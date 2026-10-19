@@ -1,5 +1,6 @@
-// Rewrites tauri-action's latest.json so every download points at the public feed repo,
-// and writes the feed's README with plain download links.
+// Rewrites tauri-action's latest.json so every download points at the old feed repo, and
+// writes the feed's README with plain download links. Since v0.1.8 Daybloom updates from this
+// repo's own releases; the feed only carries v0.1.8, as the bridge for copies older than that.
 // Usage: node public-feed.mjs <dir> <feedBaseUrl> <version>
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -23,7 +24,11 @@ writeFileSync(
   join(dir, 'README.md'),
   `# Daybloom ${version}
 
-A visual, sectograph-style day planner and timer. Installed copies update themselves from this feed.
+A visual, sectograph-style day planner and timer.
+
+> **Releases now live at [alshell7/daybloom](https://github.com/alshell7/daybloom/releases).**
+> This feed stays at ${version} so copies older than it can update once; from ${version} on,
+> Daybloom updates itself from there.
 
 ## macOS (Apple silicon + Intel)
 ${pick(/\.dmg$/)}

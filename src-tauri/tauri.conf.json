@@ -79,7 +79,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEExRkRCN0ZCOTNFRkM0QkYKUldTL3hPK1QrN2Y5b1p0dEpKWlRpeDFEYVJTaHlmaWJrendsejNyWWQ0UjNjMTlqSnJFdG0zQmkK",
       "endpoints": [
-        "https://raw.githubusercontent.com/alshell7/daybloom-releases/main/latest.json"
+        "https://github.com/alshell7/daybloom/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"
