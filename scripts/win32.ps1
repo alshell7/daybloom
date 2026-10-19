@@ -40,6 +40,11 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern bool SystemParametersInfo(uint a, uint b, string c, uint d);
   [DllImport("user32.dll")] public static extern bool SetSysColors(int n, int[] el, int[] rgb);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
+  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
+
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
 
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 
@@ -66,6 +71,26 @@ public static class W {
       return true;
     }, IntPtr.Zero);
     return list;
+  }
+
+  public static Win Info(IntPtr h) {
+    if (h == IntPtr.Zero) return null;
+    var t = new StringBuilder(256); GetWindowText(h, t, 256);
+    var c = new StringBuilder(256); GetClassName(h, c, 256);
+    uint pid; GetWindowThreadProcessId(h, out pid);
+    RECT r; GetWindowRect(h, out r);
+    return new Win {
+      hwnd = h.ToInt64(), pid = pid, title = t.ToString(), cls = c.ToString(),
+      visible = IsWindowVisible(h), iconic = IsIconic(h), exStyle = GetWindowLong(h, -20), z = -1,
+      x = r.Left, y = r.Top, w = r.Right - r.Left, h = r.Bottom - r.Top
+    };
+  }
+
+  // The top-level window a click at (x, y) would reach. Click-through windows
+  // (WS_EX_LAYERED | WS_EX_TRANSPARENT) are skipped by hit-testing, just as a real click is.
+  public static Win At(int x, int y) {
+    var p = new POINT { X = x, Y = y };
+    return Info(GetAncestor(WindowFromPoint(p), 2));
   }
 
   // Real hardware-level clicks (mouse_event), so the webview sees genuine input.
@@ -164,6 +189,8 @@ switch ($Cmd) {
   'drag' { [W]::Drag([int]$A, [int]$B, [int]$C, [int]$D); Out-Json $true }
   'move' { Out-Json ([W]::SetCursorPos([int]$A, [int]$B)) }
   'front' { Out-Json ([W]::Front([IntPtr][long]$A)) }
+  'foreground' { Out-Json ([W]::Info([W]::GetForegroundWindow())) }
+  'point' { Out-Json ([W]::At([int]$A, [int]$B)) }
   'show' { Out-Json ([W]::ShowWindow([IntPtr][long]$A, [int]$B)) }
   'post' { Out-Json ([W]::PostMessage([IntPtr][long]$A, [uint32]$B, [IntPtr][long]$C, [IntPtr][long]$D)) }
   'place' {

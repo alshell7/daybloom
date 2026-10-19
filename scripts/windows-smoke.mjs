@@ -1,14 +1,15 @@
-// Windows smoke test for the installed app (run by .github/workflows/windows-smoke.yml).
+// Windows smoke test for the installed app (run by .github/workflows/windows.yml).
 //
 //   node scripts/windows-smoke.mjs <out-dir> <artifact-dir>
 //
 // Installs the NSIS bundle silently, launches Daybloom, and checks with real Win32 input,
 // window styles and screenshots: the transparent widget (no black box), float-on-top vs
 // sit-on-desktop, the tray left click, the widget double-click and drag, notifications, the
-// theme reveal, and idle CPU. Page state is read over the WebView2 DevTools protocol on a port the
-// workflow builds into pull-request installers (WebView2 ignored the env var and registry
-// overrides for it); published releases have no port, so their page-level checks are skipped.
-// Nothing is attached while CPU is sampled. SMOKE_SOURCE says which kind is under test.
+// microphone path, the theme reveal, the screen-cues overlay, and idle CPU. Page state is read
+// over the WebView2 DevTools protocol on a port the workflow builds into pull-request
+// installers (WebView2 ignored the env var and registry overrides for it); published releases
+// have no port, so their page-level checks are skipped. Nothing is attached while CPU is
+// sampled. SMOKE_SOURCE says which kind is under test.
 // Writes results.json, summary.md and screenshots to <out-dir>.
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -408,6 +409,27 @@ async function behaviour(app) {
       } catch (e) {
         record('Notification sent from the installed app', 'fail', String(e.message ?? e));
       }
+
+      // Microphone path for voice: getUserMedia must fail only for want of a device (runners
+      // have none), never on CSP, the secure context or a permission prompt; the worklet loads.
+      const mic = await pg.main.eval(`(async () => {
+        const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(Object.assign(new Error('no answer after ' + ms + ' ms (permission prompt?)'), { name: 'Timeout' })), ms))]);
+        const out = { secure: isSecureContext, inputs: (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput').length };
+        try {
+          const s = await within(navigator.mediaDevices.getUserMedia({ audio: true }), 8000);
+          s.getTracks().forEach((t) => t.stop());
+          out.gum = 'granted';
+        } catch (e) { out.gum = e.name + ': ' + e.message; }
+        try {
+          const ctx = new AudioContext();
+          await within(ctx.audioWorklet.addModule('/voice/capture-worklet.js'), 8000);
+          await ctx.close();
+          out.worklet = 'loaded';
+        } catch (e) { out.worklet = e.name + ': ' + e.message; }
+        return out;
+      })()`);
+      record('Microphone: getUserMedia fails only for want of a device', mic.secure && (mic.gum === 'granted' || /^NotFoundError/.test(mic.gum)) ? 'pass' : 'fail', `secure context ${mic.secure}; ${mic.inputs} audio inputs; ${mic.gum}`);
+      record('Microphone: voice AudioWorklet loads under the CSP', mic.worklet === 'loaded' ? 'pass' : 'fail', mic.worklet);
     }
 
     // Layers: Notepad over the widget, then the widget's pin button flips top ↔ desktop.
@@ -544,6 +566,120 @@ async function idle(app) {
   }
 }
 
+// ---- phase C: screen cues overlay -------------------------------------------------------
+
+const CUES_TITLE = 'Daybloom Screen Cues';
+const EX = { TOPMOST: 0x8, TRANSPARENT: 0x20, TOOLWINDOW: 0x80, LAYERED: 0x80000, NOACTIVATE: 0x8000000 };
+const cuesOf = () => list(ps('windows')).find((w) => w.title === CUES_TITLE);
+const isDesktop = (w) => w && /^(Progman|WorkerW)$/.test(w.cls);
+const tealAt = (x, y) => {
+  const c = ps('corners', { A: `${x - 15},${y - 15},30,30` });
+  return { ok: c.black < 0.01 && Math.abs(c.r - WALL[0]) + Math.abs(c.g - WALL[1]) + Math.abs(c.b - WALL[2]) < 60, c };
+};
+
+// Screen cues on, plus a running focus session, so the planner opens the overlay by itself.
+function seedCues() {
+  const dir = path.join(process.env.APPDATA, IDENTIFIER, 'state');
+  const file = path.join(dir, 'settings.json');
+  const settings = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
+  settings.screen = { when: 'focus', glow: true, glowStrength: 'medium', bar: true, barDock: 'top', barSize: 'thin', hud: true, hudCorner: 'top-right' };
+  fs.writeFileSync(file, JSON.stringify(settings));
+  const label = 'Smoke focus';
+  fs.writeFileSync(
+    path.join(dir, 'timer.json'),
+    JSON.stringify({
+      active: { kind: 'countdown', label, icon: 'target', category: 'focus', startedAt: Date.now(), segments: [{ kind: 'focus', label, ms: 60 * 60_000 }], pausedAt: null, pausedMs: 0, target: null },
+      doneToday: { date: '', count: 0 },
+    }),
+  );
+}
+
+async function screenCues(app) {
+  seedCues();
+  let run = app;
+  let pg = null;
+  try {
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    const cues = await waitFor('screen cues window', () => cuesOf()?.visible && cuesOf(), 30_000).catch(() => null);
+    if (!cues) throw new Error(diagnose(run, 'screen cues window never appeared'));
+    await sleep(3000);
+    const scr = ps('screen');
+    const ex = cues.exStyle >>> 0;
+    const flags = Object.entries(EX).filter(([, bit]) => ex & bit).map(([k]) => k).join(' ');
+    record('Screen cues: overlay opens for a running focus session', 'pass', `${cues.w}x${cues.h} at ${cues.x},${cues.y} on a ${scr.w}x${scr.h} screen; exStyle 0x${ex.toString(16)} (${flags})`);
+    record('Screen cues: covers the display', cues.x === 0 && cues.y === 0 && cues.w === scr.w && cues.h === scr.h ? 'pass' : 'fail', `${cues.w}x${cues.h} at ${cues.x},${cues.y}`);
+    const fg = ps('foreground');
+    record('Screen cues: never takes focus', fg?.hwnd !== cues.hwnd ? 'pass' : 'fail', `foreground '${fg?.title}' (${fg?.cls})`);
+    shot('07-screen-cues.png');
+
+    // With the planner closed, points that hit-test to the desktop must still show it.
+    await hideMain(pid);
+    await sleep(1500);
+    const grid = [];
+    for (const fx of [0.3, 0.5, 0.7]) for (const fy of [0.35, 0.55, 0.75]) grid.push([Math.round(scr.w * fx), Math.round(scr.h * fy)]);
+    const through = grid.filter(([x, y]) => isDesktop(ps('point', { A: x, B: y })));
+    if (!through.length) record('Screen cues: no black box over the desktop', 'fail', 'no point hit-tests through the overlay to the desktop');
+    else {
+      const bad = through.map(([x, y]) => ({ x, y, ...tealAt(x, y) })).filter((p) => !p.ok);
+      record(
+        'Screen cues: no black box over the desktop',
+        bad.length ? 'fail' : 'pass',
+        bad.length ? bad.map((p) => `${p.x},${p.y} rgb(${p.c.r},${p.c.g},${p.c.b})`).join('; ') : `${through.length} desktop points read rgb(${WALL})`,
+      );
+    }
+
+    // A real click lands on the window under the overlay and activates it.
+    const notepad = spawn('notepad.exe', [], { detached: true, stdio: 'ignore' });
+    notepad.unref();
+    const np = await waitFor('Notepad window', () => list(ps('windows')).find((x) => x.pid === notepad.pid && x.visible && x.w > 100), 15_000).catch(() => null);
+    if (!np) record('Screen cues: clicks pass through', 'fail', 'Notepad did not open');
+    else {
+      ps('place', { A: np.hwnd, B: '60,700,320,240' });
+      // Bring the planner forward first, so only a click that reaches Notepad can activate it.
+      await trayClick(pid);
+      await sleep(1500);
+      ps('front', { A: mainOf(pid).hwnd });
+      await sleep(500);
+      const before = ps('foreground');
+      const hit = ps('point', { A: 220, B: 840 });
+      ps('click', { A: 220, B: 840, C: 1 });
+      await sleep(1000);
+      const after = ps('foreground');
+      const detail = `hit-test '${hit?.title}'; foreground '${before?.title}' → '${after?.title}'`;
+      if (before?.hwnd === np.hwnd) record('Screen cues: clicks pass through to the window below', hit?.hwnd === np.hwnd ? 'warn' : 'fail', `${detail} (Notepad was already active, so only the hit-test counts)`);
+      else record('Screen cues: clicks pass through to the window below', after?.hwnd === np.hwnd && hit?.hwnd === np.hwnd ? 'pass' : 'fail', detail);
+      taskkill('/PID', String(notepad.pid));
+    }
+
+    // CPU with the overlay up, the planner in the tray (compare with phase B's same scenario).
+    await hideMain(pid);
+    await sleep(10_000);
+    const r = ps('cpu', { A: pid, B: CPU_SECONDS });
+    cpu.push({ scenario: 'planner closed to tray + widget + screen cues', ...r });
+    record('Idle CPU: planner closed to tray + widget + screen cues', 'info', `${r.oneCore}% of one core (${r.machine}% of ${r.cores} cores), ${r.privateMB} MB private, ${r.seconds} s`);
+
+    if (SOURCE === 'release') {
+      record('Screen cues: overlay_show(false) closes the window', 'warn', 'release builds have no debugging port; skipped');
+      return;
+    }
+    pg = await pages(['main', 'overlay']);
+    if (!pg) return record('Screen cues: overlay_show(false) closes the window', 'fail', 'no DevTools connection to the planner and overlay');
+    const bg = await pg.overlay.eval(`[getComputedStyle(document.documentElement).backgroundColor, getComputedStyle(document.body).backgroundColor]`);
+    record('Screen cues: overlay page background is transparent', bg.every((c) => /rgba\(0, 0, 0, 0\)|transparent/.test(c)) ? 'pass' : 'fail', `html ${bg[0]}, body ${bg[1]}`);
+    await pg.main.eval(`__TAURI_INTERNALS__.invoke('overlay_show', { show: false })`);
+    const gone = await waitFor('screen cues window to close', () => !cuesOf(), 10_000).catch(() => false);
+    record('Screen cues: overlay_show(false) closes the window', gone ? 'pass' : 'fail', gone ? 'HWND destroyed' : `still there: ${JSON.stringify(cuesOf())}`);
+    const errs = [...pg.main.errors.map((e) => `main ${e}`), ...pg.overlay.errors.map((e) => `overlay ${e}`)];
+    record('Screen cues: no console errors', errs.length ? 'warn' : 'pass', errs.slice(0, 6).join(' | '));
+  } finally {
+    closeAll(pg);
+    quit(run);
+    await sleep(2000);
+  }
+}
+
 function msiInstall(msi) {
   if (!msi) return record('MSI install', 'fail', 'no .msi built');
   try {
@@ -587,6 +723,7 @@ try {
   seedState();
   await behaviour(app);
   await idle(app);
+  await screenCues(app);
   msiInstall(app.msi);
 } catch (e) {
   record('Smoke test aborted', 'fail', String(e.stack ?? e));
