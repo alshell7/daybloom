@@ -54,6 +54,9 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .ok_or("widget window config missing")?
         .clone();
     let w = tauri::WebviewWindowBuilder::from_config(app, &config)
+        // Windows: shown after it is built, a window is activated and takes the focus despite
+        // `"focus": false`; built visible, it appears without activation.
+        .map(|b| if cfg!(windows) { b.visible(true) } else { b })
         .and_then(|b| b.build())
         .map_err(|e| e.to_string())?;
     apply_layer(&w, layer(app))?;
