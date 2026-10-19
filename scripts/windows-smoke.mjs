@@ -393,6 +393,15 @@ async function behaviour(app) {
         !flip.error && flip.from !== flip.to && !errs.length ? 'pass' : 'fail',
         flip.error ?? `${flip.from} → ${flip.to}${errs.length ? `; ${errs.join(' | ')}` : ''}`,
       );
+      // The widget follows the theme; a dark color-scheme must not paint its canvas dark.
+      if (flip.to === 'dark' && spot) {
+        await sleep(1500);
+        const wd = widgetOf(pid);
+        const behind = ps('corners', { A: rect(wd) });
+        const ok = behind.black < 0.01 && Math.abs(behind.r - WALL[0]) + Math.abs(behind.g - WALL[1]) + Math.abs(behind.b - WALL[2]) < 60;
+        record('Transparent widget in the dark theme', ok ? 'pass' : 'fail', `corners avg rgb(${behind.r},${behind.g},${behind.b}), ${(behind.black * 100).toFixed(1)}% near-black; theme '${await pg.widget.eval('document.documentElement.dataset.theme')}'`);
+        shot('03b-widget-dark.png', `${wd.x - 30},${wd.y - 30},${wd.w + 60},${wd.h + 60}`);
+      }
       await pg.main.eval(`document.querySelector('button.icon-btn.toggle')?.click()`);
       await sleep(1200);
 
