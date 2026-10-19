@@ -39,7 +39,13 @@ function record(check, status, detail = '') {
 function ps(cmd, args = {}) {
   const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', PS1, '-Cmd', cmd];
   for (const [k, v] of Object.entries(args)) argv.push(`-${k}`, String(v));
-  const out = execFileSync('powershell', argv, { encoding: 'utf8', maxBuffer: 16 << 20 });
+  let out;
+  try {
+    out = execFileSync('powershell', argv, { encoding: 'utf8', maxBuffer: 16 << 20, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (e) {
+    // Say what PowerShell said (a compile error in the helper's C# fails every command).
+    throw new Error(`win32.ps1 ${cmd} failed: ${String(e.stderr ?? e.message).replace(/\s+/g, ' ').trim().slice(0, 600)}`);
+  }
   // The JSON is the last line; anything a cmdlet printed before it (even UTF-16) is ignored.
   const last = out.replace(/\0/g, '').trim().split(/\r?\n/).pop();
   return last ? JSON.parse(last) : null;

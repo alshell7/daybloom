@@ -71,7 +71,7 @@ public static class W {
   }
 
   // 0 none, 1 WDA_MONITOR (black in captures), 0x11 WDA_EXCLUDEFROMCAPTURE; -1 on failure.
-  public static long Affinity(IntPtr h) { uint a; return GetWindowDisplayAffinity(h, out a) ? a : -1; }
+  public static long Affinity(IntPtr h) { uint a; return GetWindowDisplayAffinity(h, out a) ? (long)a : -1L; }
 
   public static void Key(byte vk) { keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); }
 
