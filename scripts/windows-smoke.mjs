@@ -51,6 +51,42 @@ function ps(cmd, args = {}) {
   return last ? JSON.parse(last) : null;
 }
 
+// Runs a helper command in the background; `ready` resolves once it prints READY.
+function psAsync(cmd, args = {}) {
+  const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', PS1, '-Cmd', cmd];
+  for (const [k, v] of Object.entries(args)) argv.push(`-${k}`, String(v));
+  const child = spawn('powershell', argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+  let out = '';
+  let err = '';
+  let onReady;
+  const ready = new Promise((r) => (onReady = r));
+  child.stdout.on('data', (d) => {
+    out += d;
+    if (out.includes('READY')) onReady(true);
+  });
+  child.stderr.on('data', (d) => (err += d));
+  const done = new Promise((res, rej) =>
+    child.on('close', () => {
+      const last = out.replace(/\0/g, '').trim().split(/\r?\n/).pop();
+      try {
+        res(JSON.parse(last));
+      } catch {
+        rej(new Error(`win32.ps1 ${cmd} failed: ${(err || out).replace(/\s+/g, ' ').slice(0, 400)}`));
+      }
+    }),
+  );
+  return { ready: Promise.race([ready, sleep(20_000).then(() => false)]), done };
+}
+
+const settingsFile = () => path.join(process.env.APPDATA, IDENTIFIER, 'state', 'settings.json');
+const savedWidget = () => {
+  try {
+    return JSON.parse(fs.readFileSync(settingsFile(), 'utf8')).widget ?? {};
+  } catch {
+    return {};
+  }
+};
+
 const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
 const rect = (w) => `${w.x},${w.y},${w.w},${w.h}`;
 const shot = (name, r) => ps('shot', r ? { A: path.join(OUT, name), B: r } : { A: path.join(OUT, name) });
@@ -492,6 +528,9 @@ async function behaviour(app) {
           `visible ${s.widget.visible}; topmost ${!!(s.widget.exStyle & TOPMOST)}, z widget ${s.widget.z} vs Notepad ${s.notepad.z}; after activating the widget ${after.widget.z} vs ${after.notepad.z}`,
         );
         shot('06-layer-desktop.png', `${wg.x - 80},${wg.y - 80},${wg.w + 160},${wg.h + 160}`);
+        await sleep(1000); // the planner saves settings 250 ms after a change
+        const sw = savedWidget();
+        record('Widget on the desktop layer is still saved as shown (it reappears after a restart)', sw.visible === true && sw.layer === 'desktop' ? 'pass' : 'fail', `settings.widget ${JSON.stringify(sw)}`);
 
         await pg.widget.eval(`document.querySelector('.tools button[aria-pressed]').click()`); // back to top
         await sleep(1200);
@@ -499,6 +538,7 @@ async function behaviour(app) {
         record('Widget returns to floating on top, still visible', s.widget.visible && s.widget.exStyle & TOPMOST ? 'pass' : 'fail', `visible ${s.widget.visible}; topmost ${!!(s.widget.exStyle & TOPMOST)}`);
       }
       taskkill('/PID', String(notepad.pid));
+      if (pg) await blinkCheck(pid, pg);
     }
 
     // Widget double-click opens the planner, and clicks never leave the window stuck to the cursor.
@@ -631,6 +671,32 @@ async function exportChecks(pg) {
       /* ignore */
     }
   }
+}
+
+// Two layer changes with nothing but desktop behind the widget, watched every ~10 ms: the widget
+// must not go hidden or blank for longer than a frame or two, and must stay saved as shown.
+async function blinkCheck(pid, pg) {
+  const w = widgetOf(pid);
+  const cx = w.x + Math.round(w.w / 2);
+  const cy = w.y + Math.round(w.h / 2);
+  const watch = psAsync('watch', { A: w.hwnd, B: 7000, C: `${cx},${cy}`, D: WALL.join(',') });
+  if (!(await watch.ready)) return record('Widget layer change: no visible blink', 'warn', 'the watcher did not start');
+  await sleep(500);
+  const pin = `document.querySelector('.tools button[aria-pressed]').click()`;
+  await pg.widget.eval(pin); // to the desktop
+  await sleep(2500);
+  await pg.widget.eval(pin); // back on top
+  const r = await watch.done;
+  const worst = Math.max(r.longestHiddenMs, r.longestBlankMs);
+  record(
+    'Widget layer change: no visible blink',
+    worst <= 40 ? 'pass' : worst < 300 ? 'warn' : 'fail',
+    `${r.samples} samples over 7 s and two changes: not visible ${r.hidden}× (longest ${r.longestHiddenMs} ms), centre blank ${r.blank}× (longest ${r.longestBlankMs} ms)`,
+  );
+  await sleep(1500);
+  const sw = savedWidget();
+  const now = widgetOf(pid);
+  record('Widget back on top: still shown and saved as shown', now?.visible && sw.visible === true && sw.layer === 'top' ? 'pass' : 'fail', `visible ${now?.visible}; settings.widget ${JSON.stringify(sw)}`);
 }
 
 // Hiding and showing the widget again: it draws again and does not take the focus.
@@ -806,6 +872,39 @@ async function idle(app) {
   } finally {
     await quit(run);
     await sleep(2000);
+  }
+}
+
+// ---- restart on the desktop layer ----------------------------------------------------------
+// The planner shows the widget and then applies its saved layer; "desktop" is a real style change.
+// The widget must come up below other windows and still be saved as shown afterwards.
+async function desktopRestart(app) {
+  const write = (widget) => {
+    const st = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+    st.widget = { ...(st.widget ?? {}), ...widget };
+    fs.writeFileSync(settingsFile(), JSON.stringify(st));
+  };
+  write({ visible: true, layer: 'desktop' });
+  let run = app;
+  try {
+    const started = await start(app);
+    run = started.run;
+    await sleep(4000);
+    const w = widgetOf(run.pid);
+    const sw = savedWidget();
+    const fg = ps('foreground');
+    record(
+      'Restart on the desktop layer: widget shown, below other windows, still saved as shown',
+      w?.visible && !(w.exStyle & TOPMOST) && sw.visible === true && sw.layer === 'desktop' ? 'pass' : 'fail',
+      `visible ${w?.visible}; topmost ${w ? !!(w.exStyle & TOPMOST) : '–'}; settings.widget ${JSON.stringify(sw)}; foreground '${fg?.title}'`,
+    );
+    if (w?.visible) {
+      const face = drawnAt(w);
+      if (!face.ok) record('Restart on the desktop layer: widget draws', 'warn', `${face.detail} (a window behind it can also read as not-desktop)`);
+    }
+  } finally {
+    await quit(run);
+    write({ visible: true, layer: 'top' });
   }
 }
 
@@ -1078,6 +1177,7 @@ try {
     record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
     await behaviour(app);
     await idle(app);
+    await desktopRestart(app);
     await screenCues(app);
     msiInstall(app.msi);
   }

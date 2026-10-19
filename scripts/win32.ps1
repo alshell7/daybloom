@@ -51,7 +51,34 @@ public static class W {
   [DllImport("user32.dll")] static extern bool GetMenuItemRect(IntPtr h, IntPtr m, uint item, out RECT r);
   [DllImport("user32.dll")] static extern bool GetWindowDisplayAffinity(IntPtr h, out uint a);
 
+  [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr h);
+  [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr h, IntPtr dc);
+  [DllImport("gdi32.dll")] static extern uint GetPixel(IntPtr dc, int x, int y);
+
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+
+  public class Watch { public int samples; public int hidden; public int blank; public int longestHiddenMs; public int longestBlankMs; }
+
+  // Samples a window every ~10 ms for `ms`: whether it is visible, and whether the screen pixel
+  // at (x, y) reads as the colour behind it (r, g, b) — a blink shows up as either.
+  public static Watch WatchWindow(IntPtr h, int ms, int x, int y, int r, int g, int b) {
+    var w = new Watch();
+    var sw = System.Diagnostics.Stopwatch.StartNew();
+    IntPtr dc = GetDC(IntPtr.Zero);
+    long hiddenFrom = -1, blankFrom = -1;
+    while (sw.ElapsedMilliseconds < ms) {
+      long t = sw.ElapsedMilliseconds;
+      bool vis = IsWindowVisible(h);
+      uint px = GetPixel(dc, x, y);
+      bool isBlank = px != 0xFFFFFFFF && Math.Abs((int)(px & 0xFF) - r) + Math.Abs((int)((px >> 8) & 0xFF) - g) + Math.Abs((int)((px >> 16) & 0xFF) - b) < 40;
+      w.samples++;
+      if (!vis) { w.hidden++; if (hiddenFrom < 0) hiddenFrom = t; w.longestHiddenMs = Math.Max(w.longestHiddenMs, (int)(t - hiddenFrom) + 10); } else hiddenFrom = -1;
+      if (isBlank) { w.blank++; if (blankFrom < 0) blankFrom = t; w.longestBlankMs = Math.Max(w.longestBlankMs, (int)(t - blankFrom) + 10); } else blankFrom = -1;
+      Thread.Sleep(8);
+    }
+    ReleaseDC(IntPtr.Zero, dc);
+    return w;
+  }
 
   public class MenuItem { public string text; public bool isChecked; public int x, y, w, h; }
 
@@ -223,6 +250,14 @@ switch ($Cmd) {
   'front' { Out-Json ([W]::Front([IntPtr][long]$A)) }
   'foreground' { Out-Json ([W]::Info([W]::GetForegroundWindow())) }
   'point' { Out-Json ([W]::At([int]$A, [int]$B)) }
+  'watch' {
+    # -A hwnd, -B ms, -C "x,y", -D "r,g,b" (the colour behind the window). Prints READY first,
+    # so the caller can start whatever it wants watched, then the result.
+    $xy = $C -split ',' | ForEach-Object { [int]$_ }
+    $bg = $D -split ',' | ForEach-Object { [int]$_ }
+    [Console]::Out.WriteLine('READY'); [Console]::Out.Flush()
+    Out-Json ([W]::WatchWindow([IntPtr][long]$A, [int]$B, $xy[0], $xy[1], $bg[0], $bg[1], $bg[2]))
+  }
   'affinity' { Out-Json ([W]::Affinity([IntPtr][long]$A)) }
   'nudge' { [W]::Nudge(); Out-Json $true }
   'downloads' { Out-Json ([string](New-Object -ComObject Shell.Application).NameSpace('shell:Downloads').Self.Path) }
