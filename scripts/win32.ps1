@@ -239,7 +239,11 @@ switch ($Cmd) {
       Start-Sleep -Milliseconds 100
       $menu = [W]::All() | Where-Object { $_.cls -eq '#32768' -and $_.visible } | Select-Object -First 1
     }
-    if (-not $menu) { Out-Json @{ menu = $false }; break }
+    if (-not $menu) {
+      $fg = [W]::Info([W]::GetForegroundWindow())
+      Out-Json @{ menu = $false; fg = $(if ($fg) { $fg.title } else { '' }); menus = @([W]::All() | Where-Object { $_.cls -eq '#32768' }).Count }
+      break
+    }
     Start-Sleep -Milliseconds 250
     $items = @([W]::MenuItems([IntPtr]$menu.hwnd))
     $hit = $null
