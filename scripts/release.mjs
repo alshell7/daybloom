@@ -32,6 +32,7 @@ writeFileSync('src-tauri/Cargo.toml', cargo);
 
 sh('git add package.json package-lock.json src-tauri/Cargo.toml');
 sh(`git commit -m "Release v${next}"`);
-sh(`git tag v${next}`);
-sh('git push --follow-tags');
+sh(`git tag -a v${next} -m "Daybloom v${next}"`);
+sh('git push');
+sh(`git push origin v${next}`);
 console.log(`\nv${next} pushed — the release workflow builds, signs and publishes it.`);

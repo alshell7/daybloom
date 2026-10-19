@@ -77,7 +77,11 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
     match event.id().as_ref() {
         "open" => crate::show_main(app),
         "show-widget" => {
-            let _ = widget::set_visible(app, None);
+            // Off the menu handler: creating the widget's webview there deadlocks WebView2 on Windows.
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = widget::set_visible(&app, None);
+            });
         }
         // Radio pair: picking the active one keeps it active.
         "layer-top" => {
