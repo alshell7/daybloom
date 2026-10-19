@@ -217,9 +217,17 @@ function taskkill(...args) {
   }
 }
 
-function quit(app) {
+// Also waits for the DevTools port to be free: a WebView2 process that outlives the app keeps
+// it, and the next launch would then attach to a dead app's pages (or to none).
+async function quit(app) {
   if (app.pid) taskkill('/PID', String(app.pid), '/T');
   taskkill('/IM', path.basename(app.exe));
+  for (let i = 0; i < 20; i++) {
+    const holders = list(ps('port', { A: DEBUG_PORT }));
+    if (!holders.length) return;
+    if (i === 10) for (const h of holders) taskkill('/PID', String(h), '/T');
+    await sleep(500);
+  }
 }
 
 const windowsOf = (pid) => list(ps('windows', { A: pid }));
@@ -517,7 +525,7 @@ async function behaviour(app) {
     await privacyChecks(pid, pg);
   } finally {
     closeAll(pg);
-    quit(run);
+    await quit(run);
     await sleep(2000);
   }
 }
@@ -709,14 +717,33 @@ async function idle(app) {
     // Chromium's 5-minute mark for intensive throttling (which would stretch the tick to 60 s).
     await hideMain(pid);
     const hiddenAt = Date.now();
-    const attach = () => (SOURCE === 'release' ? null : pages());
-    let pg = await attach();
+    const attach = async (when) => {
+      if (SOURCE === 'release') return null;
+      const pg = await pages();
+      if (!pg) record(`DevTools attach ${when}`, 'fail', await devtoolsWhy(pid));
+      return pg;
+    };
+    // Who is still busy: each page's visibility and the CSS/Web animations it is running.
+    const activity = async (pg, when) => {
+      if (!pg) return;
+      const probe = `({ vis: document.visibilityState, running: document.getAnimations().filter((a) => a.playState === 'running').map((a) => a.animationName || a.constructor.name) })`;
+      const out = [];
+      for (const label of ['main', 'widget']) {
+        const p = await pg[label].eval(probe);
+        const names = [...new Set(p.running)];
+        out.push(`${label}: ${p.vis}, ${p.running.length} running${names.length ? ` (${names.slice(0, 6).join(', ')})` : ''}`);
+      }
+      record(`Pages ${when}`, 'info', out.join('; '));
+    };
+    let pg = await attach('with the planner in the tray');
+    await activity(pg, 'with the planner in the tray');
     await pg?.main.eval(`(() => { const t = (window.__smokeTicks = []); (function tick() { t.push(Date.now()); setTimeout(tick, 5000); })(); })()`);
     closeAll(pg);
     await sleep(5000);
     sample('planner closed to tray + widget', HIDDEN_CPU_SECONDS);
     await sleep(Math.max(0, hiddenAt + 7 * 60_000 - Date.now()));
-    pg = await attach();
+    pg = await attach('after 7 minutes in the tray');
+    if (!pg && SOURCE !== 'release') record('Hidden planner keeps a ~5 s timer cadence after 5+ minutes (on-time notifications)', 'fail', 'not measured: no DevTools connection');
     if (pg) {
       const page = await pg.main.eval(`({ ticks: window.__smokeTicks ?? null, vis: document.visibilityState, loadedAt: Math.round(performance.timeOrigin), discarded: !!document.wasDiscarded })`);
       const ticks = page.ticks ?? [];
@@ -738,9 +765,13 @@ async function idle(app) {
     await sleep(3000);
     ps('show', { A: mainOf(pid).hwnd, B: 6 }); // SW_MINIMIZE
     await sleep(10_000);
+    pg = await attach('with the planner minimised');
+    await activity(pg, 'with the planner minimised');
+    closeAll(pg);
+    await sleep(3000);
     sample('planner minimised + widget');
   } finally {
-    quit(run);
+    await quit(run);
     await sleep(2000);
   }
 }
@@ -855,7 +886,7 @@ async function screenCues(app) {
     record('Screen cues: no console errors', errs.length ? 'warn' : 'pass', errs.slice(0, 6).join(' | '));
   } finally {
     closeAll(pg);
-    quit(run);
+    await quit(run);
     await sleep(2000);
   }
 }
