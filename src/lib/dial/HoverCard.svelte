@@ -5,6 +5,8 @@
   import Icon from '../Icon.svelte';
   import { tasks } from '../stores/tasks.svelte';
   import { routineStreak } from '../streaks';
+  import { view } from '../stores/view.svelte';
+  import { accountLabel } from '../calendarBridge.svelte';
 
   // Everything about one block at a glance: when, how much is left, what's next inside it.
   let { block, now, hour12, compact = false }: { block: Block; now: number; hour12: boolean; compact?: boolean } = $props();
@@ -31,6 +33,9 @@
   });
   const progress = $derived(live ? (now - block.startMs) / len : block.done ? 1 : 0);
   const inARow = $derived(task?.recurrence ? routineStreak(task, now) : 0);
+  const overlaps = $derived(
+    view.pool.filter((o) => o.key !== block.key && !o.floating && o.startMs < block.endMs && o.endMs > block.startMs),
+  );
 </script>
 
 <div class="card" class:compact style:--c={block.color}>
@@ -47,6 +52,12 @@
   </div>
   {#if (live || block.done) && !compact}
     <span class="bar" aria-hidden="true"><i style:transform={`scaleX(${progress})`}></i></span>
+  {/if}
+  {#if !compact && block.event}
+    <div class="repeat"><Icon name="calendar" size={11} /> {accountLabel(block.event.accountId)}{block.event.alsoIn?.length ? ` · also in ${block.event.alsoIn.map(accountLabel).join(', ')}` : ''}</div>
+  {/if}
+  {#if !compact && overlaps.length}
+    <div class="repeat clash"><Icon name="shuffle" size={11} /> Same time as {overlaps[0].title}{overlaps.length > 1 ? ` +${overlaps.length - 1}` : ''}</div>
   {/if}
   {#if !compact && steps.length}
     <div class="steps tnum">

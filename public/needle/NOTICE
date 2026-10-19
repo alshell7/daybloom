@@ -1,0 +1,3 @@
+Needle engine (needle.js, needle.wasm) and weights (needle3.cact, downloaded on first use)
+by Cactus Compute — https://github.com/cactus-compute/needle — Apache License 2.0 (see LICENSE).
+Weights: https://huggingface.co/Cactus-Compute/needle3 (revision 3391a1007e7db31d2fe5c69c734bbe93a9c1ce79).

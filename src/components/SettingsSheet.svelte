@@ -11,7 +11,9 @@
   import Panel from './Panel.svelte';
   import Segmented from './Segmented.svelte';
   import { checkForUpdates, installUpdate, loadVersion, updates } from '../lib/updater.svelte';
+  import { needle } from '../lib/assistant/engine.svelte';
   import ThemeGallery from './ThemeGallery.svelte';
+  import SyncSettings from './SyncSettings.svelte';
 
   const s = $derived(settings.value);
   const open = $derived(view.sheet?.kind === 'settings');
@@ -317,6 +319,28 @@
     </section>
 
     <section>
+      <h3>Assistant</h3>
+      <div class="row">
+        <span>
+          {#if needle.status === 'ready'}On this device{needle.loaded ? ` · ${Math.round(needle.memory / 1048576)} MB in use` : ' · sleeping'}
+          {:else if needle.status === 'downloading'}Downloading… {Math.round(needle.progress * 100)}%
+          {:else if needle.status === 'loading'}Waking up…
+          {:else if needle.status === 'error'}Couldn't set up: {needle.error}
+          {:else}Not downloaded yet{/if}
+        </span>
+        {#if needle.status === 'ready'}
+          <button class="btn btn-quiet" onclick={() => needle.forget()}>Remove</button>
+        {:else if needle.status !== 'downloading' && needle.status !== 'loading'}
+          <button class="btn btn-soft" onclick={() => needle.ensureReady().catch(() => {})}>{needle.status === 'error' ? 'Try again' : 'Download (35 MB)'}</button>
+        {/if}
+      </div>
+      {#if needle.status === 'downloading'}
+        <span class="dl" aria-hidden="true"><i style:transform={`scaleX(${needle.progress})`}></i></span>
+      {/if}
+      <p class="hint">“Ask Daybloom” (⌘K) runs Needle by Cactus Compute (Apache-2.0) entirely on your computer — downloaded once, SHA-256 verified, then offline. Without it the assistant still works in basic mode.</p>
+    </section>
+
+    <section>
       <h3>Updates</h3>
       <div class="row">
         <span>{platform.isNative ? `Daybloom ${updates.current || ''}` : 'Daybloom (browser preview)'}</span>
@@ -343,9 +367,11 @@
       <p class="hint">Updates are signed; Daybloom refuses any download that doesn't match its key.</p>
     </section>
 
+    <SyncSettings />
+
     <section>
       <h3>Your data</h3>
-      <p class="hint">Everything stays on this computer. Calendar sign-ins live in your system keychain.</p>
+      <p class="hint">Everything stays on this computer unless you turn on Sync with GitHub. Sign-ins and tokens live in your system keychain.</p>
       <div class="cal-actions">
         <button class="btn btn-soft" onclick={exportData}>Export</button>
         <label class="btn btn-soft">Import<input type="file" accept="application/json" onchange={importData} hidden /></label>
@@ -488,6 +514,22 @@
     font-size: var(--t-xs);
     color: var(--ink-3);
     line-height: 1.5;
+  }
+  .dl {
+    display: block;
+    position: relative;
+    height: 4px;
+    margin-top: 4px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+  }
+  .dl i {
+    position: absolute;
+    inset: 0;
+    background: var(--focus-ring);
+    transform-origin: left;
+    transition: transform 0.2s linear;
   }
   .switch {
     appearance: none;

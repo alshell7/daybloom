@@ -1,0 +1,93 @@
+<script lang="ts">
+  // Calm: the breathing minute (the guide runs on the dial; this card names the phase and
+  // lets you stop), or closing the day.
+  import Icon from '../../lib/Icon.svelte';
+  import { categoryColor } from '../../lib/engine/categories';
+  import { formatDuration } from '../../lib/engine/time';
+  import { dayReview } from '../../lib/nudges.svelte';
+  import { clock } from '../../lib/stores/clock.svelte';
+  import { taskFile } from '../../lib/stores/tasks.svelte';
+  import { view } from '../../lib/stores/view.svelte';
+
+  let { kind }: { kind: 'breathe' | 'winddown' } = $props();
+
+  // 16-second cycle: 4 in, 4 hold, 6 out, 2 rest — four times.
+  const PHASES = [
+    { until: 4000, word: 'Breathe in', scale: 1 },
+    { until: 8000, word: 'Hold', scale: 1 },
+    { until: 14000, word: 'Breathe out', scale: 0.62 },
+    { until: 16000, word: 'Rest', scale: 0.62 },
+  ];
+  const t = $derived(view.breatheAt ? clock.now - view.breatheAt : -1);
+  const on = $derived(t >= 0 && t < 64_000);
+  const inCycle = $derived(on ? t % 16000 : 0);
+  const phase = $derived(PHASES.find((p) => inCycle < p.until) ?? PHASES[0]);
+  const phaseLen = $derived(phase.until - (PHASES[PHASES.indexOf(phase) - 1]?.until ?? 0));
+  const secs = $derived(Math.max(1, Math.ceil((phase.until - inCycle) / 1000)));
+  const round = $derived(Math.min(4, Math.floor(t / 16000) + 1));
+
+  const review = $derived(kind === 'winddown' ? (taskFile.value.tasks, dayReview(view.today)) : null);
+</script>
+
+{#if kind === 'breathe'}
+  <div class="a-card calm" style:--c={categoryColor('rest', view.finish.dark)}>
+    {#if on}
+      <div class="breath">
+        <span class="orb" style:transform={`scale(${phase.scale})`} style:transition-duration={view.reducedMotion ? '0ms' : `${phaseLen}ms`}></span>
+        <div class="txt" aria-live="polite">
+          <strong class="a-title">{phase.word}</strong>
+          <span class="a-meta tnum">{secs} · round {round} of 4</span>
+        </div>
+      </div>
+      <div class="a-actions"><button class="a-chip quiet" onclick={() => (view.breatheAt = 0)}>Stop</button></div>
+    {:else}
+      <div class="breath">
+        <span class="orb rest"></span>
+        <div class="txt">
+          <strong class="a-title">{view.breatheAt ? 'That was a minute.' : 'Ready when you are.'}</strong>
+          <span class="a-meta">{view.breatheAt ? 'Notice how you feel. No need to rush back.' : 'One minute, on the dial.'}</span>
+        </div>
+      </div>
+      <div class="a-actions"><button class="a-chip" onclick={() => (view.breatheAt = clock.now)}><Icon name="wind" size={13} /> {view.breatheAt ? 'Again' : 'Begin'}</button></div>
+    {/if}
+  </div>
+{:else if review}
+  <div class="a-card calm">
+    <div class="breath">
+      <span class="a-ico quiet"><Icon name="moon" size={15} /></span>
+      <div class="txt">
+        <strong class="a-title tnum">{review.done.length ? `${review.done.length} done today` : 'A quiet day'}</strong>
+        <span class="a-meta tnum">{review.spentMs >= 60_000 ? `${formatDuration(review.spentMs)} well spent` : 'Rest is part of the plan.'}{review.open.length ? ` · ${review.open.length} still open` : ''}</span>
+      </div>
+    </div>
+    <div class="a-actions">
+      <button class="a-chip primary" onclick={() => (view.sheet = { kind: 'winddown' })}><Icon name="moon" size={13} /> Close the day</button>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .breath {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+  }
+  .txt {
+    display: grid;
+    gap: 1px;
+  }
+  /* Steps with the phase (a one-shot transition each time), only during the minute. */
+  .orb {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    /* Rest's colour (lume is only for finished time). */
+    background: radial-gradient(circle, color-mix(in srgb, var(--c) 42%, transparent), color-mix(in srgb, var(--c) 12%, transparent));
+    transition-property: transform;
+    transition-timing-function: var(--ease-in-out);
+  }
+  .orb.rest {
+    transform: scale(0.62);
+  }
+</style>

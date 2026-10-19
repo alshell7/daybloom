@@ -5,6 +5,7 @@
 import { addDays, startOfDayMs } from './engine/time';
 import { settings } from './stores/settings.svelte';
 import { view } from './stores/view.svelte';
+import type { CalendarEvent } from './engine/types';
 
 type Service = typeof import('./calendar/service').calendarService;
 
@@ -27,7 +28,28 @@ function refreshFromService(svc: Service) {
   calendarState.status = (svc as any).status ?? 'idle';
   calendarState.lastSyncAt = (svc as any).lastSyncAt ?? null;
   const r = range();
-  view.events = svc.eventsBetween(r.startMs, r.endMs);
+  view.events = dedupeEvents(svc.eventsBetween(r.startMs, r.endMs));
+}
+
+/**
+ * The same meeting invited to work *and* personal calendars shows once: same title (case and
+ * spacing ignored) at the same start and end merges, remembering every account it came from.
+ */
+export function dedupeEvents(events: CalendarEvent[]): CalendarEvent[] {
+  const seen = new Map<string, CalendarEvent>();
+  const out: CalendarEvent[] = [];
+  for (const ev of events) {
+    const key = `${ev.title.trim().toLowerCase().replace(/\s+/g, ' ')}|${ev.startMs}|${ev.endMs}|${ev.allDay}`;
+    const first = seen.get(key);
+    if (first) {
+      if (first.accountId !== ev.accountId && !first.alsoIn?.includes(ev.accountId)) first.alsoIn = [...(first.alsoIn ?? []), ev.accountId];
+      continue;
+    }
+    const copy = { ...ev };
+    seen.set(key, copy);
+    out.push(copy);
+  }
+  return out;
 }
 
 export async function initCalendars(isMain: boolean): Promise<() => void> {
@@ -65,6 +87,13 @@ const googleModules = import.meta.glob('./calendar/google.ts');
 googleModules['./calendar/google.ts']?.().then((m: any) => {
   googleSetter = m.setGoogleClient ?? null;
 });
+
+/** Short human label for an account: "Work", or the part of an email before the @. */
+export function accountLabel(accountId: string): string {
+  const acc = calendarState.accounts.find((a) => a.id === accountId);
+  if (!acc) return 'Calendar';
+  return acc.label.includes('@') ? acc.label.split('@')[0] : acc.label;
+}
 
 export async function syncNow() {
   const svc = calendarState.service;

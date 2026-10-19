@@ -8,6 +8,7 @@
   import { clock } from '../lib/stores/clock.svelte';
   import { tasks } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { accountLabel } from '../lib/calendarBridge.svelte';
 
   let { block }: { block: Block } = $props();
 
@@ -75,6 +76,9 @@
   const selected = $derived(view.selected === block.key);
   const fg = $derived(onColor(block.color));
   const acked = $derived(!!task?.acks?.includes(block.date));
+  const overlaps = $derived(
+    view.dayBlocks.filter((o) => o.key !== block.key && !o.floating && o.startMs < block.endMs && o.endMs > block.startMs),
+  );
   // Revealed on hover: the next step, else the first line of the notes.
   const peek = $derived.by(() => {
     const next = subs.find((s) => !s.done)?.title;
@@ -180,6 +184,12 @@
     </span>
     {#if missed && !acked}
       <span class="waiting">check in?</span>
+    {/if}
+    {#if block.event}
+      <span class="src">{accountLabel(block.event.accountId)}{block.event.alsoIn?.length ? ` + ${block.event.alsoIn.length} more` : ''}</span>
+    {/if}
+    {#if overlaps.length}
+      <span class="clash"><Icon name="shuffle" size={11} /> same time as {overlaps[0].title}{overlaps.length > 1 ? ` +${overlaps.length - 1}` : ''}</span>
     {/if}
     {#if peek}
       <span class="peek">{peek}</span>
@@ -473,6 +483,17 @@
   .glyph {
     display: inline-grid;
     margin-left: 2px;
+  }
+  .src,
+  .clash {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .clash {
+    color: var(--ink-2);
   }
   .waiting {
     justify-self: start;

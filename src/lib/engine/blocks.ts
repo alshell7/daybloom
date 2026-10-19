@@ -127,6 +127,8 @@ export interface NowState {
   remainingMs: number;
   /** 0..1 progress through the current block. */
   progress: number;
+  /** Other unfinished blocks under the hand at the same time (overlaps, other calendars). */
+  alongside: Block[];
 }
 
 export function nowState(blocks: Block[], now: number): NowState {
@@ -134,7 +136,9 @@ export function nowState(blocks: Block[], now: number): NowState {
   // The unfinished block under the hand; if several overlap, the one ending soonest.
   // A block finished early stops being "now" — the time left over is free.
   const live = timed.filter((b) => b.startMs <= now && b.endMs > now && !b.done);
-  const current = live.sort((a, b) => a.endMs - b.endMs)[0] ?? null;
+  // Your own blocks lead; calendar events lead only when nothing of yours is running.
+  const current = live.sort((a, b) => (a.kind === 'task' ? 0 : 1) - (b.kind === 'task' ? 0 : 1) || a.endMs - b.endMs)[0] ?? null;
+  const alongside = live.filter((b) => b.key !== current?.key);
   const next = timed.filter((b) => b.startMs > now && b.key !== current?.key)[0] ?? null;
   if (current) {
     const span = current.endMs - current.startMs;
@@ -143,9 +147,10 @@ export function nowState(blocks: Block[], now: number): NowState {
       next,
       remainingMs: current.endMs - now,
       progress: span > 0 ? (now - current.startMs) / span : 1,
+      alongside,
     };
   }
-  return { current: null, next, remainingMs: next ? next.startMs - now : 0, progress: 0 };
+  return { current: null, next, remainingMs: next ? next.startMs - now : 0, progress: 0, alongside };
 }
 
 /** Free gaps between timed blocks within a window (for "free time" rows and smart rescheduling). */

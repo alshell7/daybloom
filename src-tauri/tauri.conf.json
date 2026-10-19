@@ -50,7 +50,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://www.googleapis.com https://oauth2.googleapis.com https://openidconnect.googleapis.com",
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src https://api.github.com 'self' ipc: http://ipc.localhost https://www.googleapis.com https://oauth2.googleapis.com https://openidconnect.googleapis.com https://huggingface.co https://*.hf.co https://*.huggingface.co",
       "dangerousDisableAssetCspModification": [
         "style-src"
       ]

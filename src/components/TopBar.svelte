@@ -1,6 +1,7 @@
 <script lang="ts">
   import { blocksInRange } from '../lib/engine/blocks';
-  import { addDays, formatDayLong, fromISODate, startOfDayMs, weekday } from '../lib/engine/time';
+  import { addDays, formatDayLong, formatTime, fromISODate, startOfDayMs, weekday } from '../lib/engine/time';
+  import { clock } from '../lib/stores/clock.svelte';
   import type { Block, ISODate } from '../lib/engine/types';
   import Icon from '../lib/Icon.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
@@ -62,6 +63,7 @@
 <header class="bar" class:mac data-tauri-drag-region>
   <div class="when" data-tauri-drag-region>
     <h1 class="day" data-tauri-drag-region>
+      <span class="clock tnum" aria-label={`It's ${formatTime(clock.now, view.hour12)}`}>{formatTime(clock.now, view.hour12)}</span>
       {#if rel}<span class="rel">{rel}</span>{/if}
       <span class="date">{title}</span>
     </h1>
@@ -99,6 +101,9 @@
 
   <div class="actions">
     <UpdateChip />
+    <button class="icon-btn ask" onclick={() => (view.sheet = view.sheet?.kind === 'assistant' ? null : { kind: 'assistant' })} aria-pressed={view.sheet?.kind === 'assistant'} aria-label="Ask Daybloom (⌘K)" title="Ask Daybloom · ⌘K">
+      <Icon name="sparkles" size={18} />
+    </button>
     <ThemeToggle />
     <button class="icon-btn" onclick={() => (view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' })} aria-pressed={view.sheet?.kind === 'backlog'} aria-label="Backlog (B)" title="Backlog · B">
       <Icon name="inbox" size={18} />
@@ -160,6 +165,14 @@
   }
   .rel {
     color: var(--ink);
+  }
+  .clock {
+    padding: 2px 9px;
+    border-radius: var(--r-pill);
+    background: var(--ink);
+    color: var(--ink-inverse);
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
   .rel + .date {
     color: var(--ink-3);
