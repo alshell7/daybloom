@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -194,6 +194,31 @@ Sign in with Google, or paste a calendar link from Google, iCloud or Outlook. Da
 
 ### Privacy mode
 Keep Daybloom out of screenshots, screen recordings and screen sharing with <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### Waqt: salah in your day
+The five salah times on your dial and in your plans, with adhan, jamaat and Jumu’ah. Gentle reminders, the Hijri date and the Qibla.
+
+<img src="docs/media/waqt.png" alt="The Waqt panel with the sun's path from Fajr to Maghrib, today's five prayers with jamaat times, and a week of marked prayers.">
+
+</td>
+<td valign="top">
+
+### MCP: plan with your AI apps
+Claude, Codex and other AI apps can read your day, find free time and add or move blocks. Only on this computer, behind a key. Every change has an Undo.
+
+<img src="docs/media/mcp.png" alt="The MCP panel with Daybloom and an AI app joined by a thread, a ready-to-copy setup for Claude Code, and example questions.">
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+**More addons:** **Breadcrumbs** keeps one line about where you stopped a task, and shows it when you come back. **Make it smaller** splits a task that feels too big into small steps; the first step takes two minutes. **Reality check** learns how long your blocks really take, and offers a better length when you plan.
 
 </td>
 </tr>
@@ -515,6 +540,67 @@ Exports go to your **Downloads** folder.
 - **Week:** see the hours of each day and the totals by block. Click **Export timesheet (CSV)**.
 - **Activity (optional):** turn on **Note the apps I use while tracking**. Daybloom notes the name of the app in front every 30 seconds, only while the stopwatch runs. On Windows you can also note window titles. This data stays on your computer.
 
+### Leave breadcrumbs
+
+1. Turn on **Breadcrumbs** in the Addons gallery.
+2. When you leave focus mode or a focus session ends, Daybloom asks: “Where did you leave off?” Type one line, or skip it.
+3. When you come back to the task, your last note shows in focus mode and in the block editor.
+
+- **Park a thought:** during focus, write a stray thought in **Park a thought**. It waits in the **Breadcrumbs** panel. Send it to the backlog, or let it go.
+- **When to ask:** change this in the **Breadcrumbs** panel.
+
+### Make a task smaller
+
+1. Turn on **Make it smaller** in the Addons gallery.
+2. Click **Too big?** on a task: in the block editor, in the backlog or in focus mode.
+3. Daybloom shows a few small steps. Change, remove or add steps, then click **Keep the steps**.
+4. Optional: click **Start the first step** for a 2-minute focus session.
+
+### Plan with real times
+
+1. Turn on **Reality check** in the Addons gallery.
+2. Finish blocks as usual. Daybloom learns how long they really take, from ticks, focus sessions and tracked time.
+3. When you set the length of a block, Daybloom can show “usually ~45m”. Click it to use that length.
+4. Open the **Reality check** panel to see planned and real time side by side, by task and by kind of task.
+
+Reality check never changes your plans by itself.
+
+### Keep salah times with Waqt
+
+1. Turn on **Waqt** in the Addons gallery, then click the moon in the top bar.
+2. Search for your city, or click **Use my location**. Under **Place and method**, select the calculation method and the Asr time (**Standard** or **Hanafi**).
+3. Optional: under **Jamaat and Jumu’ah**, set the jamaat time of your mosque for each prayer, and Jumu’ah on Fridays.
+
+- **On the dial:** each prayer’s time shows on the dial. Prayer blocks make room in your plans, so other blocks do not take that time.
+- **Reminders:** Daybloom reminds you before the adhan, at the adhan and before jamaat. Change the times or turn the sound off under **Reminders**.
+- **Mark a prayer:** click the circle next to a prayer. One click: prayed. Two clicks: prayed in jamaat.
+- **Your mosque’s times:** if your mosque gives fixed times, enter them under **Your mosque’s times**. Daybloom uses them in place of the calculated times.
+
+### Connect AI apps with MCP
+
+MCP (Model Context Protocol) lets AI apps use tools. With this addon, an AI app can read your day and help you plan it.
+
+1. Turn on **MCP** in the Addons gallery, then click the plug in the top bar.
+2. Under **Connect an app**, select your app: **Claude Code**, **Codex**, **Claude** or **Other**.
+3. Click **Copy** and do the step that the panel shows: run the command in a terminal, or paste the text in the app's settings.
+4. Ask your AI app, for example: “What's on my day?” or “Find an hour for writing tomorrow afternoon.”
+
+What an AI app can do:
+
+| Read | Change (you can turn this off) |
+|---|---|
+| A day, with free time and what is happening now | Add a block, with steps and repeats |
+| Blocks over a range of days | Move, resize or rename a block |
+| The backlog | Finish or remove a block |
+| Settings (never keys or passwords) | Add to the backlog, and plan a backlog task |
+| Insights for 7 or 28 days | Change waking hours, theme, sounds and focus length |
+| Salah times, when Waqt is on | |
+
+- **Undo:** each change shows a message in Daybloom with **Undo**. The **Activity** list shows what each app did.
+- **Read only:** turn off **Let apps change my plans**. Apps can then only read.
+- **Safety:** Daybloom answers only on this computer (127.0.0.1), and only to apps that have the key. Web pages cannot connect. Click **Make a new key** to stop old setups.
+- **Daybloom must run.** The AI app talks to the open Daybloom app. Codex and Claude start a small relay (`daybloom --mcp`) that finds the key by itself.
+
 ### Use the desktop widget
 
 1. Press <kbd>W</kbd>, or click the **Desktop widget** button in the top bar.
@@ -655,6 +741,8 @@ To find a setting fast, type a word in **Find a setting**, for example “sound�
   - Windows: `%APPDATA%\app.daybloom.desktop\state\`
 - Tokens, calendar sign-ins and calendar links stay in the system keychain (macOS Keychain or Windows Credential Manager).
 - Work and Time Tracker data stay on your computer, and sync with GitHub when you turn sync on. App activity tracking is a setting for each computer and never syncs.
+- Breadcrumbs, Reality check, Waqt and MCP data stay on this computer. They do not sync.
+- The MCP addon answers only on this computer (127.0.0.1) and only to apps that have its key. An AI app gets your plans only when it uses a tool, and each use shows in the **Activity** list.
 - Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
 - Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
 - To make a backup, open **Settings › App › Your data** and click **Export**. To restore, click **Import**.
