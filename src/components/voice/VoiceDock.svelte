@@ -12,7 +12,10 @@
   import Card from '../assistant/Card.svelte';
   import VoiceRing from './VoiceRing.svelte';
 
-  const shown = $derived(voice.surface === 'overlay' && voice.active);
+  // The capsule is the V key's surface. The mics in Quick add and Ask show their words in their
+  // own field, but anything that needs you (download Whistle, no microphone, an error) shows here
+  // for them too, so a mic never just does nothing.
+  const shown = $derived(voice.active && (voice.surface === 'overlay' || voice.phase === 'needs-model' || voice.phase === 'downloading' || voice.phase === 'error'));
   const reduced = $derived(view.reducedMotion);
 
   const HINTS = ['“What’s next?”', '“Add gym at 5 for 45 minutes”', '“Move lunch to 2”', '“Start a 25 minute focus”', '“Plan my day”'];
@@ -72,6 +75,7 @@
       case 'opening':
         return 'Waiting for the microphone…';
       case 'listening':
+        if (voice.warming) return 'Listening · warming up';
         return voice.handsFree ? 'Listening · pause to send' : 'Listening · let go to send';
       case 'finishing':
         return 'Reading it back…';
@@ -281,19 +285,19 @@
   .w {
     display: inline-block;
   }
+  /* The tail Whistle is still deciding on breathes softly (opacity only: compositor-friendly). */
   .pending {
-    color: color-mix(in srgb, var(--ink-inverse) 55%, transparent);
-    background: linear-gradient(90deg, color-mix(in srgb, var(--ink-inverse) 45%, transparent) 0%, var(--ink-inverse) 50%, color-mix(in srgb, var(--ink-inverse) 45%, transparent) 100%);
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: shimmer 1.6s linear infinite;
+    color: var(--ink-inverse);
+    opacity: 0.5;
+    animation: deciding 1.1s ease-in-out infinite alternate;
   }
-  @keyframes shimmer {
+  @keyframes deciding {
     to {
-      background-position: -200% 0;
+      opacity: 0.85;
     }
+  }
+  :global([data-motion='calm']) .pending {
+    animation: none;
   }
   .hint {
     color: color-mix(in srgb, var(--ink-inverse) 55%, transparent);

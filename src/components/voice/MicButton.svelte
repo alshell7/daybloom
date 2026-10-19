@@ -1,6 +1,7 @@
 <script lang="ts">
-  // A mic inside a text field. Tap to talk (it stops by itself when you pause), tap again to
-  // finish. While it listens, the mic becomes a tiny voice ring.
+  // A mic inside a text field. Press and hold to talk (let go to finish), or tap to talk hands-
+  // free (it stops by itself when you pause; tap again to finish now). While it listens, the
+  // mic becomes a tiny voice ring.
   import Icon from '../../lib/Icon.svelte';
   import { view } from '../../lib/stores/view.svelte';
   import { voice, type VoiceSurface } from '../../lib/voice/voice.svelte';
@@ -9,12 +10,28 @@
   let { surface, size = 30, label = 'Speak' }: { surface: VoiceSurface; size?: number; label?: string } = $props();
 
   const mine = $derived(voice.surface === surface && voice.active);
+  const listening = $derived(mine && voice.phase === 'listening');
   const busy = $derived(mine && (voice.phase === 'finishing' || voice.phase === 'thinking' || voice.phase === 'opening' || voice.phase === 'downloading'));
 
-  function toggle(e: MouseEvent) {
+  function down(e: PointerEvent) {
+    if (e.button !== 0) return;
+    // Keep the field's focus and caret where they are.
     e.preventDefault();
-    if (mine && voice.phase === 'listening') void voice.stop();
-    else if (mine && (voice.phase === 'opening' || voice.phase === 'needs-model' || voice.phase === 'error')) voice.cancel();
+    if (mine && (voice.phase === 'needs-model' || voice.phase === 'error')) {
+      voice.cancel();
+      return;
+    }
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    voice.press(surface);
+  }
+  function up() {
+    voice.release();
+  }
+  // Keyboard (Enter / Space on the focused button): a click without a pointer.
+  function click(e: MouseEvent) {
+    if (e.detail !== 0) return;
+    if (listening) void voice.stop();
+    else if (mine && voice.active) voice.cancel();
     else void voice.start(surface, { handsFree: true });
   }
 </script>
@@ -22,13 +39,15 @@
 <button
   type="button"
   class="mic"
-  class:on={mine && voice.phase === 'listening'}
+  class:on={listening}
   style:--sz={`${size}px`}
-  onmousedown={(e) => e.preventDefault()}
-  onclick={toggle}
-  aria-pressed={mine && voice.phase === 'listening'}
-  aria-label={mine && voice.phase === 'listening' ? 'Stop and use what I said' : label}
-  title={mine && voice.phase === 'listening' ? 'Done · or just pause' : `${label} · V`}
+  onpointerdown={down}
+  onpointerup={up}
+  onpointercancel={up}
+  onclick={click}
+  aria-pressed={listening}
+  aria-label={listening ? 'Stop and use what I said' : label}
+  title={listening ? (voice.handsFree ? 'Done · or just pause' : 'Let go to finish') : `${label} · hold to talk, or tap`}
 >
   {#if mine && (voice.phase === 'listening' || busy)}
     <VoiceRing
@@ -55,6 +74,7 @@
     flex: none;
     border-radius: 50%;
     color: var(--ink-3);
+    touch-action: none;
     transition:
       background var(--dur-1) var(--ease-out),
       color var(--dur-1) var(--ease-out),

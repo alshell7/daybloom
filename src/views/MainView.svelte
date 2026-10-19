@@ -36,7 +36,7 @@
   import TrackerPanel from '../components/addons/tracker/TrackerPanel.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
-  import { voice } from '../lib/voice/voice.svelte';
+  import { voice, type VoiceSurface } from '../lib/voice/voice.svelte';
   import TopBar from '../components/TopBar.svelte';
 
   const presetId = $derived(settings.value.preset);
@@ -152,6 +152,12 @@
       else view.selected = null;
       return;
     }
+    // ⌥V / Alt+V: hold to talk even while typing; the words go into the field you're in.
+    if (e.code === 'KeyV' && e.altKey && !e.metaKey && !e.ctrlKey && settings.value.voice.hotkey) {
+      e.preventDefault();
+      if (!e.repeat) voice.press(voiceSurfaceAt(e.target));
+      return;
+    }
     if (typing(e)) return;
     const k = e.key.toLowerCase();
     // V: hold to talk, or tap and speak (it stops when you pause).
@@ -176,6 +182,12 @@
       e.preventDefault();
       toggleDone(view.selected);
     } else if ((e.key === 'Backspace' || e.key === 'Delete') && view.selected) removeBlock(view.selected);
+  }
+
+  /** The voice surface a field belongs to (`data-voice` on its form), else the capsule. */
+  function voiceSurfaceAt(target: EventTarget | null): VoiceSurface {
+    const at = target instanceof Element ? target.closest<HTMLElement>('[data-voice]')?.dataset.voice : undefined;
+    return at === 'quickadd' || at === 'assistant' ? at : view.sheet?.kind === 'assistant' ? 'assistant' : 'overlay';
   }
 
   function togglePrivacy() {
@@ -212,9 +224,9 @@
 <svelte:window
   onkeydown={onKey}
   onkeyup={(e) => {
-    if (e.key.toLowerCase() === 'v') voice.release();
+    if (e.code === 'KeyV' || e.key.toLowerCase() === 'v' || e.key === 'Alt') voice.release();
   }}
-  onblur={() => voice.release()}
+  onblur={() => voice.blur()}
 />
 
 <div class="shell" class:mac class:sheet-open={!!view.sheet}>

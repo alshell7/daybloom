@@ -7,6 +7,9 @@
 // Surfaces: 'overlay' (the floating voice capsule, from the V key), 'assistant' (the mic in the
 // Ask panel: words flow into its input and are sent), 'quickadd' (dictation into the quick-add
 // field, for review before Enter). The mic is open only while listening.
+//
+// Listening starts the moment the microphone is open; Whistle warms up alongside (`warming`) and
+// catches up on what was said, so letting go early never throws the sentence away.
 
 import { addDays, isoOf, startOfDayMs } from '../engine/time';
 import { blocksInRange } from '../engine/blocks';
@@ -42,10 +45,12 @@ const MIN_CLIP_S = 0.35;
 const MAX_CLIP_MS = 45_000;
 const PAUSE_MS = 1_300;
 const NOTHING_MS = 7_000;
-/** Feed the live recogniser about this much new audio per pass. */
-const STEP_SAMPLES = Math.round(SPEECH_RATE * 0.8);
+/** Feed the live recogniser about this much new audio per pass (smaller = words sooner). */
+const STEP_SAMPLES = Math.round(SPEECH_RATE * 0.5);
 const HOLD_MS = 380;
 const PREROLL_SAMPLES = Math.round(SPEECH_RATE * 0.4);
+/** Push-to-talk with no detected word still counts if it was at least this loud (0..1). */
+const SOUND_FLOOR = 0.2;
 
 const VOCABULARY = [
   'add', 'move', 'start', 'finish', 'done', 'skip', 'plan my day', "what's next", 'show',
@@ -94,6 +99,8 @@ class Voice {
   seconds = $state(0);
   handsFree = $state(false);
   speaking = $state(false);
+  /** Listening while Whistle is still loading: words appear once it's ready. */
+  warming = $state(false);
   error = $state<string | null>(null);
   problem = $state<MicProblem | null>(null);
   /** The assistant's answer to a spoken command (overlay surface). */
@@ -115,9 +122,21 @@ class Voice {
   #preroll: Float32Array[] = [];
   #prerollLen = 0;
   #clip: Float32Array[] = [];
+  /** Everything since the mic opened (push-to-talk when no word was detected). */
+  #all: Float32Array[] = [];
+  #allLen = 0;
+  #loudest = 0;
   #queue: Float32Array[] = [];
   #queued = 0;
   #inflight: Promise<void> | null = null;
+  #ready: Promise<void> | null = null;
+  #isReady = false;
+  #streamed = false;
+  #stopWhenOpen = false;
+  /** Loudness arrives ~50 times a second; the ring and orb redraw once per frame. */
+  #ringData: number[] = Array(RING).fill(0);
+  #lvl = 0;
+  #frame = 0;
   #vad = new VoiceActivity();
   #opts: StartOptions = {};
   #keywords: string[] = [];
@@ -167,6 +186,14 @@ class Voice {
     else this.handsFree = true;
   }
 
+  /** The window lost focus mid-hold (a permission prompt, a click elsewhere): the key-up will
+   *  never come, so finish on the next pause instead of cutting the sentence off. */
+  blur() {
+    if (!this.#held) return;
+    this.#held = false;
+    if (this.phase === 'opening' || this.phase === 'listening') this.handsFree = true;
+  }
+
   // ---- lifecycle
 
   async start(surface: VoiceSurface, opts: StartOptions = {}) {
@@ -185,7 +212,10 @@ class Voice {
     this.entry = null;
     this.seconds = 0;
     this.heard = false;
-    this.ring = Array(RING).fill(0);
+    this.warming = false;
+    this.#ringData = Array(RING).fill(0);
+    this.#lvl = 0;
+    this.ring = this.#ringData;
     this.level = 0;
 
     let engine: SpeechEngine;
@@ -203,31 +233,50 @@ class Voice {
     }
     this.phase = 'opening';
     this.#keywords = voiceKeywords();
-    // Commands go to the assistant: wake Needle while you talk, so the answer is quick.
-    if (surface !== 'quickadd') void sessionLoader().then((m) => m.session.open());
-    try {
-      const [capture] = await Promise.all([
-        startCapture({ onAudio: (pcm) => this.#onAudio(run, pcm), onLevel: (rms, _peak, ms) => this.#onLevel(run, rms, ms) }),
-        engine.ensureReady(),
-      ]);
-      if (run !== this.#run || (this.phase as VoicePhase) !== 'opening') {
-        capture.stop();
-        return;
-      }
-      this.#capture = capture;
-    } catch (e) {
-      if (run === this.#run) this.#fail(e);
-      return;
-    }
     this.#clip = [];
+    this.#all = [];
+    this.#allLen = 0;
+    this.#loudest = 0;
     this.#preroll = [];
     this.#prerollLen = 0;
     this.#queue = [];
     this.#queued = 0;
     this.#listenedMs = 0;
+    this.#streamed = false;
+    this.#stopWhenOpen = false;
     this.#vad = new VoiceActivity();
+    // Whistle loads alongside the microphone; listening doesn't wait for it.
+    this.#isReady = false;
+    this.warming = true;
+    this.#ready = engine.ensureReady().then(
+      () => {
+        if (run !== this.#run) return;
+        this.#isReady = true;
+        this.warming = false;
+        this.#pump(run);
+      },
+      (e) => {
+        if (run === this.#run) this.#fail(e);
+        throw e;
+      },
+    );
+    this.#ready.catch(() => {});
+    let capture: Capture;
+    try {
+      capture = await startCapture({ onAudio: (pcm) => this.#onAudio(run, pcm), onLevel: (rms, _peak, ms) => this.#onLevel(run, rms, ms) });
+    } catch (e) {
+      if (run === this.#run) this.#fail(e);
+      return;
+    }
+    if (run !== this.#run || (this.phase as VoicePhase) !== 'opening') {
+      capture.stop();
+      return;
+    }
+    this.#capture = capture;
     this.phase = 'listening';
     if (settings.value.voice.chimes && settings.value.sound) sounds.listen();
+    // Let go while the microphone was still opening: finish with what's heard from here.
+    if (this.#stopWhenOpen) this.handsFree = true;
   }
 
   /** Opt-in: fetch Whistle (17 MB, once, verified), then start listening. */
@@ -258,7 +307,9 @@ class Voice {
   async stop() {
     const run = this.#run;
     if (this.phase === 'opening') {
-      this.cancel();
+      // The microphone isn't open yet (a permission prompt, a slow device): keep going and
+      // finish on the first pause rather than dropping what's about to be said.
+      this.#stopWhenOpen = true;
       return;
     }
     if (this.phase !== 'listening') return;
@@ -266,22 +317,32 @@ class Voice {
     this.#capture = null;
     this.phase = 'finishing';
     this.speaking = false;
+    this.#flushFrame();
     if (settings.value.voice.chimes && settings.value.sound) sounds.heard();
+    // Commands go to the assistant: wake Needle now (not while you talk, where it would slow
+    // the live words down), so it's ready by the time the words are.
+    if (this.surface !== 'quickadd') void sessionLoader().then((m) => m.session.open());
     const engine = this.engine!;
     let text = '';
     try {
-      // Let the last live pass land, close the stream, then one careful pass over the clip.
+      // Whistle may still be warming up; then let the last live pass land and close the
+      // stream, then one careful pass over the clip.
+      await this.#ready;
       await this.#inflight;
-      const tail = await engine.streamStop();
-      if (run !== this.#run) return;
+      if (this.#streamed) {
+        const tail = await engine.streamStop();
+        if (run !== this.#run) return;
+        if (this.heard) this.#commit(tail);
+      }
       this.pending = '';
-      if (this.heard) this.#commit(tail);
-      // Never heard a word (a quick push-to-talk): use everything that was recorded.
-      const pcm = concat(this.heard ? this.#clip : [...this.#preroll, ...this.#clip]);
+      // No word detected, but you held the key and something was said (quiet speech, a short
+      // word): use everything that was recorded. Silence is never transcribed (it turns into
+      // words nobody said).
+      const pcm = this.heard ? concat(this.#clip) : !this.handsFree && this.#loudest >= SOUND_FLOOR ? concat(this.#all) : new Float32Array(0);
       this.#clip = [];
+      this.#all = [];
       this.#preroll = [];
-      // Push-to-talk can be shorter than the detector's attack; hands-free needs real speech.
-      if (pcm.length >= SPEECH_RATE * MIN_CLIP_S && (this.heard || !this.handsFree)) {
+      if (pcm.length >= SPEECH_RATE * MIN_CLIP_S) {
         const t = await engine.transcribe(pcm, { language: this.#lang(), keywords: this.#keywords });
         if (run !== this.#run) return;
         text = normalizeSpoken(tidy(t.text) || tidy(this.live));
@@ -325,12 +386,18 @@ class Voice {
     this.#capture?.stop();
     this.#capture = null;
     this.#clip = [];
+    this.#all = [];
     this.#queue = [];
     this.#queued = 0;
     this.#held = false;
     this.speaking = false;
+    this.warming = false;
+    this.#stopWhenOpen = false;
+    cancelAnimationFrame(this.#frame);
+    this.#frame = 0;
     this.#clearClose();
-    const wasStreaming = this.phase === 'listening' || this.phase === 'finishing';
+    const wasStreaming = this.#streamed && (this.phase === 'listening' || this.phase === 'finishing');
+    this.#streamed = false;
     this.phase = 'idle';
     this.entry = null;
     if (wasStreaming) void this.engine?.streamStop().catch(() => {});
@@ -355,12 +422,12 @@ class Voice {
   #onLevel(run: number, rms: number, ms: number) {
     if (run !== this.#run || this.phase !== 'listening') return;
     const l = loudness(rms);
-    this.level += (l - this.level) * (l > this.level ? 0.5 : 0.18);
-    const ring = this.ring.slice(0, RING - 1);
-    ring.unshift(l);
-    this.ring = ring;
+    if (l > this.#loudest) this.#loudest = l;
+    this.#lvl += (l - this.#lvl) * (l > this.#lvl ? 0.5 : 0.18);
+    this.#ringData.pop();
+    this.#ringData.unshift(l);
     this.#listenedMs += ms;
-    this.seconds = this.#listenedMs / 1000;
+    if (!this.#frame) this.#frame = requestAnimationFrame(() => this.#flushFrame());
     const st = this.#vad.push(rms, ms);
     this.speaking = st.speaking;
     if (st.heard && !this.heard) {
@@ -385,8 +452,21 @@ class Voice {
     }
   }
 
+  /** Publish the ring, the orb's level and the clock (once per frame, not per audio message). */
+  #flushFrame() {
+    cancelAnimationFrame(this.#frame);
+    this.#frame = 0;
+    this.ring = this.#ringData.slice();
+    this.level = this.#lvl;
+    this.seconds = this.#listenedMs / 1000;
+  }
+
   #onAudio(run: number, pcm: Float32Array) {
     if (run !== this.#run || this.phase !== 'listening') return;
+    if (this.#allLen < (SPEECH_RATE * MAX_CLIP_MS) / 1000) {
+      this.#all.push(pcm);
+      this.#allLen += pcm.length;
+    }
     if (!this.heard) {
       this.#preroll.push(pcm);
       this.#prerollLen += pcm.length;
@@ -402,10 +482,11 @@ class Voice {
   }
 
   #pump(run: number) {
-    if (this.#inflight || this.#queued < STEP_SAMPLES || !this.engine) return;
+    if (this.#inflight || !this.#isReady || this.#queued < STEP_SAMPLES || !this.engine) return;
     const chunk = concat(this.#queue);
     this.#queue = [];
     this.#queued = 0;
+    this.#streamed = true;
     this.#inflight = this.engine
       .streamPush(chunk, { language: this.#lang(), keywords: this.#keywords })
       .then((step) => {
@@ -416,8 +497,9 @@ class Voice {
         if (step.language) this.language = step.language;
         this.#opts.onText?.(this.live, false);
       })
-      .catch(() => {
-        /* a failed live pass only costs the preview; the final pass still runs */
+      .catch((e) => {
+        // A failed live pass only costs the preview; the final pass still runs.
+        if (import.meta.env.DEV) console.warn('voice: live pass failed', e);
       })
       .finally(() => {
         this.#inflight = null;
@@ -437,6 +519,10 @@ class Voice {
   #fail(e: unknown) {
     this.#capture?.stop();
     this.#capture = null;
+    this.warming = false;
+    this.speaking = false;
+    cancelAnimationFrame(this.#frame);
+    this.#frame = 0;
     if (e instanceof MicError) {
       this.problem = e.problem;
       this.error = e.message;

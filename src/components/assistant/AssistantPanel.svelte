@@ -156,6 +156,7 @@
           {/each}
         </div>
         <form
+          data-voice="assistant"
           class="bar"
           onsubmit={(e) => {
             e.preventDefault();

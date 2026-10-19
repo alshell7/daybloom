@@ -14,6 +14,7 @@
   import { taskFile, tasks } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
   import { voice } from '../lib/voice/voice.svelte';
+  import LiveWords from './voice/LiveWords.svelte';
   import MicButton from './voice/MicButton.svelte';
 
   // Type a block the way you'd say it: "gym 5pm 45m", "meds every day 8am". Or say it: the
@@ -97,7 +98,15 @@
   }
 </script>
 
-<form class="quick" class:active={focused || !!text} onsubmit={submit} style:--c={color}>
+<form
+  class="quick"
+  class:active={focused || !!text || dictating}
+  class:hearing={dictating}
+  onsubmit={submit}
+  style:--c={color}
+  style:--lvl={dictating ? voice.level : 0}
+  data-voice="quickadd"
+>
   <span class="lead">
     {#key icon}
       <span class="ico" in:scale={{ start: 0.4, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }}>
@@ -105,6 +114,9 @@
       </span>
     {/key}
   </span>
+  {#if dictating}
+    <span class="words"><LiveWords placeholder="Listening… say the block" /></span>
+  {/if}
   <input
     bind:this={input}
     bind:value={text}
@@ -115,7 +127,7 @@
     autocomplete="off"
     spellcheck="false"
   />
-  {#if !text}
+  {#if !text && !dictating}
     {#key ex}
       <span class="ph" in:fly={{ y: 8, duration: view.reducedMotion ? 0 : 360, easing: cubicOut }} out:fly={{ y: -8, duration: view.reducedMotion ? 0 : 220 }} aria-hidden="true">
         {dictating ? 'Listening… say the block' : focused ? 'Type a block… then Enter' : `Try “${EXAMPLES[ex]}”`}
@@ -155,6 +167,31 @@
   .quick.active {
     border-color: color-mix(in srgb, var(--c) 60%, var(--line));
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 14%, transparent);
+  }
+  /* Dictating: the words are drawn by LiveWords; the ring swells with your voice. */
+  .quick.hearing input {
+    color: transparent;
+    caret-color: transparent;
+  }
+  .quick::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: calc(var(--r-md) + 5px);
+    border: 2px solid color-mix(in srgb, var(--c) 45%, transparent);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .quick.hearing::after {
+    opacity: calc(0.15 + var(--lvl) * 0.85);
+    transform: scale(calc(1 + var(--lvl) * 0.012));
+  }
+  .words {
+    position: absolute;
+    left: 44px;
+    right: 44px;
+    top: 0;
+    bottom: 0;
   }
   .lead {
     display: grid;
