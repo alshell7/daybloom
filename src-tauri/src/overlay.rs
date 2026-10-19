@@ -66,10 +66,12 @@ pub fn set_visible(app: &AppHandle, show: bool) -> Result<bool, String> {
     if show {
         let w = ensure(app)?;
         place(app, &w)?;
-        // Shown without activation, so it never takes the keyboard focus (see `show_quietly`).
-        crate::show_quietly(&w)?;
-        // Showing can re-enable hit testing on some platforms.
-        w.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+        // Shown without keeping the focus (see `show_quietly`); showing can re-enable hit
+        // testing on some platforms, so mouse pass-through is set again afterwards.
+        let w2 = w.clone();
+        crate::show_quietly(&w, move || {
+            let _ = w2.set_ignore_cursor_events(true);
+        })?;
         Ok(true)
     } else {
         if let Some(w) = window(app) {

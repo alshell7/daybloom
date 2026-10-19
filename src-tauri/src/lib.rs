@@ -37,26 +37,40 @@ pub(crate) fn set_webview_visible(w: &tauri::WebviewWindow, visible: bool) {
     });
 }
 
-/// Shows a window without taking the keyboard focus from whatever you are typing in.
-/// Windows activates a window on a plain show (SW_SHOW) despite `focus: false`, so there it
-/// is shown with SW_SHOWNOACTIVATE and WebView2 is told the page is visible. (Building the
-/// window already visible also avoids activation, but leaves WebView2's compositor busy:
-/// ~20% of a core in its GPU process while idle.) Elsewhere a plain show leaves focus alone.
-pub(crate) fn show_quietly(w: &tauri::WebviewWindow) -> Result<(), String> {
+/// Shows a window without leaving it with the keyboard focus, then runs `then`.
+///
+/// Windows activates a window on show (SW_SHOW) despite `focus: false`, which takes the focus
+/// from whatever you are typing in. Showing it without activation (SW_SHOWNOACTIVATE, or
+/// building it already visible) avoids that but leaves WebView2 rendering the hidden planner
+/// and its GPU process busy (~20% of a core idle; PR #2's measurements). So on Windows the
+/// window is shown normally and the foreground goes straight back to the previous window, all
+/// on the main thread (where Tauri runs window calls synchronously), and `then` runs after.
+/// Elsewhere a plain show leaves the focus alone.
+pub(crate) fn show_quietly(w: &tauri::WebviewWindow, then: impl FnOnce() + Send + 'static) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
-        let hwnd = w.hwnd().map_err(|e| e.to_string())?;
-        // SAFETY: a valid top-level window handle owned by this process.
-        unsafe {
-            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        }
-        set_webview_visible(w, true);
-        Ok(())
+        let w = w.clone();
+        let app = w.app_handle().clone();
+        app.run_on_main_thread(move || {
+            use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow};
+            // SAFETY: plain Win32 calls on window handles; failures are ignored.
+            let prev = unsafe { GetForegroundWindow() };
+            let _ = w.show();
+            let own = w.hwnd().ok();
+            if !prev.is_invalid() && Some(prev) != own {
+                unsafe {
+                    let _ = SetForegroundWindow(prev);
+                }
+            }
+            then();
+        })
+        .map_err(|e| e.to_string())
     }
     #[cfg(not(windows))]
     {
-        w.show().map_err(|e| e.to_string())
+        w.show().map_err(|e| e.to_string())?;
+        then();
+        Ok(())
     }
 }
 
