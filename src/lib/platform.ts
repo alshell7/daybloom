@@ -126,6 +126,13 @@ export const platform = {
     };
   },
 
+  /** Ask the planner window to do what a tray item does (from the widget, say). */
+  async trayAction(action: TrayAction): Promise<void> {
+    if (!isTauri) return;
+    const { emitTo } = await import('@tauri-apps/api/event');
+    await emitTo('main', 'daybloom://tray', { action });
+  },
+
   async notify(title: string, body: string): Promise<void> {
     if (isTauri) {
       const n = await import('@tauri-apps/plugin-notification');

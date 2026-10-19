@@ -16,6 +16,7 @@
   import { timer } from '../lib/stores/timer.svelte';
   import { enabledAddons, isOn } from '../lib/addons/registry';
   import TrackerPill from './addons/tracker/TrackerPill.svelte';
+  import SessionPill from './focus/SessionPill.svelte';
 
   let { mac = false, ontogglewidget }: { mac?: boolean; ontogglewidget: () => void } = $props();
 
@@ -134,6 +135,7 @@
           <Icon name="eye-off" size={14} stroke={2.1} /><span>Private</span>
         </button>
       {/if}
+      <SessionPill />
       {#if isOn('tracker')}<TrackerPill />{/if}
       <UpdateChip />
       <button class="icon-btn ask" onclick={() => (view.sheet = view.sheet?.kind === 'assistant' ? null : { kind: 'assistant' })} aria-pressed={view.sheet?.kind === 'assistant'} aria-label="Ask Daybloom (⌘K)" title="Ask Daybloom · ⌘K">

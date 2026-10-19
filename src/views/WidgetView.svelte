@@ -84,6 +84,12 @@
       platform.startDrag();
     }
   }
+
+  /** Double-click: the planner, or straight back into the focus view while a session runs. */
+  async function openMain() {
+    await platform.showMain();
+    if (timer.active) await platform.trayAction('focus-now');
+  }
 </script>
 
 <div
@@ -92,8 +98,8 @@
   onpointerdown={onDown}
   onpointermove={onMove}
   onpointerup={() => (press = null)}
-  ondblclick={() => platform.showMain()}
-  title={`${PRESETS[presetId].name} · double-click to open Daybloom`}
+  ondblclick={openMain}
+  title={`${PRESETS[presetId].name} · double-click to open ${timer.active ? 'your focus' : 'Daybloom'}`}
 >
   <div class="dial">
     <Dial
