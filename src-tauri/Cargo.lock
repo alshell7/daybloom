@@ -784,9 +784,12 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
 name = "daybloom"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "keyring",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -801,6 +804,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "windows",
 ]
 
 [[package]]

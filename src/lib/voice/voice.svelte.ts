@@ -62,7 +62,7 @@ export function voiceKeywords(): string[] {
 
 export function micAdvice(problem: MicProblem, os: string): string {
   if (problem === 'denied') {
-    return os === 'macos'
+    return os === 'mac'
       ? 'Open System Settings › Privacy & Security › Microphone and turn on Daybloom.'
       : os === 'windows'
         ? 'Open Settings › Privacy & security › Microphone and allow desktop apps.'

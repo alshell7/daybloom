@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -157,6 +157,47 @@ An optional edge glow breathes in the colour of the task, and breathes faster ne
 </td>
 </tr>
 <tr>
+<td valign="top">
+
+### Addons
+Switch on new powers when you need them. Your day stays as it was when you switch one off.
+
+<img src="docs/media/addons.png" alt="The Addons gallery with the Work and Time Tracker addons.">
+
+</td>
+<td valign="top">
+
+### Work: every block can earn
+Give blocks a project and a rate. See what you earned this week, budgets, and the work that isn't billed yet. Make a bill and print it to PDF.
+
+<img src="docs/media/work.png" alt="The Work overview with earnings, an earnings chart, projects, a budget and unbilled work.">
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### Time Tracker
+A live stopwatch for any block or project. Daybloom notices when you step away, and focus sessions track themselves.
+
+<img src="docs/media/tracker.png" alt="The Time Tracker with a running stopwatch and today's entries.">
+
+</td>
+<td valign="top">
+
+### Calendars in one place
+Sign in with Google, or paste a calendar link from Google, iCloud or Outlook. Daybloom shows a preview before it adds anything.
+
+<img src="docs/media/calendars.png" alt="The Calendars panel with two ways to add a calendar.">
+
+<br><br>
+
+### Privacy mode
+Keep Daybloom out of screenshots, screen recordings and screen sharing with <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>.
+
+</td>
+</tr>
+<tr>
 <td colspan="2" valign="top">
 
 ### Always in view
@@ -168,7 +209,7 @@ A small, transparent dial floats over your work or sits on the desktop. On macOS
 </tr>
 </table>
 
-**Also included:** voice dictation in quick add · recurring blocks · multiple Google Calendar accounts and ICS links · sync between computers through a private GitHub repo · notifications and soft sounds · a one-minute breathing guide · an evening wind-down · keyboard control · signed automatic updates.
+**Also included:** voice dictation in quick add · recurring blocks · multiple Google Calendar accounts and calendar links · sync between computers through a private GitHub repo · notifications and soft sounds · a one-minute breathing guide · an evening wind-down · keyboard control · signed automatic updates.
 
 <br>
 
@@ -401,8 +442,67 @@ Screen cues are optional signals on your desktop. They help you keep the time in
 | **Edge glow** | The edge of the screen breathes in the colour of the task. It breathes faster in the last 5 minutes and in the last minute. | Soft, Medium, Strong |
 | **Time bar** | A thin bar drains as the time goes. The time left shows at its tip. | Top, bottom, left or right edge. Thin or Bold. |
 | **HUD** | A small pill with a ring, the task name and the time left. | Any corner |
+| **Colour** | All cues use the colour of the task, or one colour that you select. | Task colour, 7 calm colours, or any colour |
 
 When you turn on a cue, Daybloom shows a preview for a few seconds. You can also turn cues on and off in the focus launcher. Use the HUD, the widget, or both.
+
+### Use privacy mode
+
+Privacy mode keeps Daybloom's windows out of screenshots, screen recordings and screen sharing. Use it when you share your screen.
+
+1. Push <kbd>⇧</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>P</kbd> on Windows). You can also open the **More** menu (…) in the top bar, or the Daybloom icon in the menu bar or notification area, and select **Privacy mode**.
+2. A **Private** pill shows in the top bar. Click it to turn privacy mode off.
+3. Optional: open **Settings › Privacy** and turn on **Hide block names**. The widget, the HUD and the menu bar then show the category (for example “Focus”) instead of the block name.
+
+> [!NOTE]
+> Windows leaves protected windows out of captures. On macOS, screenshots leave them out, but some screen recorders can still capture them. Use **Hide block names** as a second layer when you share your screen on a Mac.
+
+### Use addons
+
+1. Click the **Addons** button (puzzle) in the top bar. You can also open **Settings › Addons**.
+2. Turn on an addon with its switch.
+3. The addon adds its own button to the top bar and its fields to the block editor.
+
+Addon data is kept separately from your blocks. When you turn an addon off, your day does not change, and the addon keeps its data for later.
+
+### Bill your time with Work
+
+**Do these steps one time:**
+
+1. Turn on **Work** in the Addons gallery.
+2. Open **Work › Projects** and click **New project**.
+3. Enter a name, and select or add a client.
+4. Set a rate: **Per hour**, **Per block** (a fixed amount), or **Client rate**. Optional: set a budget in hours or money.
+5. Open **Work › Bills › Your details on bills** and enter your name, email and address.
+
+**Every day:**
+
+1. Open a block and select its project under **Work**. The block editor shows what the block earns.
+2. Finish the block. Daybloom adds it to your earnings. If you track time on the block, Daybloom bills the tracked time.
+3. Open **Work › Overview** to see the week or the month: earnings, billable time, effective rate, budgets and the work that is not billed yet.
+
+**Make a bill:**
+
+1. Open **Work › Bills** and click **New bill**.
+2. Select the client, the period and how to group the lines (by block, by project or by day).
+3. Look at the preview, then click **Save bill**.
+4. Click **Print / PDF**. The bill opens in your browser. Print it and select **Save as PDF**. Click **CSV** for a spreadsheet.
+5. Click **Mark sent** and **Mark paid** to keep the status. Work that is on a bill never goes on a second bill.
+
+Exports go to your **Downloads** folder.
+
+### Track your time
+
+1. Turn on **Time Tracker** in the Addons gallery.
+2. Click the stopwatch button in the top bar.
+3. Select what you work on (the current block, a later block or a project), then click **Start**. You can also click **Track this block** in the block editor.
+4. The time runs in a pill in the top bar. Click the square to stop.
+
+- **Focus sessions** track themselves. Turn this off in **Time Tracker › Settings**.
+- **Time away:** when you do not use the computer for 5 minutes (you can change this), Daybloom asks what to do with that time: **Keep it**, **Drop it**, or **Drop it and stop**.
+- **Edit entries:** in **Today**, click the times of an entry to change them. Click **Add time** to add time that you forgot to track.
+- **Week:** see the hours of each day and the totals by block. Click **Export timesheet (CSV)**.
+- **Activity (optional):** turn on **Note the apps I use while tracking**. Daybloom notes the name of the app in front every 30 seconds, only while the stopwatch runs. On Windows you can also note window titles. This data stays on your computer.
 
 ### Use the desktop widget
 
@@ -440,12 +540,27 @@ Repeating blocks keep their clock times. Calendar events keep their real moments
 
 ### Connect calendars
 
-Open **Settings › Calendars**.
+Open the **More** menu (…) in the top bar and select **Calendars**. You can also open **Settings › Calendars**.
 
-- **Google Calendar:** click **Add Google account**. You can add more than one account, for example work and personal. Daybloom needs a Google OAuth client of the type “Desktop app”. Enter its ID under **Google client ID**. See [docs/calendar.md](docs/calendar.md).
-- **Other calendars:** paste an ICS or webcal link. Outlook, iCloud and many other services give such links.
+**Add a calendar link (Google, iCloud, Outlook and others):**
 
-Calendar events are read-only. When the same event is in two accounts, Daybloom shows it one time.
+1. Click **Calendar link**.
+2. Paste the link. Daybloom checks it and shows a preview: the name, the next event and the number of events in the next 2 weeks.
+3. Change the name if you want, then click **Add**.
+
+**Find the link for a Google calendar:**
+
+1. Open Google Calendar on the web.
+2. Open **Settings**, then select the calendar under **Settings for my calendars**.
+3. Select **Integrate calendar**.
+4. Copy **Secret address in iCal format**. Use the secret address: the public address works only if the calendar is public.
+
+> [!WARNING]
+> A secret address gives read access to your calendar. Do not share it. Daybloom keeps calendar links in the system keychain, not in its files.
+
+**Sign in with Google:** click **Google account**. You can add more than one account, for example work and personal. Daybloom needs a Google OAuth client of the type “Desktop app”. See [docs/calendar.md](docs/calendar.md).
+
+Calendar events are read-only. When the same event is in two accounts, Daybloom shows it one time. Each calendar has a switch to show or hide it.
 
 ### Sync with GitHub
 
@@ -492,6 +607,7 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
 | <kbd>V</kbd> | Hold to talk, or tap to talk hands-free |
 | <kbd>W</kbd> | Desktop widget |
 | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>K</kbd> | Ask Daybloom |
+| <kbd>⇧</kbd><kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>P</kbd> | Privacy mode on or off |
 | <kbd>,</kbd> | Settings |
 | <kbd>Esc</kbd> | Close the panel, cancel listening, or clear the selection |
 
@@ -502,7 +618,8 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
 - Daybloom keeps all data on your computer:
   - macOS: `~/Library/Application Support/app.daybloom.desktop/state/`
   - Windows: `%APPDATA%\app.daybloom.desktop\state\`
-- Tokens and calendar sign-ins stay in the system keychain (macOS Keychain or Windows Credential Manager).
+- Tokens, calendar sign-ins and calendar links stay in the system keychain (macOS Keychain or Windows Credential Manager).
+- Work and Time Tracker data stay on your computer. GitHub sync does not include them yet.
 - Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
 - Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
 - To make a backup, open **Settings › Your data** and click **Export**. To restore, click **Import**.
@@ -595,10 +712,12 @@ src/
   lib/assistant/     Needle and Whistle engines (WebAssembly workers), tools, matcher and cards
   lib/voice/         microphone capture, resampler, voice activity, spoken-text rules, voice state
   lib/sync/          GitHub sync: Contents API client and three-way merge
+  lib/addons/        addon registry; work/ (rates, earnings, bills) and tracker/ (entries, idle, timesheets)
   lib/platform.ts    the only connection to the native shell (commands and events)
   components/        top bar, timeline, panels, settings, focus mode, assistant cards
   views/             MainView (planner), WidgetView (desktop dial), OverlayView (screen cues)
-src-tauri/           Rust shell: windows, tray, widget layers, screen-cue overlay, keychain, OAuth loopback, model downloads
+src-tauri/           Rust shell: windows, tray, widget layers, screen-cue overlay, privacy mode, exports,
+                     idle and app activity, keychain, OAuth loopback, model downloads
 docs/                calendar notes and the media in this README
 ```
 

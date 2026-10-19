@@ -48,6 +48,7 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling");
     let w = b.build().map_err(|e| e.to_string())?;
     w.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+    crate::privacy::apply(app, &w);
     place(app, &w)?;
     Ok(w)
 }

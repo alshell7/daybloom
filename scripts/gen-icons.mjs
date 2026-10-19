@@ -57,6 +57,11 @@ const ICONS = [
   ['mic', 'mic', null], ['mic-off', 'mic-off', null], ['audio-lines', 'audio-lines', null], ['monitor', 'monitor', null],
   ['panel-top', 'panel-top', null], ['panel-bottom', 'panel-bottom', null], ['panel-left', 'panel-left', null], ['panel-right', 'panel-right', null],
   ['scan', 'scan', null], ['gauge', 'gauge', null], ['square', 'square', null], ['sparkle', 'sparkle', null], ['layers', 'layers', null],
+  ['eye-off', 'eye-off', null], ['shield', 'shield-check', null], ['puzzle', 'puzzle', null], ['receipt', 'receipt', null],
+  ['file-text', 'file-text', null], ['download', 'download', null], ['dollar', 'circle-dollar-sign', null], ['folder', 'folder', null],
+  ['building', 'building-2', null], ['printer', 'printer', null], ['tag', 'tag', null], ['percent', 'percent', null], ['user', 'user', null],
+  ['plug', 'plug', null], ['app-window', 'app-window', null], ['chart-pie', 'chart-pie', null], ['chart-column', 'chart-column', null],
+  ['badge-check', 'badge-check', null], ['timer-reset', 'timer-reset', null], ['pointer', 'mouse-pointer-2', null], ['coins', 'coins', null],
 ];
 
 // Aliased icons are absent from icon-nodes.json; read their SVG instead.

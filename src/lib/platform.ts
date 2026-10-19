@@ -145,6 +145,41 @@ export const platform = {
     return show !== false;
   },
 
+  /**
+   * Save an export (a bill, a timesheet) to Downloads; `then` opens it or shows it in its
+   * folder. In a browser the file downloads instead. Returns where it went.
+   */
+  async exportFile(name: string, contents: string, then?: 'open' | 'reveal'): Promise<string> {
+    if (isTauri) return invoke<string>('export_save', { name, contents, then: then ?? null });
+    const type = name.endsWith('.csv') ? 'text/csv' : name.endsWith('.json') ? 'application/json' : 'text/html';
+    const url = URL.createObjectURL(new Blob([contents], { type: `${type};charset=utf-8` }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return name;
+  },
+
+  /** Privacy mode: keep every Daybloom window out of screenshots and recordings. */
+  async setPrivacy(on: boolean): Promise<void> {
+    if (isTauri) await invoke('privacy_set', { on });
+  },
+
+  /** Privacy mode changed natively (the tray menu). */
+  onPrivacyChange(cb: (on: boolean) => void): () => void {
+    if (!isTauri) return () => {};
+    let off: (() => void) | null = null;
+    let dead = false;
+    import('@tauri-apps/api/event').then(({ listen }) =>
+      listen<{ on: boolean }>('daybloom://privacy', (e) => cb(!!e.payload?.on)).then((u) => (dead ? u() : (off = u))),
+    );
+    return () => {
+      dead = true;
+      off?.();
+    };
+  },
+
   /** Screen cues window (edge glow, time bar, HUD). Desktop only. */
   async showOverlay(show: boolean): Promise<boolean> {
     if (isTauri) return invoke<boolean>('overlay_show', { show });

@@ -338,10 +338,12 @@ function calendarMeta(props: Prop[]): { name?: string; color?: string; timezone?
   };
 }
 
-/** Calendar name/colour only; stops before the first VEVENT, so it's cheap. */
-export function readIcsMeta(text: string): { name?: string; color?: string } {
-  const { name, color } = calendarMeta(lex(text, true).calendar);
-  return { name, color };
+/** Calendar name, colour and time zone only; stops before the first VEVENT, so it's cheap. */
+export function readIcsMeta(text: string): { name?: string; color?: string; timeZone?: string } {
+  const { calendar, aliases } = lex(text, true);
+  const { name, color, timezone } = calendarMeta(calendar);
+  const timeZone = timezone ? (resolveTimeZone(timezone, aliases) ?? undefined) : undefined;
+  return { name, color, ...(timeZone ? { timeZone } : {}) };
 }
 
 // ---------------------------------------------------------------------------
@@ -673,11 +675,20 @@ export function parseIcs(text: string, range: TimeRange): IcsCalendar {
 export const FEED_CALENDAR_ID = 'feed';
 /** Re-use a fetched feed for this long, so listCalendars + fetchEvents cost one request. */
 const FEED_REUSE_MS = 30_000;
+/** Adding a calendar right after previewing it reuses the preview's download. */
+const CONNECT_REUSE_MS = 20_000;
 const FEED_COLORS = ['#5b8def', '#3fa66b', '#e5793b', '#9b6ad6', '#d0587e', '#2fa3a8', '#c99a2e'];
 
-/** webcal:// → https://, trimmed and validated. Throws `CalendarError('invalid')`. */
+/**
+ * webcal:// → https://, trimmed and validated. Quotes or angle brackets copied along with
+ * the link are dropped. Throws `CalendarError('invalid')`.
+ */
 export function normalizeIcsUrl(input: string): string {
-  const raw = input.trim().replace(/^webcals?:\/\//i, 'https://');
+  const raw = input
+    .trim()
+    .replace(/^[<"'“‘]+|[>"'”’]+$/g, '')
+    .trim()
+    .replace(/^webcals?:\/\//i, 'https://');
   let url: URL;
   try {
     url = new URL(raw);
@@ -700,6 +711,42 @@ export function icsAccountId(normalizedUrl: string): string {
   return `ics:${hash(normalizedUrl)}`;
 }
 
+/** Keychain entry that holds an ICS account's full link. */
+export function icsSecretKey(accountId: string): string {
+  return `${accountId}:url`;
+}
+
+/** A last path segment we can show: a plain word with a calendar extension, e.g. `basic.ics`. */
+const SAFE_FILE = /^[a-z_-]{1,24}\.(?:ics|ical|icalendar|ifb|vcs)$/i;
+
+/**
+ * A short form of a calendar link that is safe to show and to store: the host, plus the file
+ * name when it is a plain word. Tokens in the path, the query and any user info are dropped.
+ * `https://calendar.google.com/calendar/ical/x%40gmail.com/private-ab12/basic.ics` →
+ * `calendar.google.com/…/basic.ics`.
+ */
+export function redactIcsUrl(url: string): string {
+  let u: URL;
+  try {
+    u = new URL(url.trim().replace(/^webcals?:\/\//i, 'https://'));
+  } catch {
+    return 'calendar link';
+  }
+  const host = u.hostname.replace(/^www\./, '');
+  const segments = u.pathname.split('/').filter(Boolean);
+  const last = segments[segments.length - 1] ?? '';
+  const file = SAFE_FILE.test(last) ? last : '';
+  const query = u.search.length > 1 ? '?…' : '';
+  if (!segments.length) return host + (query ? `/${query}` : '');
+  if (segments.length === 1 && file) return `${host}/${file}${query}`;
+  return `${host}/…${file ? `/${file}` : ''}${query}`;
+}
+
+/** Replace every link inside a message with its redacted form, so errors never carry a token. */
+export function scrubUrls(text: string): string {
+  return text.replace(/\b(?:https?|webcals?):\/\/[^\s"'<>)\]]+/gi, (m) => redactIcsUrl(m));
+}
+
 interface Feed {
   text: string;
   fetchedAt: number;
@@ -708,6 +755,19 @@ interface Feed {
 }
 
 const feeds = new Map<string, Feed>();
+
+/**
+ * Keep a feed that was just fetched elsewhere (the add-calendar preview), so adding the
+ * calendar and its first sync reuse it instead of downloading it again.
+ */
+export function rememberFeed(url: string, text: string, headers?: Headers): void {
+  feeds.set(url, {
+    text,
+    fetchedAt: Date.now(),
+    etag: headers?.get('etag') ?? undefined,
+    lastModified: headers?.get('last-modified') ?? undefined,
+  });
+}
 
 async function fetchFeed(url: string, maxAgeMs = FEED_REUSE_MS): Promise<string> {
   const hit = feeds.get(url);
@@ -739,12 +799,7 @@ async function fetchFeed(url: string, maxAgeMs = FEED_REUSE_MS): Promise<string>
   if (!text.includes('BEGIN:VCALENDAR')) {
     throw new CalendarError('invalid', 'That link didn’t return a calendar (.ics) file.');
   }
-  feeds.set(url, {
-    text,
-    fetchedAt: Date.now(),
-    etag: res.headers.get('etag') ?? undefined,
-    lastModified: res.headers.get('last-modified') ?? undefined,
-  });
+  rememberFeed(url, text, res.headers);
   return text;
 }
 
@@ -765,7 +820,8 @@ export function createIcsProvider(): CalendarProvider {
 
     async connect(input) {
       const url = normalizeIcsUrl(input?.url ?? '');
-      const text = await fetchFeed(url, 0);
+      // A preview from the last few seconds is fresh enough to validate the link.
+      const text = await fetchFeed(url, CONNECT_REUSE_MS);
       const id = icsAccountId(url);
       const host = new URL(url).hostname;
       const calendar = feedCalendar(id, text, input?.label?.trim() || host);

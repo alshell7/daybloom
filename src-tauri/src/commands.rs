@@ -113,6 +113,12 @@ pub async fn overlay_show(app: AppHandle, show: bool) -> Result<bool, String> {
     crate::overlay::set_visible(&app, show)
 }
 
+/// Privacy mode on or off for every window (also mirrored in the tray menu).
+#[tauri::command]
+pub fn privacy_set(app: AppHandle, on: bool) {
+    crate::privacy::set(&app, on);
+}
+
 #[tauri::command]
 pub fn overlay_metrics(app: AppHandle) -> Option<crate::overlay::Metrics> {
     crate::overlay::metrics(&app)

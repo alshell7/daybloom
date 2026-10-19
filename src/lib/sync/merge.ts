@@ -72,6 +72,8 @@ export const SHARED_SETTINGS = [
   'nudges',
   'voice',
   'focus',
+  'privacy',
+  'addons',
   'widget.preset',
   'widget.finish',
 ] as const satisfies readonly SettingsPath[];

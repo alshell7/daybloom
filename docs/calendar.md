@@ -74,7 +74,7 @@ const stop = cal.startAutoSync();        // main window only (see below)
 | Event cache (`calendar-cache` key) | App-data JSON covering yesterday through +14 days, so the widget renders offline. |
 | Custom OAuth client (`calendar-google-client` key) | App-data JSON. Set through `calendarService.setGoogleClient()`. |
 
-ICS URLs are stored in the accounts JSON as typed. A "secret address" URL is effectively a read-only credential for that calendar. Moving it to the keychain is a possible hardening step.
+| ICS feed URL | OS keychain only, under `platform.secrets` key `ics:<hash>:url` (`icsSecretKey`). A "secret address" URL is a read-only credential for that calendar. The accounts JSON keeps only a shortened `displayUrl` (for example `calendar.google.com/…/basic.ics`) and `urlInKeychain: true`. Plain URLs written by older versions move to the keychain on first load. Removing the account deletes the entry. |
 
 Network behaviour: 429, 5xx and Google's 403 `rateLimitExceeded` are retried up to 2 times with jittered exponential backoff (honouring `Retry-After`). `invalid_grant` marks the account `reconnect` instead of failing the sync.
 

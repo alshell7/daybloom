@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
   store: new Map<string, string>(),
+  secrets: new Map<string, string>(),
   external: new Set<(key: string) => void>(),
 }));
 
@@ -15,13 +16,18 @@ vi.mock('../platform', () => ({
     }),
     fetch: vi.fn(),
     openExternal: vi.fn(),
-    secrets: { get: vi.fn(), set: vi.fn(), delete: vi.fn(async () => {}) },
+    secrets: {
+      get: vi.fn(async (account: string) => h.secrets.get(account) ?? null),
+      set: vi.fn(async (account: string, value: string) => void h.secrets.set(account, value)),
+      delete: vi.fn(async (account: string) => void h.secrets.delete(account)),
+    },
     oauth: { listen: vi.fn(), wait: vi.fn() },
   },
 }));
 
 import type { CalendarEvent } from '../engine/types';
 import { platform } from '../platform';
+import { icsAccountId, icsSecretKey, normalizeIcsUrl } from './ics';
 import { ACCOUNTS_KEY, CACHE_KEY, createCalendarService, defaultSyncWindow, type CalendarService } from './service';
 import {
   CalendarError,
@@ -128,6 +134,7 @@ const titles = (events: CalendarEvent[]) => events.map((e) => e.title);
 
 beforeEach(() => {
   h.store.clear();
+  h.secrets.clear();
   h.external.clear();
   vi.clearAllMocks();
 });
@@ -355,5 +362,165 @@ describe('calendar service: persistence', () => {
     h.external.forEach((cb) => cb(CACHE_KEY));
     await vi.waitFor(() => expect(listener).toHaveBeenCalled());
     expect(service.eventsBetween(...today())).toEqual([]);
+  });
+});
+
+// -- ICS links are credentials ---------------------------------------------------
+
+/** Synthetic link with a token in the path and the query, like real secret feeds. */
+const SECRET = 'private-0f0f0f0f0f0f0f0f';
+const FEED_URL = `https://calendar.example.test/ical/someone%40example.test/${SECRET}/basic.ics?key=${SECRET}`;
+const FEED_ID = icsAccountId(normalizeIcsUrl(FEED_URL));
+
+/** A fake ICS provider that records the link each call receives. */
+function fakeIcs() {
+  const seenUrls: (string | undefined)[] = [];
+  const feed: CalendarInfo = { id: 'feed', name: 'Team feed', color: '#3fa66b', enabled: true, primary: true };
+  const provider: CalendarProvider = {
+    kind: 'ics',
+    connect: vi.fn(async (input?: { url?: string; label?: string }): Promise<CalendarAccount> => {
+      const url = normalizeIcsUrl(input?.url ?? '');
+      return { id: icsAccountId(url), provider: 'ics', label: input?.label ?? 'Team feed', url, calendars: [{ ...feed }], enabled: true, error: null };
+    }),
+    listCalendars: vi.fn(async (acc: CalendarAccount) => {
+      seenUrls.push(acc.url);
+      if (!acc.url) throw new CalendarError('invalid', 'no link');
+      return [{ ...feed }];
+    }),
+    fetchEvents: vi.fn(async (acc: CalendarAccount, cal: CalendarInfo) => {
+      seenUrls.push(acc.url);
+      return [event(acc.id, cal.id, 'feed standup', at(0, 9), 1, { provider: 'ics' })];
+    }),
+    disconnect: vi.fn(async () => {}),
+  };
+  return { provider, seenUrls };
+}
+
+function makeIcsService(provider: CalendarProvider) {
+  const s = createCalendarService({ providers: { ics: provider }, now: () => NOW });
+  services.push(s);
+  return s;
+}
+
+/** Everything the app wrote to plain storage, as one string. */
+const everythingOnDisk = () => [...h.store.values()].join('\n');
+
+describe('calendar service: ICS links stay in the keychain', () => {
+  it('stores the link in the keychain and only a short form on disk', async () => {
+    const ics = fakeIcs();
+    const service = makeIcsService(ics.provider);
+    const account = await service.addIcs(`  webcal://${FEED_URL.slice('https://'.length)}  `, 'Team');
+    await service.sync(undefined, { force: true });
+
+    expect(h.secrets.get(icsSecretKey(FEED_ID))).toBe(normalizeIcsUrl(FEED_URL));
+    expect(everythingOnDisk()).not.toContain(SECRET);
+    expect(everythingOnDisk()).not.toContain('someone%40example.test');
+    const stored = JSON.parse(h.store.get(ACCOUNTS_KEY)!).accounts[0];
+    expect(stored).not.toHaveProperty('url');
+    expect(stored).toMatchObject({ id: FEED_ID, displayUrl: 'calendar.example.test/…/basic.ics?…', urlInKeychain: true });
+
+    // The UI never sees the link either; providers do.
+    expect(account).not.toHaveProperty('url');
+    expect(service.getAccounts().every((a) => !('url' in a))).toBe(true);
+    expect(ics.seenUrls.at(-1)).toBe(normalizeIcsUrl(FEED_URL));
+    expect(titles(service.eventsBetween(...today()))).toEqual(['feed standup']);
+  });
+
+  it('reads the link back from the keychain when a restarted app syncs', async () => {
+    await makeIcsService(fakeIcs().provider).addIcs(FEED_URL);
+    const ics = fakeIcs();
+    const restarted = makeIcsService(ics.provider);
+    await restarted.init();
+    expect(platform.secrets.get).not.toHaveBeenCalled(); // only when it is needed
+
+    await restarted.sync(undefined, { force: true });
+    expect(platform.secrets.get).toHaveBeenCalledWith(icsSecretKey(FEED_ID));
+    expect(ics.seenUrls).toEqual([normalizeIcsUrl(FEED_URL), normalizeIcsUrl(FEED_URL)]);
+    expect(restarted.getAccounts()[0].error).toBeNull();
+  });
+
+  it('moves a plain link from an older version into the keychain, then rewrites the file', async () => {
+    const url = normalizeIcsUrl(FEED_URL);
+    h.store.set(
+      ACCOUNTS_KEY,
+      JSON.stringify({
+        version: 1,
+        accounts: [
+          { id: FEED_ID, provider: 'ics', label: 'Team', url, calendars: [{ id: 'feed', name: 'Team feed', color: '#3fa66b', enabled: true }], enabled: true, error: null },
+        ],
+      }),
+    );
+    const ics = fakeIcs();
+    const service = makeIcsService(ics.provider);
+    await service.init();
+
+    expect(h.secrets.get(icsSecretKey(FEED_ID))).toBe(url);
+    expect(everythingOnDisk()).not.toContain(SECRET);
+    expect(JSON.parse(h.store.get(ACCOUNTS_KEY)!).accounts[0]).toMatchObject({
+      id: FEED_ID,
+      label: 'Team',
+      displayUrl: 'calendar.example.test/…/basic.ics?…',
+      urlInKeychain: true,
+    });
+    await service.sync(undefined, { force: true });
+    expect(ics.seenUrls[0]).toBe(url);
+    expect(titles(service.eventsBetween(...today()))).toEqual(['feed standup']);
+  });
+
+  it('leaves an old plain link where it was while the keychain refuses it, and moves it later', async () => {
+    const url = normalizeIcsUrl(FEED_URL);
+    const legacy = JSON.stringify({ version: 1, accounts: [{ id: FEED_ID, provider: 'ics', label: 'Team', url, calendars: [], enabled: true }] });
+    h.store.set(ACCOUNTS_KEY, legacy);
+    vi.mocked(platform.secrets.set).mockRejectedValueOnce(new Error('keychain locked'));
+
+    const first = makeIcsService(fakeIcs().provider);
+    await first.init();
+    await first.sync(undefined, { force: true }); // saves the account file again
+    expect(h.secrets.has(icsSecretKey(FEED_ID))).toBe(false);
+    expect(JSON.parse(h.store.get(ACCOUNTS_KEY)!).accounts[0].url).toBe(url); // not lost
+
+    const second = makeIcsService(fakeIcs().provider);
+    await second.init();
+    expect(h.secrets.get(icsSecretKey(FEED_ID))).toBe(url);
+    expect(everythingOnDisk()).not.toContain(SECRET);
+  });
+
+  it('refuses to add a link when the keychain fails, so it never falls back to the file', async () => {
+    vi.mocked(platform.secrets.set).mockRejectedValueOnce(new Error('no keychain'));
+    const service = makeIcsService(fakeIcs().provider);
+    await expect(service.addIcs(FEED_URL)).rejects.toMatchObject({ code: 'config' });
+    expect(service.getAccounts()).toEqual([]);
+    expect(everythingOnDisk()).not.toContain(SECRET);
+  });
+
+  it('removing the account deletes its keychain entry', async () => {
+    const ics = fakeIcs();
+    const service = makeIcsService(ics.provider);
+    await service.addIcs(FEED_URL);
+    await service.removeAccount(FEED_ID);
+
+    expect(h.secrets.has(icsSecretKey(FEED_ID))).toBe(false);
+    expect(ics.provider.disconnect).toHaveBeenCalledWith(expect.objectContaining({ id: FEED_ID, url: normalizeIcsUrl(FEED_URL) }));
+    expect(JSON.parse(h.store.get(ACCOUNTS_KEY)!).accounts).toEqual([]);
+  });
+
+  it('asks for the link again when its keychain entry is gone', async () => {
+    await makeIcsService(fakeIcs().provider).addIcs(FEED_URL);
+    h.secrets.clear();
+    const restarted = makeIcsService(fakeIcs().provider);
+    await restarted.sync(undefined, { force: true });
+    const [acc] = restarted.getAccounts();
+    expect(acc.error).toMatch(/Add the link again/);
+    expect(acc.errorCode).toBe('invalid');
+  });
+
+  it('never stores a link that appears inside an error message', async () => {
+    const ics = fakeIcs();
+    vi.mocked(ics.provider.listCalendars).mockRejectedValue(new Error(`request failed for url (${normalizeIcsUrl(FEED_URL)})`));
+    const service = makeIcsService(ics.provider);
+    await service.addIcs(FEED_URL);
+    await service.sync(undefined, { force: true });
+    expect(service.getAccounts()[0].error).toBe('request failed for url (calendar.example.test/…/basic.ics?…)');
+    expect(everythingOnDisk()).not.toContain(SECRET);
   });
 });
