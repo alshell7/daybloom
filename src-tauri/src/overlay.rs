@@ -51,14 +51,6 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .focusable(false)
         .visible(false)
         .visible_on_all_workspaces(true);
-    // Windows: a window shown after it is built is activated (SW_SHOW) and takes the focus from
-    // whatever you are typing in, `focused(false)` notwithstanding; one built visible is shown
-    // without activation. It starts as one pixel and covers the display only once it ignores
-    // the mouse, so it never catches a click on the way.
-    #[cfg(windows)]
-    {
-        b = b.visible(true).inner_size(1.0, 1.0).position(0.0, 0.0);
-    }
     if let Some(args) = browser_args(app) {
         b = b.additional_browser_args(&args);
     }
@@ -74,7 +66,8 @@ pub fn set_visible(app: &AppHandle, show: bool) -> Result<bool, String> {
     if show {
         let w = ensure(app)?;
         place(app, &w)?;
-        w.show().map_err(|e| e.to_string())?;
+        // Shown without activation, so it never takes the keyboard focus (see `show_quietly`).
+        crate::show_quietly(&w)?;
         // Showing can re-enable hit testing on some platforms.
         w.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
         Ok(true)

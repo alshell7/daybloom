@@ -31,10 +31,33 @@ pub(crate) fn show_main(app: &AppHandle) {
 /// windows' `additionalBrowserArgs` turn off Chromium's IntensiveWakeUpThrottling, which would
 /// otherwise stretch that tick to a minute (late notifications) after 5 minutes hidden.
 #[cfg(windows)]
-fn set_webview_visible(w: &tauri::WebviewWindow, visible: bool) {
+pub(crate) fn set_webview_visible(w: &tauri::WebviewWindow, visible: bool) {
     let _ = w.with_webview(move |webview| unsafe {
         let _ = webview.controller().SetIsVisible(visible);
     });
+}
+
+/// Shows a window without taking the keyboard focus from whatever you are typing in.
+/// Windows activates a window on a plain show (SW_SHOW) despite `focus: false`, so there it
+/// is shown with SW_SHOWNOACTIVATE and WebView2 is told the page is visible. (Building the
+/// window already visible also avoids activation, but leaves WebView2's compositor busy:
+/// ~20% of a core in its GPU process while idle.) Elsewhere a plain show leaves focus alone.
+pub(crate) fn show_quietly(w: &tauri::WebviewWindow) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+        let hwnd = w.hwnd().map_err(|e| e.to_string())?;
+        // SAFETY: a valid top-level window handle owned by this process.
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        }
+        set_webview_visible(w, true);
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        w.show().map_err(|e| e.to_string())
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
