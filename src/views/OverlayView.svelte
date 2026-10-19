@@ -4,7 +4,7 @@
   //    there's time, quicker in the last five minutes and the last minute. Opacity only.
   //  · Time bar — a thin bar on any edge drains as the time goes, with the minutes at its tip.
   //  · HUD — a small pill in a corner: a ring, the name, the time left.
-  // Per-second values are set without transitions; every loop is compositor-only.
+  // Per-second values are set without transitions; the glow steps its opacity from a timer.
   import { onMount } from 'svelte';
   import { cubicOut } from 'svelte/easing';
   import { fade, fly } from 'svelte/transition';
@@ -76,6 +76,48 @@
   });
   const R = 13;
   const CIRC = 2 * Math.PI * R;
+
+  // The glow breathes from a timer, a few steps a second, not as a 60 fps CSS animation: on macOS
+  // each frame of a window the size of the display costs the compositor (WindowServer) the same,
+  // however little of it changes (~16% of a core on a 5K display at 60 fps). A slow, soft glow
+  // looks the same at 15 steps a second (30 already costs as much as 60); the last minute's
+  // quick breath gets 20.
+  const PERIOD: Record<string, number> = { calm: 6, break: 8, urgent: 3.6, final: 1.9 };
+  const FPS: Record<string, number> = { calm: 15, break: 15, urgent: 15, final: 20 };
+  const LOW = 0.22;
+  const HIGH = 0.95;
+  const ease = (x: number) => 0.5 - 0.5 * Math.cos(Math.PI * x);
+  // In for 42% of the breath, a short hold at the top, then out.
+  function level(phase: number): number {
+    if (phase < 0.42) return LOW + (HIGH - LOW) * ease(phase / 0.42);
+    if (phase < 0.55) return HIGH;
+    return HIGH - (HIGH - LOW) * ease((phase - 0.55) / 0.45);
+  }
+  function breath(node: HTMLElement, p: { period: number; fps: number; still: boolean }) {
+    let timer = 0;
+    let t0 = performance.now();
+    const step = () => {
+      node.style.opacity = level((((performance.now() - t0) / (p.period * 1000)) % 1 + 1) % 1).toFixed(3);
+      timer = window.setTimeout(step, 1000 / p.fps);
+    };
+    const run = () => {
+      clearTimeout(timer);
+      if (p.still) node.style.opacity = '0.3';
+      else step();
+    };
+    run();
+    return {
+      update(next: typeof p) {
+        // Keep the breath where it is when its pace changes (calm → urgent → final).
+        const now = performance.now();
+        const phase = (((now - t0) / (p.period * 1000)) % 1 + 1) % 1;
+        t0 = now - phase * next.period * 1000;
+        p = next;
+        run();
+      },
+      destroy: () => clearTimeout(timer),
+    };
+  }
 </script>
 
 <div
@@ -88,7 +130,9 @@
   aria-hidden="true"
 >
   {#if s && cfg.glow}
-    <div class="glow {cfg.glowStrength} {stage}" class:reduced transition:fade={{ duration: reduced ? 0 : 900 }}></div>
+    <div class="glow-in" transition:fade={{ duration: reduced ? 0 : 900 }}>
+      <div class="glow {cfg.glowStrength} {stage}" use:breath={{ period: PERIOD[stage] ?? 6, fps: FPS[stage] ?? 15, still: reduced || stage === 'paused' }}></div>
+    </div>
   {/if}
 
   {#if s && cfg.bar}
@@ -131,10 +175,13 @@
     font-family: var(--font-ui);
   }
 
-  /* ---- edge glow: painted once, then only its opacity breathes */
+  /* ---- edge glow: painted once, then only its opacity breathes (see `breath`) */
+  .glow-in,
   .glow {
     position: absolute;
     inset: 0;
+  }
+  .glow {
     --w: 90px;
     --a: 0.5;
     box-shadow:
@@ -142,7 +189,6 @@
       inset 0 0 calc(var(--w) * 0.25) 0 color-mix(in srgb, var(--c) calc(var(--a) * 70%), transparent);
     opacity: 0.35;
     will-change: opacity;
-    animation: breathe 6s ease-in-out infinite;
   }
   .glow.soft {
     --w: 56px;
@@ -152,33 +198,11 @@
     --w: 140px;
     --a: 0.62;
   }
-  .glow.break {
-    animation-duration: 8s;
-  }
   .glow.urgent {
-    animation-duration: 3.6s;
     --a: 0.7;
   }
   .glow.final {
-    animation-duration: 1.9s;
     --a: 0.8;
-  }
-  .glow.paused,
-  .glow.reduced {
-    animation: none;
-    opacity: 0.3;
-  }
-  @keyframes breathe {
-    0%,
-    100% {
-      opacity: 0.22;
-    }
-    42% {
-      opacity: 0.95;
-    }
-    55% {
-      opacity: 0.95;
-    }
   }
 
   /* ---- time bar */
