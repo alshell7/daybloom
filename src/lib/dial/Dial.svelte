@@ -5,7 +5,8 @@
   import HoverCard from './HoverCard.svelte';
   import RemainRing from './RemainRing.svelte';
   import { assignLanes } from '../engine/blocks';
-  import { mix } from '../engine/categories';
+  import { categoryColor, mix } from '../engine/categories';
+  import BreathOrb from './BreathOrb.svelte';
   import { atMinutes, addDays, formatDuration, formatTime, isoOf, MINUTE } from '../engine/time';
   import type { Block, ISODate, Minutes } from '../engine/types';
   import Icon from '../Icon.svelte';
@@ -41,6 +42,7 @@
     onadjust,
     ondroptask,
     breathing = false,
+    breathStart = 0,
     children,
   }: {
     presetId: PresetId;
@@ -71,6 +73,8 @@
     ondroptask?: (taskId: string, startMs: number) => void;
     /** Show the breathing guide in the face. */
     breathing?: boolean;
+    /** When the breathing minute began (app clock), so the orb joins it in step. */
+    breathStart?: number;
     children?: Snippet;
   } = $props();
 
@@ -651,8 +655,10 @@
     {/key}
   {/if}
 
-  {#if breathing}
-    <div class="breath" style:background={finish.ink} aria-hidden="true"></div>
+  {#if breathing && breathStart}
+    {#key breathStart}
+      <BreathOrb startAt={breathStart} color={categoryColor('rest', finish.dark)} dark={finish.dark} {reduced} />
+    {/key}
   {/if}
 
   {#if tip && !compact}
@@ -809,35 +815,6 @@
     to {
       stroke-dashoffset: -1.1;
       opacity: 0;
-    }
-  }
-  .breath {
-    position: absolute;
-    left: 25.8%;
-    top: 25.8%;
-    width: 48.4%;
-    height: 48.4%;
-    border-radius: 50%;
-    opacity: 0.16;
-    pointer-events: none;
-    will-change: transform, opacity;
-    /* 4s in · 4s hold · 6s out · 2s rest — a calm 16-second cycle */
-    animation: breath 16s ease-in-out infinite;
-  }
-  @keyframes breath {
-    0% {
-      transform: scale(0.45);
-      opacity: 0.08;
-    }
-    25%,
-    50% {
-      transform: scale(1);
-      opacity: 0.22;
-    }
-    87.5%,
-    100% {
-      transform: scale(0.45);
-      opacity: 0.08;
     }
   }
   .tip {

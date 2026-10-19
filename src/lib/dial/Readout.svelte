@@ -6,6 +6,7 @@
   import Rolling from './Rolling.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import { ROUNDS, type BreathState } from '../breath.svelte';
 
   let {
     state,
@@ -31,18 +32,12 @@
     compact?: boolean;
     reduced?: boolean;
     ontimer?: (action: 'pause' | 'resume' | 'stop' | 'skip') => void;
-    /** ms since the breathing guide started, or null. */
-    breath?: number | null;
+    /** Where the breathing minute is, or null. */
+    breath?: BreathState | null;
     onbreathe?: (on: boolean) => void;
   } = $props();
 
-  const breathPhase = $derived.by(() => {
-    if (breath == null) return null;
-    const t = breath % 16_000;
-    const cycle = Math.floor(breath / 16_000) + 1;
-    const phase = t < 4000 ? 'Breathe in' : t < 8000 ? 'Hold' : t < 14_000 ? 'Breathe out' : 'Rest';
-    return { phase, cycle };
-  });
+  const breathPhase = $derived(breath ?? null);
 
   const view = $derived.by(() => {
     if (timer) {
@@ -105,8 +100,17 @@
 
 <div class="readout" class:compact data-tone={breathPhase ? 'breath' : view.tone} aria-live="polite">
   {#if breathPhase}
-    <div class="breath-phase">{breathPhase.phase}</div>
-    <div class="sub">{breathPhase.cycle} of 4</div>
+    <div class="breath-words">
+      {#key `${breathPhase.round}:${breathPhase.id}`}
+        <div class="breath-phase" in:fly={{ y: reduced ? 0 : 6, duration: reduced ? 0 : 700, easing: cubicOut }} out:fly={{ y: reduced ? 0 : -6, duration: reduced ? 0 : 400 }}>{breathPhase.word}</div>
+      {/key}
+    </div>
+    <div class="sub breath-sub">
+      <span class="rounds" role="img" aria-label={`Round ${breathPhase.round} of ${ROUNDS}`}>
+        {#each Array(ROUNDS) as _, i (i)}<i class:on={i < breathPhase.round} class:now={i === breathPhase.round - 1}></i>{/each}
+      </span>
+      <span class="secs tnum" aria-hidden="true">{breathPhase.id === 'rest' ? '' : breathPhase.secondsLeft}</span>
+    </div>
     {#if onbreathe && !compact}
       <div class="controls"><button class="pill" onclick={() => onbreathe(false)}>Stop</button></div>
     {/if}
@@ -213,11 +217,42 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .breath-words {
+    display: grid;
+  }
   .breath-phase {
+    grid-area: 1 / 1;
     font-size: clamp(18px, 7cqi, 40px);
     font-weight: 300;
     letter-spacing: -0.02em;
     line-height: 1.1;
+  }
+  .breath-sub {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .rounds {
+    display: inline-flex;
+    gap: 5px;
+  }
+  .rounds i {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.25;
+    transition: opacity var(--dur-3) var(--ease-out), transform var(--dur-3) var(--ease-settle);
+  }
+  .rounds i.on {
+    opacity: 0.7;
+  }
+  .rounds i.now {
+    transform: scale(1.3);
+  }
+  .secs {
+    min-width: 1ch;
   }
   .pill {
     display: inline-flex;

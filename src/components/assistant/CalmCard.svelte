@@ -8,23 +8,17 @@
   import { clock } from '../../lib/stores/clock.svelte';
   import { taskFile } from '../../lib/stores/tasks.svelte';
   import { view } from '../../lib/stores/view.svelte';
+  import { BREATH, breath } from '../../lib/breath.svelte';
 
   let { kind }: { kind: 'breathe' | 'winddown' } = $props();
 
-  // 16-second cycle: 4 in, 4 hold, 6 out, 2 rest — four times.
-  const PHASES = [
-    { until: 4000, word: 'Breathe in', scale: 1 },
-    { until: 8000, word: 'Hold', scale: 1 },
-    { until: 14000, word: 'Breathe out', scale: 0.62 },
-    { until: 16000, word: 'Rest', scale: 0.62 },
-  ];
-  const t = $derived(view.breatheAt ? clock.now - view.breatheAt : -1);
-  const on = $derived(t >= 0 && t < 64_000);
-  const inCycle = $derived(on ? t % 16000 : 0);
-  const phase = $derived(PHASES.find((p) => inCycle < p.until) ?? PHASES[0]);
-  const phaseLen = $derived(phase.until - (PHASES[PHASES.indexOf(phase) - 1]?.until ?? 0));
-  const secs = $derived(Math.max(1, Math.ceil((phase.until - inCycle) / 1000)));
-  const round = $derived(Math.min(4, Math.floor(t / 16000) + 1));
+  // The shared rhythm (breath.svelte.ts); the orb fills on the in-breath and empties on the out.
+  const st = $derived(breath.state);
+  const on = $derived(!!st);
+  const phase = $derived({ word: st?.word ?? 'Breathe in', scale: st && (st.id === 'in' || st.id === 'hold') ? 1 : 0.62 });
+  const phaseLen = $derived(BREATH.find((p) => p.id === st?.id)?.ms ?? 4000);
+  const secs = $derived(st?.secondsLeft ?? 4);
+  const round = $derived(st?.round ?? 1);
 
   const review = $derived(kind === 'winddown' ? (taskFile.value.tasks, dayReview(view.today)) : null);
 </script>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { adjust, createFromRange, createNext, removeBlock, toggleDone } from '../lib/actions';
   import Dial from '../lib/dial/Dial.svelte';
   import Readout from '../lib/dial/Readout.svelte';
@@ -37,6 +38,7 @@
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
   import { voice, type VoiceSurface } from '../lib/voice/voice.svelte';
+  import { breath } from '../lib/breath.svelte';
   import TopBar from '../components/TopBar.svelte';
 
   const presetId = $derived(settings.value.preset);
@@ -208,6 +210,12 @@
     settings.value.widget.visible = vis;
   }
 
+  // The breathing minute's words step with its own timer (exact phase boundaries).
+  $effect(() => {
+    const at = view.breatheAt;
+    untrack(() => breath.watch(at));
+  });
+
   // Tray menu → app.
   $effect(() =>
     platform.onTray((a) => {
@@ -259,6 +267,7 @@
           onadjust={onAdjust}
           ondroptask={onDropTask}
           breathing={view.breathing}
+          breathStart={view.breatheAt}
         >
           <Readout
             state={view.now}
@@ -270,7 +279,7 @@
             timer={timed ? readoutTimer : null}
             reduced={view.reducedMotion}
             ontimer={onTimer}
-            breath={view.breathing ? clock.now - view.breatheAt : null}
+            breath={view.breathing ? breath.state : null}
             onbreathe={(on) => (view.breatheAt = on ? clock.now : 0)}
           />
         </Dial>

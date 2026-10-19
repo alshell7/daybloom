@@ -5,6 +5,7 @@ import { PRESETS, resolveFinish, type PresetId } from '../presets';
 import { THEME_BY_ID } from '../themes';
 import { openItems } from '../backlog';
 import { clock } from './clock.svelte';
+import { BREATH_MS } from '../breath.svelte';
 import { settings } from './settings.svelte';
 import { taskFile } from './tasks.svelte';
 import { timer } from './timer.svelte';
@@ -53,9 +54,9 @@ class View {
   railPreview = $state<null | { key: string; startMs: number; endMs: number }>(null);
   /** Direction of the last day change (for the dial's turn animation). */
   dayDir = $state<1 | -1>(1);
-  /** Breathing guide start time (0 = off). Four 16-second cycles. */
+  /** Breathing guide start time (0 = off). Four 16-second cycles (see breath.svelte.ts). */
   breatheAt = $state(0);
-  breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < 64_000);
+  breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < BREATH_MS);
 
   systemDark = $state(media('(prefers-color-scheme: dark)')?.matches ?? false);
   systemReduced = $state(media('(prefers-reduced-motion: reduce)')?.matches ?? false);
