@@ -46,6 +46,67 @@ export const NEEDLE_WEIGHTS = {
   file: 'needle3.cact',
 } as const;
 
+/** Whistle, the speech-to-text model by the same team, run by the same engine. */
+export const WHISTLE_WEIGHTS = {
+  url: 'https://huggingface.co/Cactus-Compute/whistle/resolve/741118687e1f008f06d1351a402a731274789790/whistle.cact',
+  sha256: 'b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb',
+  bytes: 16_919_407,
+  file: 'whistle.cact',
+} as const;
+
+/** One recognised word, with times in seconds from the start of the audio. */
+export interface SpokenWord {
+  word: string;
+  start: number;
+  end: number;
+  probability: number;
+}
+
+export interface TranscribeOptions {
+  /** "en", "de", "fr", "es", "it", "nl", "pl", or null to detect. */
+  language?: string | null;
+  /** Words and phrases to bias recognition towards (task titles, app words). */
+  keywords?: string[];
+  /** Include per-word times (transcribe only). */
+  words?: boolean;
+}
+
+export interface Transcript {
+  text: string;
+  language: string;
+  words: SpokenWord[];
+  /** Wall time for the call in ms. */
+  ms: number;
+}
+
+/** One live-transcription step: the words this step committed and the unconfirmed tail. */
+export interface StreamStep {
+  text: string;
+  words: SpokenWord[];
+  pending: string;
+  language: string;
+  /** Seconds of audio received so far. */
+  received: number;
+  ms: number;
+}
+
+/** The speech side of the engine (implemented by `whistle` in engine.svelte.ts). */
+export interface SpeechEngine {
+  readonly status: EngineStatus;
+  readonly progress: number;
+  readonly error: string | null;
+  hasWeights(): Promise<boolean>;
+  ensureReady(): Promise<void>;
+  /** 16 kHz mono float PCM in [-1, 1], any length. */
+  transcribe(pcm: Float32Array, opts?: TranscribeOptions): Promise<Transcript>;
+  /** Live: append about a second of audio and re-transcribe what is buffered. */
+  streamPush(pcm: Float32Array, opts?: TranscribeOptions): Promise<StreamStep>;
+  /** End the live stream: the tail becomes committed words. */
+  streamStop(): Promise<StreamStep>;
+  unload(): void;
+  forget(): Promise<void>;
+}
+
 /**
  * The engine API the assistant uses (implemented by `needle` in engine.svelte.ts).
  * All methods are safe to call before the weights exist; they reject with a clear error.

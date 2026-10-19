@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus](#use-focus-mode), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -115,7 +115,7 @@ See what you finished this week. A rhythm counts the days on which you finished 
 <td valign="top">
 
 ### Focus on one thing
-Focus mode shows only the current block, its steps and the next block.
+Focus mode shows only the session, the steps of the task and the next block.
 
 <img src="docs/media/focus.png" alt="Focus mode on a black theme with the current block and its steps.">
 
@@ -125,6 +125,34 @@ Focus mode shows only the current block, its steps and the next block.
 Four light themes and six dark themes, including true black.
 
 <img src="docs/media/themes.png" alt="Eight dials in the themes Fog, Linen, Mist, Sage, Black, Forest, Plum and Cocoa.">
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### Just say it
+Hold <kbd>V</kbd> and talk. Your words appear as you speak, and the assistant acts on them when you stop. Speech recognition runs on your computer.
+
+<img src="docs/media/voice.png" alt="The voice capsule while listening, and the answer card after 'Add yoga tomorrow at 7:30 for 30 minutes'.">
+
+</td>
+<td valign="top">
+
+### Focus your way
+Pick what to focus on and turn the dial to any length, from 1 minute to 2 hours. Use one stretch, or cycles with breaks.
+
+<img src="docs/media/focus-launcher.png" alt="The focus launcher with targets, a time dial set to 40 minutes, and length chips.">
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+### Cues at the edge of your screen
+An optional edge glow breathes in the colour of the task, and breathes faster near the end. A thin time bar drains on the edge that you choose. A small HUD shows the time left in a corner. None of them take a click.
+
+<img src="docs/media/screen-cues.png" alt="A desktop with a breathing blue edge glow, a time bar at the top, a HUD in the top-right corner, and the Daybloom widget.">
 
 </td>
 </tr>
@@ -140,7 +168,7 @@ A small, transparent dial floats over your work or sits on the desktop. On macOS
 </tr>
 </table>
 
-**Also included:** recurring blocks · multiple Google Calendar accounts and ICS links · sync between computers through a private GitHub repo · notifications and soft sounds · a one-minute breathing guide · an evening wind-down · keyboard control · signed automatic updates.
+**Also included:** voice dictation in quick add · recurring blocks · multiple Google Calendar accounts and ICS links · sync between computers through a private GitHub repo · notifications and soft sounds · a one-minute breathing guide · an evening wind-down · keyboard control · signed automatic updates.
 
 <br>
 
@@ -286,12 +314,38 @@ Examples:
 - `show backlog`
 - `how did my week go?`
 
+You can also speak your request. See [Talk to Daybloom](#talk-to-daybloom).
+
 The assistant works in **basic mode** without a download. For better understanding of requests, download **Needle**:
 
 1. Open **Settings › Assistant**.
 2. Click **Download** (35 MB, one time).
 
 Needle is a small on-device model by [Cactus Compute](https://cactuscompute.com/needle) (Apache-2.0). Daybloom checks the download with SHA-256. After the download, the assistant works offline. It does not send your requests to a server.
+
+### Talk to Daybloom
+
+**Talk once (push to talk):**
+
+1. Push and hold <kbd>V</kbd>.
+2. Say what you want. Example: “Add gym at 5 for 45 minutes”.
+3. Release <kbd>V</kbd>.
+
+**Talk hands-free:**
+
+1. Push <kbd>V</kbd> one time and release it.
+2. Speak. Daybloom stops listening when you pause.
+
+The voice capsule shows your words while you speak. When you stop, the assistant does the action and shows its card. Push <kbd>Enter</kbd> to send immediately, or <kbd>Esc</kbd> to cancel.
+
+You can also click the microphone in **Quick add** or in **Ask Daybloom**. In Quick add, your words go into the field. Look at the preview, then push <kbd>Enter</kbd>.
+
+The first time, Daybloom asks to download **Whistle** (17 MB, one time). Whistle is a speech model by [Cactus Compute](https://cactuscompute.com/blog/whistle) (Apache-2.0). It runs on your computer. Daybloom checks the download with SHA-256.
+
+> [!NOTE]
+> The microphone is on only while the capsule shows “Listening”. The first time, macOS or Windows asks for permission to use the microphone.
+
+To change the language, open **Settings › Assistant › Voice**. Commands are understood in English.
 
 ### See your week
 
@@ -319,12 +373,36 @@ Open **Settings › Transitions** to set the heads-up before a block ends (2, 5 
 
 In free time, click **Breathe · 1 min** in the centre of the dial for a one-minute breathing guide.
 
-### Use focus mode
+### Start a focus session
 
-1. Press <kbd>F</kbd>, or click the **Focus** button in the top bar.
-2. Do the current block. Tick each step when it is done.
-3. Click **Finished**, **+5 min** or **Just 2 minutes**.
-4. To go back to the planner, press <kbd>Esc</kbd>.
+1. Push <kbd>F</kbd>, or click the **Focus** button in the top bar.
+2. Under **Focus on**, select the current block, the next block, a backlog task or **Just focus**.
+3. Under **For how long**, drag the knob around the dial. One lap is 1 hour. Continue past 12 for a second hour.
+4. Or click a chip: **Rest of block**, **Until** the next block, a saved length, or **Just 2 min**.
+5. Under **Rhythm**, select **One stretch** or **Cycles with breaks**. For cycles, set the number of rounds.
+6. Click **Start focus**, or push <kbd>Enter</kbd>.
+
+Focus mode then shows only the session, the steps of the task and the next block. When the session ends, Daybloom asks if the task is done.
+
+- To pause, skip a round or stop, use the buttons in the centre of the dial.
+- To go back to the planner, push <kbd>Esc</kbd>. The session continues. Push <kbd>F</kbd> to see it again.
+- A backlog task that you focus on becomes a block on today's dial.
+
+### Use screen cues
+
+Screen cues are optional signals on your desktop. They help you keep the time in view, also when Daybloom is behind other windows. They do not take clicks or the keyboard.
+
+1. Open **Settings › Screen cues**.
+2. Under **Show them**, select **In focus sessions** or **For every block**.
+3. Turn on the cues that you want:
+
+| Cue | What it does | Options |
+|---|---|---|
+| **Edge glow** | The edge of the screen breathes in the colour of the task. It breathes faster in the last 5 minutes and in the last minute. | Soft, Medium, Strong |
+| **Time bar** | A thin bar drains as the time goes. The time left shows at its tip. | Top, bottom, left or right edge. Thin or Bold. |
+| **HUD** | A small pill with a ring, the task name and the time left. | Any corner |
+
+When you turn on a cue, Daybloom shows a preview for a few seconds. You can also turn cues on and off in the focus launcher. Use the HUD, the widget, or both.
 
 ### Use the desktop widget
 
@@ -410,11 +488,12 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
 | <kbd>Delete</kbd> | Remove the selected block |
 | <kbd>B</kbd> | Backlog |
 | <kbd>I</kbd> | Your week |
-| <kbd>F</kbd> | Focus mode |
+| <kbd>F</kbd> | Start a focus session (or show the running session) |
+| <kbd>V</kbd> | Hold to talk, or tap to talk hands-free |
 | <kbd>W</kbd> | Desktop widget |
 | <kbd>⌘</kbd>/<kbd>Ctrl</kbd> <kbd>K</kbd> | Ask Daybloom |
 | <kbd>,</kbd> | Settings |
-| <kbd>Esc</kbd> | Close the panel, or clear the selection |
+| <kbd>Esc</kbd> | Close the panel, cancel listening, or clear the selection |
 
 <br>
 
@@ -424,6 +503,7 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
   - macOS: `~/Library/Application Support/app.daybloom.desktop/state/`
   - Windows: `%APPDATA%\app.daybloom.desktop\state\`
 - Tokens and calendar sign-ins stay in the system keychain (macOS Keychain or Windows Credential Manager).
+- Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
 - Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
 - To make a backup, open **Settings › Your data** and click **Export**. To restore, click **Import**.
 
@@ -463,7 +543,8 @@ Build Windows bundles on Windows. The installer installs the WebView2 runtime if
 - All looping animations change only opacity and transform on HTML layers. The hands are placed from the wall clock at each tick, so they cannot drift.
 - A hidden planner updates every 5 seconds instead of every second. The widget webview exists only while the widget shows.
 - Svelte compiles away. The UI is about 600 KB of JavaScript (about 200 KB gzipped), plus the 0.9 MB Needle runtime. All sounds are made with WebAudio, so there are no audio files.
-- The assistant runs [Needle](https://cactuscompute.com/needle) as WebAssembly in a worker. The weights download on first use and are pinned to a revision and a SHA-256 hash.
+- The assistant runs [Needle](https://cactuscompute.com/needle) as WebAssembly in a worker, and voice runs [Whistle](https://cactuscompute.com/blog/whistle) in a second worker on the same engine. Live transcription never waits for Needle. Both models download on first use and are pinned to a revision and a SHA-256 hash.
+- Screen cues are one transparent, click-through window. It exists only while a cue has something to show.
 
 </details>
 
@@ -511,12 +592,13 @@ src/
   lib/dial/          the dial: geometry, Dial, arcs, readout, remaining-time ring, hover card
   lib/stores/        Svelte 5 rune stores, saved per window and synced across windows
   lib/calendar/      calendar providers (Google with multiple accounts, ICS) and the sync service
-  lib/assistant/     Needle engine (WebAssembly worker), tools, matcher and cards
+  lib/assistant/     Needle and Whistle engines (WebAssembly workers), tools, matcher and cards
+  lib/voice/         microphone capture, resampler, voice activity, spoken-text rules, voice state
   lib/sync/          GitHub sync: Contents API client and three-way merge
   lib/platform.ts    the only connection to the native shell (commands and events)
   components/        top bar, timeline, panels, settings, focus mode, assistant cards
-  views/             MainView (planner) and WidgetView (desktop dial)
-src-tauri/           Rust shell: windows, tray, widget layers, keychain, OAuth loopback, model download
+  views/             MainView (planner), WidgetView (desktop dial), OverlayView (screen cues)
+src-tauri/           Rust shell: windows, tray, widget layers, screen-cue overlay, keychain, OAuth loopback, model downloads
 docs/                calendar notes and the media in this README
 ```
 
@@ -537,5 +619,5 @@ docs/                calendar notes and the media in this README
 <br>
 
 <div align="center">
-<sub>Made with care for calm, clear days. Icons by <a href="https://lucide.dev">Lucide</a> (ISC). Assistant model by <a href="https://cactuscompute.com/needle">Cactus Compute</a> (Apache-2.0).</sub>
+<sub>Made with care for calm, clear days. Icons by <a href="https://lucide.dev">Lucide</a> (ISC). Needle and Whistle models by <a href="https://cactuscompute.com">Cactus Compute</a> (Apache-2.0).</sub>
 </div>

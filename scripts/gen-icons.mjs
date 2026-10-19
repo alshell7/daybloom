@@ -54,6 +54,9 @@ const ICONS = [
   ['medal', 'medal', null], ['rocket', 'rocket', null], ['sunset', 'sunset', null], ['brain-dump', 'notebook-pen', null],
   ['timer', 'timer', null], ['circle-dashed', 'circle-dashed', null], ['circle-check', 'circle-check', null],
   ['trend-up', 'trending-up', null], ['flame', 'flame', null], ['bed-rest', 'bed-double', null], ['shuffle', 'shuffle', null], ['wand-sparkles', 'wand-sparkles', null], ['maximize', 'maximize-2', null], ['minimize', 'minimize-2', null], ['more', 'ellipsis', null],
+  ['mic', 'mic', null], ['mic-off', 'mic-off', null], ['audio-lines', 'audio-lines', null], ['monitor', 'monitor', null],
+  ['panel-top', 'panel-top', null], ['panel-bottom', 'panel-bottom', null], ['panel-left', 'panel-left', null], ['panel-right', 'panel-right', null],
+  ['scan', 'scan', null], ['gauge', 'gauge', null], ['square', 'square', null], ['sparkle', 'sparkle', null], ['layers', 'layers', null],
 ];
 
 // Aliased icons are absent from icon-nodes.json; read their SVG instead.

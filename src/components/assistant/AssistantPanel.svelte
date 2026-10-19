@@ -11,6 +11,8 @@
   import Panel from '../Panel.svelte';
   import Card from './Card.svelte';
   import EngineBadge from './EngineBadge.svelte';
+  import MicButton from '../voice/MicButton.svelte';
+  import { voice } from '../../lib/voice/voice.svelte';
 
   const open = $derived(view.sheet?.kind === 'assistant');
   const prefill = $derived(view.sheet?.kind === 'assistant' ? (view.sheet.query ?? '') : '');
@@ -23,6 +25,15 @@
   let draft = '';
 
   const starters = HELP_GROUPS.slice(0, 4).map((g) => g.examples[0]);
+
+  // Speaking here: the words appear in the input as Whistle hears them; when you stop, the
+  // voice module sends them and the input clears for the next thing.
+  const hearing = $derived(voice.surface === 'assistant' && (voice.phase === 'listening' || voice.phase === 'finishing' || voice.phase === 'opening'));
+  $effect(() => {
+    if (voice.surface !== 'assistant') return;
+    if (voice.phase === 'listening' || voice.phase === 'finishing') text = voice.live;
+    else if (voice.phase === 'idle' && voice.final) untrack(() => (text = ''));
+  });
 
   $effect(() => {
     if (!open) return;
@@ -116,7 +127,9 @@
 
       {#each session.entries as e (e.id)}
         <article class="turn" in:fly={{ y: 8, duration: view.reducedMotion ? 0 : 260, easing: cubicOut }}>
-          <p class="q"><span>{e.query}</span></p>
+          <p class="q" class:spoken={e.spoken}>
+            <span>{#if e.spoken}<Icon name="mic" size={11} stroke={2.3} />{/if}{e.query}</span>
+          </p>
           {#if e.pending}
             {#if e.slow}
               <p class="a-meta thinking" in:fade={{ duration: view.reducedMotion ? 0 : 160 }}>
@@ -154,12 +167,15 @@
             bind:this={field}
             bind:value={text}
             onkeydown={onKey}
-            placeholder="What's now? · Add gym at 5pm · Plan my day"
+            readonly={hearing}
+            class:hearing
+            placeholder={hearing ? 'Listening…' : "What's now? · Add gym at 5pm · Plan my day"}
             aria-label="Ask Daybloom"
             autocomplete="off"
             spellcheck="false"
             enterkeyhint="send"
           />
+          <MicButton surface="assistant" size={32} label="Speak" />
           <button class="icon-btn send" type="submit" disabled={!text.trim() || session.busy} aria-label="Ask"><Icon name="arrow-right" size={17} stroke={2.1} /></button>
         </form>
         <div class="under">
@@ -212,6 +228,19 @@
     font-size: var(--t-md);
     line-height: 1.35;
     overflow-wrap: anywhere;
+  }
+  .q.spoken span {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .q.spoken span :global(svg) {
+    flex: none;
+    color: var(--ink-3);
+    transform: translateY(1px);
+  }
+  input.hearing {
+    color: var(--ink-2);
   }
   .thinking {
     margin: 0;

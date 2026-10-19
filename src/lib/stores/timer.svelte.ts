@@ -25,6 +25,8 @@ export interface TimerState {
     pausedAt: number | null;
     /** Total ms spent paused so far. */
     pausedMs: number;
+    /** What this session is for: a block on the day, or a backlog task. */
+    target?: { key?: string; taskId?: string } | null;
   };
   /** Completed focus segments today, for the cycle pips. */
   doneToday: { date: string; count: number };
@@ -66,6 +68,40 @@ export const timer = {
       segments,
       pausedAt: null,
       pausedMs: 0,
+    };
+  },
+
+  /**
+   * A focus session from the launcher: one stretch, or cycles of focus and breaks, for a
+   * block, a backlog task, or just focus.
+   */
+  startSession(o: {
+    minutes: number;
+    rhythm: 'single' | 'cycles';
+    label: string;
+    icon: string;
+    category: CategoryId;
+    target?: { key?: string; taskId?: string } | null;
+    cycles?: { short: number; long: number; rounds: number };
+  }) {
+    const segments: Segment[] = [];
+    if (o.rhythm === 'cycles') {
+      const c = o.cycles ?? { short: 5, long: 15, rounds: 4 };
+      for (let i = 0; i < c.rounds; i++) {
+        segments.push({ kind: 'focus', label: o.label, ms: o.minutes * MINUTE });
+        if (i < c.rounds - 1) segments.push({ kind: 'break', label: (i + 1) % 4 === 0 ? 'Long break' : 'Break', ms: ((i + 1) % 4 === 0 ? c.long : c.short) * MINUTE });
+      }
+    } else segments.push({ kind: 'focus', label: o.label, ms: o.minutes * MINUTE });
+    timerFile.value.active = {
+      kind: o.rhythm === 'cycles' ? 'cycles' : 'countdown',
+      label: o.label,
+      icon: o.icon,
+      category: o.category,
+      startedAt: nowMs(),
+      segments,
+      pausedAt: null,
+      pausedMs: 0,
+      target: o.target ?? null,
     };
   },
 

@@ -70,6 +70,8 @@ export const SHARED_SETTINGS = [
   'sleep',
   'cycles',
   'nudges',
+  'voice',
+  'focus',
   'widget.preset',
   'widget.finish',
 ] as const satisfies readonly SettingsPath[];
@@ -82,6 +84,7 @@ export const DEVICE_SETTINGS = [
   'menuBarTimer',
   'widget.visible',
   'widget.layer',
+  'screen',
   'google',
   'onboarded',
   'lastGreeted',

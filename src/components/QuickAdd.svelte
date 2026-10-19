@@ -13,8 +13,11 @@
   import { settings } from '../lib/stores/settings.svelte';
   import { taskFile, tasks } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { voice } from '../lib/voice/voice.svelte';
+  import MicButton from './voice/MicButton.svelte';
 
-  // Type a block the way you'd say it: "gym 5pm 45m", "meds every day 8am".
+  // Type a block the way you'd say it: "gym 5pm 45m", "meds every day 8am". Or say it: the
+  // mic dictates into the field, the preview reads it live, and Enter adds it.
   let text = $state('');
   let focused = $state(false);
   let input: HTMLInputElement | undefined = $state();
@@ -25,6 +28,19 @@
     if (focused || text) return;
     const id = setInterval(() => (ex = (ex + 1) % EXAMPLES.length), 3800);
     return () => clearInterval(id);
+  });
+
+  // Dictation: live words flow into the field; the final text stays for a look before Enter.
+  const dictating = $derived(voice.surface === 'quickadd' && (voice.phase === 'listening' || voice.phase === 'finishing'));
+  let usedFinal = '';
+  $effect(() => {
+    if (dictating) text = voice.live;
+  });
+  $effect(() => {
+    if (voice.surface !== 'quickadd' || voice.phase !== 'idle' || !voice.final || voice.final === usedFinal) return;
+    usedFinal = voice.final;
+    text = voice.final;
+    input?.focus();
   });
 
   const parsed = $derived(text.trim() ? parseQuick(text, clock.now, Math.floor(minutesOfDay(clock.now))) : null);
@@ -102,11 +118,12 @@
   {#if !text}
     {#key ex}
       <span class="ph" in:fly={{ y: 8, duration: view.reducedMotion ? 0 : 360, easing: cubicOut }} out:fly={{ y: -8, duration: view.reducedMotion ? 0 : 220 }} aria-hidden="true">
-        {focused ? 'Type a block… then Enter' : `Try “${EXAMPLES[ex]}”`}
+        {dictating ? 'Listening… say the block' : focused ? 'Type a block… then Enter' : `Try “${EXAMPLES[ex]}”`}
       </span>
     {/key}
   {/if}
-  {#if text}
+  <MicButton surface="quickadd" size={28} label="Say a block" />
+  {#if text && !dictating}
     <kbd class="enter" in:scale={{ start: 0.6, duration: 180 }}><Icon name="corner" size={12} /></kbd>
   {/if}
 </form>

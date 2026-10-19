@@ -1,4 +1,5 @@
-//! On-device weights store for the Needle assistant model (Cactus Compute, Apache-2.0).
+//! On-device weights store for the assistant models by Cactus Compute (Apache-2.0): Needle
+//! (`needle3.cact`, tool calling) and Whistle (`whistle.cact`, speech to text).
 //!
 //! The weights are not bundled. They download once, only when the user asks, from a pinned
 //! Hugging Face revision into `app_data_dir()/models/`, and are SHA-256 verified before they
@@ -6,15 +7,17 @@
 //! (WebAssembly in a worker, see src/lib/assistant/engine.svelte.ts); this module only fetches,
 //! verifies, serves and deletes the file.
 //!
-//!   assistant_weights_status(sha256?, bytes?) -> { present, bytes }
-//!   assistant_weights_download(url, sha256, bytes) -> ()   emits `daybloom://needle-progress`
-//!   assistant_weights_read(sha256?) -> raw bytes (an ArrayBuffer in JS, not a JSON array)
-//!   assistant_weights_forget() -> ()                        also cancels a running download
+//!   assistant_weights_status(name?, sha256?, bytes?) -> { present, bytes }
+//!   assistant_weights_download(name?, url, sha256, bytes) -> ()  emits `daybloom://needle-progress`
+//!   assistant_weights_read(name?, sha256?) -> raw bytes (an ArrayBuffer in JS, not a JSON array)
+//!   assistant_weights_forget(name?) -> ()                        also cancels a running download
+//!
+//! `name` is one of MODELS (default `needle3.cact`); each model has its own file and state.
 
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -24,7 +27,8 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const FILE: &str = "needle3.cact";
+/// The model files this store may hold. The first one is the default.
+const MODELS: [&str; 2] = ["needle3.cact", "whistle.cact"];
 const PROGRESS_EVENT: &str = "daybloom://needle-progress";
 /// The only place a model may come from (the redirect target is checked separately).
 const SOURCE_PREFIX: &str = "/Cactus-Compute/";
@@ -35,10 +39,16 @@ const MISMATCH: &str = "hash mismatch: the model file does not match its pinned 
 
 #[derive(Default)]
 pub struct Weights {
-    downloading: AtomicBool,
-    cancel: AtomicBool,
-    /// The file already hashed this launch, so later reads skip re-hashing it.
-    verified: Mutex<Option<Fingerprint>>,
+    downloading: Mutex<HashSet<&'static str>>,
+    cancel: Mutex<HashSet<&'static str>>,
+    /// Files already hashed this launch, so later reads skip re-hashing them.
+    verified: Mutex<HashMap<&'static str, Fingerprint>>,
+}
+
+impl Weights {
+    fn cancelled(&self, name: &str) -> bool {
+        self.cancel.lock().unwrap().contains(name)
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -56,6 +66,7 @@ pub struct WeightsStatus {
 
 #[derive(Serialize, Clone)]
 struct Progress {
+    name: &'static str,
     received: u64,
     total: u64,
 }
@@ -67,13 +78,25 @@ struct Paths {
     hash: PathBuf,
 }
 
-fn paths(app: &AppHandle) -> Result<Paths, String> {
+/// `name` → one of MODELS (nothing else can become a path).
+fn model(name: Option<&str>) -> Result<&'static str, String> {
+    match name {
+        None => Ok(MODELS[0]),
+        Some(n) => MODELS.iter().copied().find(|m| *m == n).ok_or_else(|| format!("unknown model {n}")),
+    }
+}
+
+fn paths_in(dir: &Path, file: &str) -> Paths {
+    Paths {
+        file: dir.join(file),
+        part: dir.join(format!("{file}.part")),
+        hash: dir.join(format!("{file}.sha256")),
+    }
+}
+
+fn paths(app: &AppHandle, file: &str) -> Result<Paths, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("models");
-    Ok(Paths {
-        file: dir.join(FILE),
-        part: dir.join(format!("{FILE}.part")),
-        hash: dir.join(format!("{FILE}.sha256")),
-    })
+    Ok(paths_in(&dir, file))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -134,10 +157,11 @@ fn remove_quiet(path: &Path) -> std::io::Result<()> {
 #[tauri::command]
 pub fn assistant_weights_status(
     app: AppHandle,
+    name: Option<String>,
     sha256: Option<String>,
     bytes: Option<u64>,
 ) -> Result<WeightsStatus, String> {
-    let p = paths(&app)?;
+    let p = paths(&app, model(name.as_deref())?)?;
     let len = match fs::metadata(&p.file) {
         Ok(m) if m.is_file() => m.len(),
         _ => return Ok(WeightsStatus { present: false, bytes: 0 }),
@@ -151,40 +175,42 @@ pub fn assistant_weights_status(
     Ok(WeightsStatus { present, bytes: len })
 }
 
-struct Busy<'a>(&'a AtomicBool);
+struct Busy<'a>(&'a Mutex<HashSet<&'static str>>, &'static str);
 impl Drop for Busy<'_> {
     fn drop(&mut self) {
-        self.0.store(false, Ordering::SeqCst);
+        self.0.lock().unwrap().remove(self.1);
     }
 }
 
-/// Streams the model to `models/needle3.cact.part`, verifies size and SHA-256, then renames
-/// it into place. Progress goes out as `daybloom://needle-progress` {received, total} at most
+/// Streams the model to `models/<name>.part`, verifies size and SHA-256, then renames it into
+/// place. Progress goes out as `daybloom://needle-progress` {name, received, total} at most
 /// ~10 times a second.
 #[tauri::command]
 pub async fn assistant_weights_download(
     app: AppHandle,
     state: State<'_, Weights>,
+    name: Option<String>,
     url: String,
     sha256: String,
     bytes: u64,
 ) -> Result<(), String> {
+    let name = model(name.as_deref())?;
     let url = check_source(&url)?;
     let sha256 = check_hash(&sha256)?;
     if bytes == 0 || bytes > MAX_BYTES {
         return Err("unexpected model size".into());
     }
-    if state.downloading.swap(true, Ordering::SeqCst) {
+    if !state.downloading.lock().unwrap().insert(name) {
         return Err("the model is already downloading".into());
     }
-    let _busy = Busy(&state.downloading);
-    state.cancel.store(false, Ordering::SeqCst);
+    let _busy = Busy(&state.downloading, name);
+    state.cancel.lock().unwrap().remove(name);
 
-    let p = paths(&app)?;
+    let p = paths(&app, name)?;
     let emit = |received: u64| {
-        let _ = app.emit(PROGRESS_EVENT, Progress { received, total: bytes });
+        let _ = app.emit(PROGRESS_EVENT, Progress { name, received, total: bytes });
     };
-    let result = download(&emit, &state, &p, url, &sha256, bytes).await;
+    let result = download(&emit, &state, name, &p, url, &sha256, bytes).await;
     if result.is_err() {
         let _ = fs::remove_file(&p.part);
     }
@@ -194,6 +220,7 @@ pub async fn assistant_weights_download(
 async fn download(
     emit: &(dyn Fn(u64) + Sync),
     state: &Weights,
+    name: &'static str,
     p: &Paths,
     url: Url,
     sha256: &str,
@@ -240,7 +267,7 @@ async fn download(
     emit(0);
     let mut last = Instant::now();
     while let Some(chunk) = resp.chunk().await.map_err(net)? {
-        if state.cancel.load(Ordering::SeqCst) {
+        if state.cancelled(name) {
             return Err("download cancelled".into());
         }
         received += chunk.len() as u64;
@@ -263,7 +290,7 @@ async fn download(
     }
     file.sync_all().map_err(io)?;
     drop(file);
-    if state.cancel.load(Ordering::SeqCst) {
+    if state.cancelled(name) {
         return Err("download cancelled".into());
     }
 
@@ -273,7 +300,7 @@ async fn download(
     fs::rename(&tmp, &p.hash).map_err(io)?;
 
     let modified = fs::metadata(&p.file).and_then(|m| m.modified()).ok();
-    *state.verified.lock().unwrap() = Some(Fingerprint { len: total, modified, sha256: sha256.into() });
+    state.verified.lock().unwrap().insert(name, Fingerprint { len: total, modified, sha256: sha256.into() });
     Ok(())
 }
 
@@ -283,14 +310,16 @@ async fn download(
 pub async fn assistant_weights_read(
     app: AppHandle,
     state: State<'_, Weights>,
+    name: Option<String>,
     sha256: Option<String>,
 ) -> Result<tauri::ipc::Response, String> {
-    let p = paths(&app)?;
+    let name = model(name.as_deref())?;
+    let p = paths(&app, name)?;
     let expected = match sha256 {
         Some(h) => check_hash(&h)?,
         None => stored_hash(&p).ok_or(NOT_DOWNLOADED)?,
     };
-    let known = state.verified.lock().unwrap().clone();
+    let known = state.verified.lock().unwrap().get(name).cloned();
     let (bytes, fp) = tauri::async_runtime::spawn_blocking(move || -> Result<(Vec<u8>, Fingerprint), String> {
         let missing = |e: std::io::Error| {
             if e.kind() == ErrorKind::NotFound {
@@ -311,18 +340,19 @@ pub async fn assistant_weights_read(
     })
     .await
     .map_err(|e| e.to_string())??;
-    *state.verified.lock().unwrap() = Some(fp);
+    state.verified.lock().unwrap().insert(name, fp);
     Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// Deletes the weights (and any partial download, which is cancelled).
 #[tauri::command]
-pub fn assistant_weights_forget(app: AppHandle, state: State<'_, Weights>) -> Result<(), String> {
-    if state.downloading.load(Ordering::SeqCst) {
-        state.cancel.store(true, Ordering::SeqCst);
+pub fn assistant_weights_forget(app: AppHandle, state: State<'_, Weights>, name: Option<String>) -> Result<(), String> {
+    let name = model(name.as_deref())?;
+    if state.downloading.lock().unwrap().contains(name) {
+        state.cancel.lock().unwrap().insert(name);
     }
-    *state.verified.lock().unwrap() = None;
-    let p = paths(&app)?;
+    state.verified.lock().unwrap().remove(name);
+    let p = paths(&app, name)?;
     remove_quiet(&p.file).map_err(|e| e.to_string())?;
     remove_quiet(&p.hash).map_err(|e| e.to_string())?;
     // A running download still holds the .part open (Windows can't delete it yet); it
@@ -365,23 +395,49 @@ mod tests {
         const SHA: &str = "c9d915eca282ed42d1a09b143b592adb4cc6744ffe2d294adf5cfc5548170c38";
         const BYTES: u64 = 35_335_380;
         let dir = std::env::temp_dir().join(format!("daybloom-needle-test-{}", std::process::id()));
-        let p = Paths { file: dir.join(FILE), part: dir.join(format!("{FILE}.part")), hash: dir.join(format!("{FILE}.sha256")) };
+        let p = paths_in(&dir, MODELS[0]);
         let ticks = std::sync::atomic::AtomicU64::new(0);
         let emit = |_received: u64| {
-            ticks.fetch_add(1, Ordering::Relaxed);
+            ticks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         };
         let state = Weights::default();
         let block_on = tauri::async_runtime::block_on;
         let started = Instant::now();
-        block_on(download(&emit, &state, &p, check_source(URL).unwrap(), SHA, BYTES)).unwrap();
-        eprintln!("downloaded + verified in {:?}, {} progress events", started.elapsed(), ticks.load(Ordering::Relaxed));
+        block_on(download(&emit, &state, MODELS[0], &p, check_source(URL).unwrap(), SHA, BYTES)).unwrap();
+        eprintln!("downloaded + verified in {:?}, {} progress events", started.elapsed(), ticks.load(std::sync::atomic::Ordering::Relaxed));
         assert_eq!(fs::metadata(&p.file).unwrap().len(), BYTES);
         assert_eq!(fs::read_to_string(&p.hash).unwrap(), SHA);
         assert!(!p.part.exists());
         // A wrong pin fails verification and leaves nothing behind.
-        let bad = block_on(download(&emit, &state, &p, check_source(URL).unwrap(), &"0".repeat(64), BYTES));
+        let bad = block_on(download(&emit, &state, MODELS[0], &p, check_source(URL).unwrap(), &"0".repeat(64), BYTES));
         assert!(bad.unwrap_err().starts_with("hash mismatch"));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Real download of the pinned Whistle model (17 MB): `cargo test --lib assistant -- --ignored`.
+    #[test]
+    #[ignore]
+    fn downloads_and_verifies_whistle() {
+        const URL: &str = "https://huggingface.co/Cactus-Compute/whistle/resolve/741118687e1f008f06d1351a402a731274789790/whistle.cact";
+        const SHA: &str = "b6e02f048568ac5d01a2042556c658061e699acbc0aa2a1439f52f3d461dffeb";
+        const BYTES: u64 = 16_919_407;
+        let dir = std::env::temp_dir().join(format!("daybloom-whistle-test-{}", std::process::id()));
+        let p = paths_in(&dir, MODELS[1]);
+        let state = Weights::default();
+        tauri::async_runtime::block_on(download(&|_| {}, &state, MODELS[1], &p, check_source(URL).unwrap(), SHA, BYTES)).unwrap();
+        assert_eq!(fs::metadata(&p.file).unwrap().len(), BYTES);
+        assert_eq!(fs::read_to_string(&p.hash).unwrap(), SHA);
+        assert!(state.verified.lock().unwrap().contains_key(MODELS[1]));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_known_models_become_paths() {
+        assert_eq!(model(None).unwrap(), "needle3.cact");
+        assert_eq!(model(Some("whistle.cact")).unwrap(), "whistle.cact");
+        assert!(model(Some("../secrets")).is_err());
+        assert!(model(Some("needle3.cact.part")).is_err());
+        assert!(model(Some("")).is_err());
     }
 
     #[test]

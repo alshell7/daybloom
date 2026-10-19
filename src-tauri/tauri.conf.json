@@ -70,7 +70,8 @@
     "shortDescription": "A visual day timer that makes time a shape.",
     "longDescription": "Daybloom is a lightweight, sectograph-style visual day planner and timer. Your plans become arcs around a clock face, so the time left in a block, before the next thing, and in the day is something you see at a glance \u2014 designed first for people who experience time blindness.",
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "entitlements": "Entitlements.plist"
     },
     "createUpdaterArtifacts": true
   },

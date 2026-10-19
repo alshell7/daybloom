@@ -113,7 +113,7 @@
         isToday={true}
         hour12={view.hour12}
         tally={view.tally}
-        timer={timed && ts && !ts.finished && timer.active ? { label: ts.segment.label, remainingMs: ts.remainingMs, paused: ts.paused, index: ts.index, count: timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1), kind: timer.active.kind, segment: ts.segment.kind } : null}
+        timer={timed && ts && !ts.finished && timer.active ? { label: ts.segment.label, remainingMs: ts.remainingMs, paused: ts.paused, index: ts.index, count: Math.ceil(timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1)), kind: timer.active.kind, segment: ts.segment.kind } : null}
         compact
         reduced={view.reducedMotion}
       />

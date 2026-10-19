@@ -70,7 +70,7 @@
           isToday={true}
           hour12={view.hour12}
           tally={view.tally}
-          timer={ts && !ts.finished && timer.active ? { label: ts.segment.label, remainingMs: ts.remainingMs, paused: ts.paused, index: ts.index, count: timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1), kind: timer.active.kind, segment: ts.segment.kind } : null}
+          timer={ts && !ts.finished && timer.active ? { label: ts.segment.label, remainingMs: ts.remainingMs, paused: ts.paused, index: ts.index, count: Math.ceil(timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1)), kind: timer.active.kind, segment: ts.segment.kind } : null}
           reduced={view.reducedMotion}
           ontimer={(a) => (a === 'pause' ? timer.pause() : a === 'resume' ? timer.resume() : a === 'skip' ? timer.skip() : timer.stop())}
         />
@@ -114,15 +114,15 @@
             {/if}
           {/if}
           {#if !timer.active}
-            <button class="btn btn-quiet big" onclick={() => timer.startCycles(settings.value.cycles, cur.title)}>
-              <Icon name="target" size={16} /> Pomodoro
+            <button class="btn btn-quiet big" onclick={() => ((view.focus = false), (view.sheet = { kind: 'focus', key: cur.key }))}>
+              <Icon name="target" size={16} /> Focus session…
             </button>
           {/if}
         </div>
       {:else if ts && !ts.finished && timer.active}
         <h2><Icon name={ts.segment.kind === 'break' ? 'coffee' : 'target'} size={26} stroke={2} /> {ts.segment.kind === 'break' ? 'Break' : ts.segment.label}</h2>
         <p class="when tnum">
-          {#if timer.active.kind === 'cycles'}Round {Math.floor(ts.index / 2) + 1} of {timer.active.segments.length / 2} · {/if}ends {formatTime(clock.now + ts.remainingMs, view.hour12)}
+          {#if timer.active.kind === 'cycles'}Round {Math.floor(ts.index / 2) + 1} of {Math.ceil(timer.active.segments.length / 2)} · {/if}ends {formatTime(clock.now + ts.remainingMs, view.hour12)}
         </p>
         <div class="actions">
           <button class="btn btn-soft big" onclick={() => timer.addMinutes(5)}>+5 min</button>

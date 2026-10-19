@@ -32,17 +32,24 @@ export type TrayAction = 'new-block' | 'focus-now' | 'open-settings';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-/** Label of the current window: 'main' or 'widget'. Browser dev uses `?view=widget`. */
-export function windowLabel(): 'main' | 'widget' {
+export type WindowLabel = 'main' | 'widget' | 'overlay';
+
+/** Label of the current window. Browser dev uses `?view=widget` / `?view=overlay`. */
+export function windowLabel(): WindowLabel {
   if (isTauri) {
     const label = (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label;
-    if (label === 'widget') return 'widget';
+    if (label === 'widget' || label === 'overlay') return label;
     return 'main';
   }
-  if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('view') === 'widget') {
-    return 'widget';
-  }
-  return 'main';
+  const v = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('view') : null;
+  return v === 'widget' || v === 'overlay' ? v : 'main';
+}
+
+export interface ScreenMetrics {
+  screen: { x: number; y: number; width: number; height: number };
+  /** Relative to the display: what the menu bar, Dock or taskbar leave free. */
+  work: { x: number; y: number; width: number; height: number };
+  scale: number;
 }
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -136,6 +143,18 @@ export const platform = {
     if (isTauri) return invoke<boolean>('widget_show', { show: show ?? null });
     if (show !== false) window.open(`${location.pathname}?view=widget`, 'daybloom-widget', 'width=300,height=300');
     return show !== false;
+  },
+
+  /** Screen cues window (edge glow, time bar, HUD). Desktop only. */
+  async showOverlay(show: boolean): Promise<boolean> {
+    if (isTauri) return invoke<boolean>('overlay_show', { show });
+    return false;
+  },
+
+  /** The display the cues cover, and its work area. Null in a browser. */
+  async screenMetrics(): Promise<ScreenMetrics | null> {
+    if (isTauri) return invoke<ScreenMetrics | null>('overlay_metrics');
+    return null;
   },
 
   async setWidgetLayer(layer: WidgetLayer): Promise<void> {

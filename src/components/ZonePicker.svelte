@@ -154,7 +154,7 @@
     top: calc(100% + 6px);
     left: 0;
     z-index: 45;
-    width: 320px;
+    width: min(320px, calc(100vw - 32px));
     border-radius: var(--r-lg);
     background: var(--raised);
     border: 1px solid var(--line);

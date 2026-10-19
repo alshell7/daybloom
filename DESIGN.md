@@ -331,7 +331,7 @@ Depth is tonal first. Four desk tones step up from Pressed Fog (sunken) to Fog D
 ### Named Rules
 **The Tonal Desk Rule.** Reach for a tone step (sunken hover, raised selection) before a shadow. A shadow means the thing is held above the desk: selected, dragged, or a transient overlay.
 
-**The Glow Is Not Elevation Rule.** Lume glow marks finished time, and nothing else may glow.
+**The Glow Is Not Elevation Rule.** Lume glow marks finished time, and nothing else may glow. The one exception is opt-in: the **screen-cue edge glow** is the breathing aura moved to the edge of the display, in the category colour of what is being timed, breathing faster only in the last five minutes and the last minute.
 
 ## Shapes
 
