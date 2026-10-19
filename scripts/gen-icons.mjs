@@ -62,6 +62,7 @@ const ICONS = [
   ['building', 'building-2', null], ['printer', 'printer', null], ['tag', 'tag', null], ['percent', 'percent', null], ['user', 'user', null],
   ['plug', 'plug', null], ['app-window', 'app-window', null], ['chart-pie', 'chart-pie', null], ['chart-column', 'chart-column', null],
   ['badge-check', 'badge-check', null], ['timer-reset', 'timer-reset', null], ['pointer', 'mouse-pointer-2', null], ['coins', 'coins', null],
+  ['terminal', 'terminal', null], ['key', 'key-round', null], ['sliders', 'sliders-horizontal', null], ['calendar-plus', 'calendar-plus', null], ['bot', 'bot', null],
 ];
 
 // Aliased icons are absent from icon-nodes.json; read their SVG instead.

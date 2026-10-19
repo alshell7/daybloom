@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp';
 
 export interface AddonMeta {
   id: AddonId;
@@ -17,7 +17,7 @@ export interface AddonMeta {
   accent: string;
   features: { icon: string; text: string }[];
   /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
-  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt';
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp';
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
@@ -107,6 +107,20 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'globe', text: 'Your mosque’s times or calculated ones, the Hijri date, the Qibla' },
     ],
     sheet: 'waqt',
+  },
+  {
+    id: 'mcp',
+    name: 'MCP',
+    tagline: 'Plan your day with your AI apps',
+    description: 'A small, private connection for AI apps that speak MCP, like Claude and Codex. They can read your day, find free time, and add, move or finish blocks. It runs only on this computer, behind a key, and you can undo every change.',
+    icon: 'plug',
+    accent: '#DB4F94',
+    features: [
+      { icon: 'dial', text: 'Your day, free time, backlog, settings and insights, ready for any MCP app' },
+      { icon: 'wand', text: 'Add, move and finish blocks; each change shows here with an Undo' },
+      { icon: 'shield', text: 'Only on this computer, behind a key; read-only with one switch' },
+    ],
+    sheet: 'mcp',
   },
 ];
 

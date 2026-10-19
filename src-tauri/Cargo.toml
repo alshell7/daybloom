@@ -31,6 +31,8 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
 sha2 = "0.10"
 # Platform backends are target-gated inside keyring, so enabling all is harmless.
+# MCP addon token (src/mcp.rs). The version tauri already builds.
+getrandom = "0.3"
 keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
 # Time Tracker activity sensing (src/activity.rs). The versions tauri already builds.

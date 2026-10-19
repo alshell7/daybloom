@@ -27,7 +27,8 @@ export type Sheet =
   | { kind: 'tracker'; tab?: string }
   | { kind: 'crumbs' }
   | { kind: 'reality' }
-  | { kind: 'waqt' };
+  | { kind: 'waqt' }
+  | { kind: 'mcp' };
 
 const DOCK_ORDER = ['crumb', 'waqt'];
 

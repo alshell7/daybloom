@@ -40,6 +40,7 @@
   import RealityPanel from '../components/addons/reality/RealityPanel.svelte';
   import WaqtPanel from '../components/addons/waqt/WaqtPanel.svelte';
   import WaqtMoment from '../components/addons/waqt/WaqtMoment.svelte';
+  import McpPanel from '../components/addons/mcp/McpPanel.svelte';
   import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
@@ -314,6 +315,7 @@
   {#if isOn('crumbs')}<CrumbsPanel /><CrumbPrompt />{/if}
   {#if isOn('reality')}<RealityPanel />{/if}
   {#if isOn('waqt')}<WaqtPanel /><WaqtMoment />{/if}
+  {#if isOn('mcp')}<McpPanel />{/if}
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />

@@ -15,6 +15,9 @@
 //   main_show()                      -> void
 //   set_tray_status(title, tooltip)  -> void               macOS menu-bar text + tooltip
 //   set_dock_visible(visible)        -> void               macOS only; no-op elsewhere
+//   mcp_set(on, rotate?)             -> McpStatus          MCP addon server on 127.0.0.1
+//   mcp_status()                     -> McpStatus
+//   mcp_reply(id, answer)            -> void               answers a `daybloom://mcp` request
 //
 // Events: `daybloom://state` {key, origin} is broadcast whenever a window saves,
 // `daybloom://tray` {action} is emitted by the native tray menu,
@@ -26,6 +29,25 @@ export interface OAuthRedirect {
   code: string | null;
   state: string | null;
   error: string | null;
+}
+
+/** The MCP addon's local server (src-tauri/src/mcp.rs). */
+export interface McpStatus {
+  on: boolean;
+  port: number;
+  url: string;
+  token: string;
+  /** This app's executable and arguments, for tools that start `daybloom --mcp`. */
+  exe: string;
+  args: string[];
+}
+
+export interface McpRequest {
+  id: number;
+  method: 'tools/list' | 'tools/call';
+  params: any;
+  /** The AI app's own name, when it said (e.g. "claude-code"). */
+  client: string;
 }
 
 export type TrayAction = 'new-block' | 'focus-now' | 'open-settings';
@@ -124,6 +146,35 @@ export const platform = {
       dead = true;
       off?.();
     };
+  },
+
+  /** The MCP addon. In a plain browser there is no server: a stand-in status for the UI. */
+  mcp: {
+    async set(on: boolean, rotate = false): Promise<McpStatus> {
+      if (isTauri) return invoke<McpStatus>('mcp_set', { on, rotate });
+      return { on, port: 7451, url: on ? 'http://127.0.0.1:7451/mcp' : '', token: 'preview-0000000000000000000000000000000000007f3a', exe: '/Applications/Daybloom.app/Contents/MacOS/daybloom', args: ['--mcp'] };
+    },
+    async reply(id: number, answer: { result: unknown } | { error: string }): Promise<void> {
+      if (isTauri) await invoke('mcp_reply', { id, answer });
+    },
+    /** Requests from AI apps, and the name of each app that connects. */
+    listen(onRequest: (r: McpRequest) => void, onClient: (name: string) => void): () => void {
+      if (!isTauri) return () => {};
+      let dead = false;
+      const offs: (() => void)[] = [];
+      void import('@tauri-apps/api/event').then(async ({ listen }) => {
+        const a = await listen<McpRequest>('daybloom://mcp', (e) => onRequest(e.payload));
+        const b = await listen<{ name: string }>('daybloom://mcp-client', (e) => onClient(e.payload?.name ?? ''));
+        if (dead) {
+          a();
+          b();
+        } else offs.push(a, b);
+      });
+      return () => {
+        dead = true;
+        offs.forEach((f) => f());
+      };
+    },
   },
 
   /** The quick-capture card (also opened from the tray / menu bar). */

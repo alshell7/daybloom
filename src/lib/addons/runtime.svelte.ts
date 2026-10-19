@@ -7,6 +7,7 @@ import { work } from './work/work.svelte';
 import { crumbsFile, startCrumbs } from './crumbs/crumbs.svelte';
 import { realityFile, startReality } from './reality/reality.svelte';
 import { startWaqt, waqtFile } from './waqt/waqt.svelte';
+import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { view } from '../stores/view.svelte';
 
 export function startAddons(): () => void {
@@ -19,6 +20,7 @@ export function startAddons(): () => void {
   let stopCrumbs: (() => void) | null = null;
   let stopReality: (() => void) | null = null;
   let stopWaqt: (() => void) | null = null;
+  let stopMcp: (() => void) | null = null;
   const root = $effect.root(() => {
     $effect(() => {
       if (isOn('work') && !work.ready) void work.load();
@@ -57,6 +59,17 @@ export function startAddons(): () => void {
       }
     });
     $effect(() => {
+      const on = isOn('mcp');
+      if (on && !stopMcp) {
+        void mcpFile.load().then(() => {
+          if (isOn('mcp') && !stopMcp) stopMcp = startMcp();
+        });
+      } else if (!on && stopMcp) {
+        stopMcp();
+        stopMcp = null;
+      }
+    });
+    $effect(() => {
       const on = isOn('tracker');
       if (on && !stopTracker) {
         void tracker.load().then(() => {
@@ -78,6 +91,7 @@ export function startAddons(): () => void {
     stopCrumbs?.();
     stopReality?.();
     stopWaqt?.();
+    stopMcp?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();

@@ -3,6 +3,7 @@ mod assistant;
 mod capture;
 mod commands;
 mod export;
+mod mcp;
 mod oauth;
 mod overlay;
 mod privacy;
@@ -77,6 +78,13 @@ pub(crate) fn show_quietly(w: &tauri::WebviewWindow, then: impl FnOnce() + Send 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // `daybloom --mcp`: a stdio relay to the running app for AI tools (see mcp.rs). It never
+    // opens a window, so it must come before the single-instance plugin.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--mcp") {
+        mcp::stdio_relay(&args);
+        return;
+    }
     let app = tauri::Builder::default()
         // Must be registered first so a second launch never gets further than this.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| show_main(app)))
@@ -100,6 +108,7 @@ pub fn run() {
         .manage(assistant::Weights::default())
         .manage(widget::LayerState::default())
         .manage(privacy::Privacy::default())
+        .manage(mcp::Mcp::default())
         .setup(|app| {
             tray::create(app.handle())?;
             Ok(())
@@ -146,6 +155,9 @@ pub fn run() {
             commands::capture_show,
             commands::capture_close,
             commands::privacy_set,
+            mcp::mcp_set,
+            mcp::mcp_status,
+            mcp::mcp_reply,
             export::export_save,
             activity::activity_idle_seconds,
             activity::activity_foreground,
