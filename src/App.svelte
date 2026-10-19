@@ -11,6 +11,8 @@
   import { view } from './lib/stores/view.svelte';
   import { themeCss } from './lib/themes';
   import { startUpdateChecks } from './lib/updater.svelte';
+  import { startSync } from './lib/sync/sync.svelte';
+  import { streakFile } from './lib/stores/streaks.svelte';
   import { initCalendars } from './lib/calendarBridge.svelte';
   import MainView from './views/MainView.svelte';
   import WidgetView from './views/WidgetView.svelte';
@@ -40,8 +42,9 @@
     let stopCalendars: (() => void) | undefined;
     let stopWidgetSync: (() => void) | undefined;
     let stopUpdates: (() => void) | undefined;
+    let stopGitSync: (() => void) | undefined;
     (async () => {
-      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load()]);
+      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load()]);
       if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0) {
         seedSampleDay(clock.now);
       }
@@ -56,6 +59,7 @@
         }
         greet();
         stopUpdates = startUpdateChecks();
+        stopGitSync = startSync();
         // Tray / OS changes to the widget flow back into settings.
         stopWidgetSync = platform.onWidgetChange(({ visible, layer }) => {
           settings.value.widget.visible = visible;
@@ -69,6 +73,7 @@
       stopCalendars?.();
       stopWidgetSync?.();
       stopUpdates?.();
+      stopGitSync?.();
     };
   });
 

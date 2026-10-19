@@ -13,6 +13,7 @@
   import { checkForUpdates, installUpdate, loadVersion, updates } from '../lib/updater.svelte';
   import { needle } from '../lib/assistant/engine.svelte';
   import ThemeGallery from './ThemeGallery.svelte';
+  import SyncSettings from './SyncSettings.svelte';
 
   const s = $derived(settings.value);
   const open = $derived(view.sheet?.kind === 'settings');
@@ -366,9 +367,11 @@
       <p class="hint">Updates are signed; Daybloom refuses any download that doesn't match its key.</p>
     </section>
 
+    <SyncSettings />
+
     <section>
       <h3>Your data</h3>
-      <p class="hint">Everything stays on this computer. Calendar sign-ins live in your system keychain.</p>
+      <p class="hint">Everything stays on this computer unless you turn on Sync with GitHub. Sign-ins and tokens live in your system keychain.</p>
       <div class="cal-actions">
         <button class="btn btn-soft" onclick={exportData}>Export</button>
         <label class="btn btn-soft">Import<input type="file" accept="application/json" onchange={importData} hidden /></label>
