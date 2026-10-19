@@ -118,9 +118,13 @@ body {
   cursor: default;
 }
 
+html.widget-mode,
 html:has(body.widget-mode),
 body.widget-mode {
-  background: transparent;
+  background: transparent !important;
+}
+html.widget-mode {
+  color-scheme: normal !important;
 }
 
 #app {
