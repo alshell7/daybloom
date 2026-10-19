@@ -94,8 +94,10 @@ pub async fn secret_delete(account: String) -> Result<(), String> {
 
 // ---- Windows, tray, dock -------------------------------------------------------------
 
+/// Async on purpose: building a webview window from a synchronous command deadlocks
+/// WebView2 on Windows (the frame appears, the webview never loads).
 #[tauri::command]
-pub fn widget_show(app: AppHandle, show: Option<bool>) -> Result<bool, String> {
+pub async fn widget_show(app: AppHandle, show: Option<bool>) -> Result<bool, String> {
     widget::set_visible(&app, show)
 }
 
