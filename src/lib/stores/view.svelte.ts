@@ -17,7 +17,8 @@ export type Sheet =
   | { kind: 'insights' }
   | { kind: 'backlog' }
   | { kind: 'winddown' }
-  | { kind: 'assistant'; query?: string };
+  | { kind: 'assistant'; query?: string }
+  | { kind: 'focus'; key?: string; taskId?: string };
 
 export interface Spark {
   id: number;

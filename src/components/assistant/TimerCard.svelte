@@ -16,7 +16,7 @@
   const ts = $derived(a ? timer.status(clock.now) : null);
   const running = $derived(!!a && !!ts && !ts.finished);
   const color = $derived(a && ts ? categoryColor(ts.segment.kind === 'break' ? 'rest' : a.category, view.finish.dark) : 'var(--ink)');
-  const rounds = $derived(a?.kind === 'cycles' ? a.segments.length / 2 : 0);
+  const rounds = $derived(a?.kind === 'cycles' ? Math.ceil(a.segments.length / 2) : 0);
 
   function start(min: number) {
     timer.startCountdown(min, `${min} minutes`, 'focus', 'timer');

@@ -4,6 +4,9 @@
 //   init     { system, tools }             -> { prefixTokens, ms }
 //   complete { text, maxTokens }           -> { json, ms, heapBytes } (conversation reset first)
 //   embed    { text }                      -> Float32Array            (buffer transferred)
+//   transcribe { pcm, language, keywords, words } -> { json, ms }        (Whistle; pcm transferred)
+//   stream   { pcm, language, keywords }   -> { json, ms }            (live: commit agreed words)
+//   streamStop {}                          -> { json, ms }            (the tail becomes committed)
 //   unload   {}                            -> null, then the worker closes itself
 // Replies are { id, ok: true, result } or { id, ok: false, error, fatal? }; fatal means the
 // WebAssembly instance trapped and the worker should be thrown away.
@@ -26,6 +29,9 @@
     _needle_init(system: number, tools: number, toolIndexPath: number): number;
     _needle_complete(input: number, pcm: number, samples: number, maxNew: number, out: number, cap: number): number;
     _needle_embed(input: number, pcm: number, samples: number, out: number, cap: number): number;
+    _needle_transcribe(pcm: number, samples: number, language: number, keywords: number, words: number, out: number, cap: number): number;
+    _needle_stream_transcribe_process(pcm: number, samples: number, language: number, keywords: number, out: number, cap: number): number;
+    _needle_stream_transcribe_stop(out: number, cap: number): number;
     _needle_reset(): void;
     _needle_last_error(): number;
     _malloc(n: number): number;
@@ -67,6 +73,42 @@
     } finally {
       m._free(p);
     }
+  }
+
+  /** Like withString, but null passes a NULL pointer. */
+  function withOptString<T>(s: string | null, fn: (ptr: number) => T): T {
+    return s === null ? fn(0) : withString(s, fn);
+  }
+
+  /** Copies 16 kHz float PCM into the heap for the duration of `fn`. */
+  function withPcm<T>(pcm: Float32Array, fn: (ptr: number, samples: number) => T): T {
+    const m = M!;
+    const n = pcm.length;
+    const p = m._malloc(Math.max(4, n * 4));
+    if (!p) throw new Error('out of memory');
+    new Float32Array(m.HEAPU8.buffer, p, n).set(pcm);
+    try {
+      return fn(p, n);
+    } finally {
+      m._free(p);
+    }
+  }
+
+  /** Runs a call that writes JSON into `out`, growing the buffer when the engine asks for more. */
+  function intoOut(call: () => number, what: string): string {
+    const m = M!;
+    ensureOut(64 * 1024);
+    for (;;) {
+      const rc = call();
+      if (rc >= 0) break;
+      const err = lastError();
+      if (/buffer|capacity|too small/i.test(err) && outCap < 1 << 22) {
+        ensureOut(outCap * 4);
+        continue;
+      }
+      throw new Error(err || `${what} returned ${rc}`);
+    }
+    return m.UTF8ToString(out, outCap);
   }
 
   function ensureOut(cap: number) {
@@ -202,6 +244,28 @@
         } finally {
           m._free(buf);
         }
+      }
+      case 'transcribe': {
+        const json = withPcm(msg.pcm, (p, n) =>
+          withOptString(msg.language, (lang) =>
+            withOptString(msg.keywords, (kw) => intoOut(() => m._needle_transcribe(p, n, lang, kw, msg.words ? 1 : 0, out, outCap), 'needle_transcribe')),
+          ),
+        );
+        return { result: { json, ms: ms() } };
+      }
+      case 'stream': {
+        const json = withPcm(msg.pcm, (p, n) =>
+          withOptString(msg.language, (lang) =>
+            withOptString(msg.keywords, (kw) =>
+              intoOut(() => m._needle_stream_transcribe_process(p, n, lang, kw, out, outCap), 'needle_stream_transcribe_process'),
+            ),
+          ),
+        );
+        return { result: { json, ms: ms() } };
+      }
+      case 'streamStop': {
+        const json = intoOut(() => m._needle_stream_transcribe_stop(out, outCap), 'needle_stream_transcribe_stop');
+        return { result: { json, ms: ms() } };
       }
     }
     throw new Error(`unknown request ${(msg as { type: string }).type}`);

@@ -1,30 +1,9 @@
 <script lang="ts">
-  import { flushSync } from 'svelte';
-  import { settings } from '../lib/stores/settings.svelte';
+  import { toggleTheme } from '../lib/themeToggle';
   import { view } from '../lib/stores/view.svelte';
 
-  // Sun ↔ moon. The new theme spreads out from the button as a growing circle
-  // (View Transitions where the webview supports them, a plain swap elsewhere).
-  function toggle(e: MouseEvent) {
-    const next = view.dark ? 'light' : 'dark';
-    const apply = () => {
-      settings.value.theme = next;
-      document.documentElement.dataset.theme = next;
-      flushSync();
-    };
-    const doc = document as Document & { startViewTransition?: (cb: () => void) => { ready: Promise<void> } };
-    if (!doc.startViewTransition || view.reducedMotion) return apply();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = r.left + r.width / 2;
-    const y = r.top + r.height / 2;
-    const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
-    doc.startViewTransition(apply).ready.then(() => {
-      document.documentElement.animate(
-        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] },
-        { duration: 620, easing: 'cubic-bezier(0.65, 0, 0.35, 1)', pseudoElement: '::view-transition-new(root)' },
-      );
-    });
-  }
+  // Sun ↔ moon. The new theme spreads out from the button as a growing circle.
+  const toggle = (e: MouseEvent) => toggleTheme(e.currentTarget as HTMLElement);
 </script>
 
 <button class="icon-btn toggle" class:dark={view.dark} onclick={toggle} aria-label={view.dark ? 'Switch to light' : 'Switch to dark'} title={view.dark ? 'Light mode' : 'Dark mode'}>

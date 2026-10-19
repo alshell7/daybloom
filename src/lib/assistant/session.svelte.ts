@@ -30,6 +30,8 @@ export interface Entry {
   result: ToolResult | null;
   route: Route | null;
   undone: boolean;
+  /** Asked by voice (the query bubble shows a small mic). */
+  spoken?: boolean;
 }
 
 export type Status = EngineStatus | 'unavailable';
@@ -141,8 +143,8 @@ class Session {
     return this.engine && this.engine.status === 'ready' ? this.engine : null;
   }
 
-  #push(query: string): Entry {
-    this.entries.push({ id: ++this.#seq, query, at: clock.now, pending: true, slow: false, result: null, route: null, undone: false });
+  #push(query: string, spoken = false): Entry {
+    this.entries.push({ id: ++this.#seq, query, at: clock.now, pending: true, slow: false, result: null, route: null, undone: false, spoken });
     if (this.entries.length > MAX_ENTRIES) this.entries.splice(0, this.entries.length - MAX_ENTRIES);
     return this.entries[this.entries.length - 1];
   }
@@ -168,12 +170,12 @@ class Session {
     historyFile.value.history = h.slice(-50);
   }
 
-  /** Ask in words. */
-  async ask(raw: string) {
+  /** Ask in words (typed, or spoken through Whistle). */
+  async ask(raw: string, opts: { spoken?: boolean } = {}) {
     const text = raw.trim();
     if (!text) return;
     this.#remember(text);
-    const entry = this.#push(text);
+    const entry = this.#push(text, !!opts.spoken);
     await this.#settle(entry, async () => {
       const r = await respond(text, this.#engineIfReady(), clock.now);
       entry.route = r.route;
@@ -200,3 +202,5 @@ class Session {
 }
 
 export const session = new Session();
+
+if (import.meta.env.DEV) (globalThis as { __session?: Session }).__session = session;

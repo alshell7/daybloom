@@ -1,6 +1,7 @@
 mod assistant;
 mod commands;
 mod oauth;
+mod overlay;
 mod tray;
 mod widget;
 
@@ -50,6 +51,8 @@ pub fn run() {
             // Geometry only: the frontend decides whether the widget is visible.
             tauri_plugin_window_state::Builder::default()
                 .with_state_flags(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED)
+                // The cues window always covers the planner's display; nothing to remember.
+                .with_denylist(&[overlay::LABEL])
                 .build(),
         )
         .manage(oauth::Listeners::default())
@@ -62,7 +65,7 @@ pub fn run() {
         .on_window_event(|window, event| match event {
             // The planner hides instead of quitting; Daybloom lives on in the tray / menu bar.
             // The widget really closes, releasing its webview until it is shown again.
-            WindowEvent::CloseRequested { api, .. } if window.label() != widget::LABEL => {
+            WindowEvent::CloseRequested { api, .. } if window.label() != widget::LABEL && window.label() != overlay::LABEL => {
                 api.prevent_close();
                 let _ = window.hide();
                 #[cfg(windows)]
@@ -94,6 +97,8 @@ pub fn run() {
             commands::secret_delete,
             commands::widget_show,
             commands::widget_set_layer,
+            commands::overlay_show,
+            commands::overlay_metrics,
             commands::main_show,
             commands::set_tray_status,
             commands::set_dock_visible,

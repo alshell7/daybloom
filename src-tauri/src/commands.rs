@@ -106,6 +106,18 @@ pub fn widget_set_layer(app: AppHandle, layer: String) -> Result<(), String> {
     widget::set_layer(&app, Layer::parse(&layer)?)
 }
 
+/// Async for the same reason as widget_show: building a window from a sync command can
+/// deadlock WebView2 on Windows.
+#[tauri::command]
+pub async fn overlay_show(app: AppHandle, show: bool) -> Result<bool, String> {
+    crate::overlay::set_visible(&app, show)
+}
+
+#[tauri::command]
+pub fn overlay_metrics(app: AppHandle) -> Option<crate::overlay::Metrics> {
+    crate::overlay::metrics(&app)
+}
+
 #[tauri::command]
 pub fn main_show(app: AppHandle) {
     crate::show_main(&app);

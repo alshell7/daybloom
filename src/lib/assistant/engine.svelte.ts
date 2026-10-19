@@ -13,11 +13,17 @@
 import { platform } from '../platform';
 import {
   NEEDLE_WEIGHTS,
+  WHISTLE_WEIGHTS,
   type EngineStatus,
   type NeedleCall,
   type NeedleEngine,
   type NeedleResult,
+  type SpeechEngine,
+  type SpokenWord,
+  type StreamStep,
   type ToolSchema,
+  type TranscribeOptions,
+  type Transcript,
 } from './types';
 
 // ---------------------------------------------------------------- worker protocol
@@ -27,6 +33,9 @@ export type WorkerRequest =
   | { id: number; type: 'init'; system: string; tools: string }
   | { id: number; type: 'complete'; text: string; maxTokens: number }
   | { id: number; type: 'embed'; text: string }
+  | { id: number; type: 'transcribe'; pcm: Float32Array; language: string | null; keywords: string | null; words: boolean }
+  | { id: number; type: 'stream'; pcm: Float32Array; language: string | null; keywords: string | null }
+  | { id: number; type: 'streamStop' }
   | { id: number; type: 'unload' };
 
 export type WorkerResponse =
@@ -45,6 +54,10 @@ export interface CompleteResult {
   json: string;
   ms: number;
   heapBytes: number;
+}
+export interface SpeechResult {
+  json: string;
+  ms: number;
 }
 
 type Body<T> = T extends { id: number } ? Omit<T, 'id'> : never;
@@ -77,7 +90,7 @@ export interface EngineDeps {
   now?: () => number;
 }
 
-export type WeightsSpec = { url: string; sha256: string; bytes: number };
+export type WeightsSpec = { url: string; sha256: string; bytes: number; file?: string };
 
 export const NEEDLE_PROGRESS_EVENT = 'daybloom://needle-progress';
 const IDLE_MS = 5 * 60_000;
@@ -90,7 +103,11 @@ function message(e: unknown): string {
 
 // ---------------------------------------------------------------- engine
 
-export class Needle implements NeedleEngine {
+/**
+ * One model in its own worker. `needle` (tool calling) and `whistle` (speech to text) are two
+ * instances: separate workers, so live transcription never waits behind Needle warming up.
+ */
+export class Needle implements NeedleEngine, SpeechEngine {
   #status = $state<EngineStatus>('absent');
   #progress = $state(0);
   #error = $state<string | null>(null);
@@ -192,6 +209,44 @@ export class Needle implements NeedleEngine {
     return this.#run(async () => {
       await this.#load();
       return this.#call<Float32Array>({ type: 'embed', text });
+    });
+  }
+
+  // ---- speech (a Whistle .cact)
+
+  transcribe(pcm: Float32Array, opts: TranscribeOptions = {}): Promise<Transcript> {
+    const t0 = this.#deps.now();
+    return this.#run(async () => {
+      await this.#load();
+      const copy = pcm.slice();
+      const r = await this.#call<SpeechResult>(
+        { type: 'transcribe', pcm: copy, language: opts.language ?? null, keywords: keywordList(opts.keywords), words: !!opts.words },
+        [copy.buffer],
+      );
+      const o = parseSpeech(r.json);
+      return { text: str(o.text), language: str(o.language), words: wordsOf(o.words), ms: Math.round(this.#deps.now() - t0) };
+    });
+  }
+
+  streamPush(pcm: Float32Array, opts: TranscribeOptions = {}): Promise<StreamStep> {
+    const t0 = this.#deps.now();
+    return this.#run(async () => {
+      await this.#load();
+      const copy = pcm.slice();
+      const r = await this.#call<SpeechResult>(
+        { type: 'stream', pcm: copy, language: opts.language ?? null, keywords: keywordList(opts.keywords) },
+        [copy.buffer],
+      );
+      return streamStep(r.json, this.#deps.now() - t0);
+    });
+  }
+
+  streamStop(): Promise<StreamStep> {
+    const t0 = this.#deps.now();
+    return this.#run(async () => {
+      if (!this.#transport) return { text: '', words: [], pending: '', language: '', received: 0, ms: 0 };
+      const r = await this.#call<SpeechResult>({ type: 'streamStop' });
+      return streamStep(r.json, this.#deps.now() - t0);
     });
   }
 
@@ -422,6 +477,63 @@ export function parseCompletion(text: string): Omit<NeedleResult, 'ms'> {
   return { calls, confidence, reasoning, raw: obj };
 }
 
+// ---------------------------------------------------------------- speech output
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+/** Newline-separated keyword list for keyword biasing (null when there is none). */
+export function keywordList(words: string[] | undefined): string | null {
+  if (!words?.length) return null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const w of words) {
+    const k = w.replace(/[\r\n]+/g, ' ').trim();
+    if (!k || k.length > 48 || seen.has(k.toLowerCase())) continue;
+    seen.add(k.toLowerCase());
+    out.push(k);
+    if (out.length >= 64) break;
+  }
+  return out.length ? out.join('\n') : null;
+}
+
+function parseSpeech(text: string): Record<string, unknown> {
+  const nul = text.indexOf('\u0000');
+  const s = (nul >= 0 ? text.slice(0, nul) : text).trim();
+  try {
+    const o = JSON.parse(s);
+    if (o && typeof o === 'object' && !Array.isArray(o)) return o as Record<string, unknown>;
+  } catch {
+    /* falls through */
+  }
+  throw new Error('engine returned unreadable output');
+}
+
+function wordsOf(v: unknown): SpokenWord[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((w): w is Record<string, unknown> => !!w && typeof w === 'object' && typeof (w as { word?: unknown }).word === 'string')
+    .map((w) => ({
+      word: String(w.word),
+      start: Number(w.start) || 0,
+      end: Number(w.end) || 0,
+      probability: Number(w.probability) || 0,
+    }));
+}
+
+export function streamStep(json: string, ms: number): StreamStep {
+  const o = parseSpeech(json);
+  return {
+    text: str(o.text),
+    words: wordsOf(o.words),
+    pending: str(o.pending),
+    language: str(o.language),
+    received: Number(o.received) || 0,
+    ms: Math.round(ms),
+  };
+}
+
 // ---------------------------------------------------------------- weights stores
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -435,9 +547,11 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
 
 /** Desktop: the Rust store in src-tauri/src/assistant.rs (downloads outside the webview). */
 export function nativeStore(w: WeightsSpec = NEEDLE_WEIGHTS): WeightsStore {
+  const name = w.file ?? 'needle3.cact';
   return {
     async has() {
       const s = await invoke<{ present: boolean; bytes: number }>('assistant_weights_status', {
+        name,
         sha256: w.sha256,
         bytes: w.bytes,
       });
@@ -445,21 +559,21 @@ export function nativeStore(w: WeightsSpec = NEEDLE_WEIGHTS): WeightsStore {
     },
     async download(onProgress) {
       const { listen } = await import('@tauri-apps/api/event');
-      const off = await listen<{ received: number; total: number }>(NEEDLE_PROGRESS_EVENT, (e) =>
-        onProgress(e.payload.received, e.payload.total),
-      );
+      const off = await listen<{ name?: string; received: number; total: number }>(NEEDLE_PROGRESS_EVENT, (e) => {
+        if ((e.payload.name ?? 'needle3.cact') === name) onProgress(e.payload.received, e.payload.total);
+      });
       try {
-        await invoke('assistant_weights_download', { url: w.url, sha256: w.sha256, bytes: w.bytes });
+        await invoke('assistant_weights_download', { name, url: w.url, sha256: w.sha256, bytes: w.bytes });
       } finally {
         off();
       }
     },
     async read() {
-      const data = await invoke<ArrayBuffer | number[]>('assistant_weights_read', { sha256: w.sha256 });
+      const data = await invoke<ArrayBuffer | number[]>('assistant_weights_read', { name, sha256: w.sha256 });
       return data instanceof ArrayBuffer ? data : new Uint8Array(data).buffer;
     },
     async forget() {
-      await invoke('assistant_weights_forget');
+      await invoke('assistant_weights_forget', { name });
     },
   };
 }
@@ -473,8 +587,11 @@ export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string>
  * Browser (vite dev, tests): fetch with streamed progress, verify with WebCrypto, keep in the
  * Cache API (`daybloom-needle`). Falls back to memory where the Cache API is unavailable.
  */
-export function browserStore(w: WeightsSpec = NEEDLE_WEIGHTS, fetchImpl: typeof fetch = (...a) => fetch(...a)): WeightsStore {
-  const CACHE = 'daybloom-needle';
+export function browserStore(
+  w: WeightsSpec = NEEDLE_WEIGHTS,
+  fetchImpl: typeof fetch = (...a) => fetch(...a),
+  CACHE = 'daybloom-needle',
+): WeightsStore {
   let memory: Uint8Array | null = null;
   let verified = false;
   let abort: AbortController | null = null;
@@ -599,9 +716,9 @@ async function defaultAssets(): Promise<{ scriptUrl: string; wasm: ArrayBuffer }
   return { scriptUrl: assetUrl('needle.js'), wasm: await res.arrayBuffer() };
 }
 
-function spawnWorker(): Transport {
+function spawnWorker(name = 'needle'): Transport {
   // Classic worker (see needle.worker.ts): Vite bundles it in production and serves it in dev.
-  const w = new Worker(new URL('./needle.worker.ts', import.meta.url), { name: 'needle' });
+  const w = new Worker(new URL('./needle.worker.ts', import.meta.url), { name });
   return {
     send: (msg, transfer = []) => w.postMessage(msg, transfer),
     listen(onMessage, onCrash) {
@@ -618,5 +735,12 @@ function spawnWorker(): Transport {
 
 export const needle = new Needle({
   store: platform.isNative ? nativeStore() : browserStore(),
-  spawn: spawnWorker,
+  spawn: () => spawnWorker('needle'),
+});
+
+/** Whistle (speech to text): its own worker, weights and idle timer. */
+export const whistle = new Needle({
+  store: platform.isNative ? nativeStore(WHISTLE_WEIGHTS) : browserStore(WHISTLE_WEIGHTS, undefined, 'daybloom-whistle'),
+  spawn: () => spawnWorker('whistle'),
+  idleMs: 3 * 60_000,
 });

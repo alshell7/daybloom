@@ -98,6 +98,16 @@ export const sounds = {
     bell(783.99, 0.5, 1.6, 0.13);
     bell(1046.5, 1.0, 2.2, 0.13);
   },
+  /** Listening starts: two quick rising notes. */
+  listen() {
+    bell(880, 0, 0.35, 0.07);
+    bell(1174.66, 0.07, 0.45, 0.07);
+  },
+  /** Listening stops: the same two notes, falling. */
+  heard() {
+    bell(1174.66, 0, 0.35, 0.06);
+    bell(880, 0.07, 0.5, 0.06);
+  },
   /** Last block of the day finished. */
   dayComplete() {
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => bell(f, i * 0.11, 2.4, 0.11));

@@ -56,7 +56,40 @@ export interface Settings {
     /** Offer an end-of-day wind-down at this minute of the day (sleep − 60 by default; -1 = off). */
     windDown: number;
   };
+  /** Voice input (Whistle). */
+  voice: {
+    /** Spoken language: 'auto' detects it; commands are understood in English. */
+    language: VoiceLanguage;
+    /** Soft tones when listening starts and stops. */
+    chimes: boolean;
+    /** Hold or tap V to talk. */
+    hotkey: boolean;
+  };
+  /** Focus sessions (the launcher's memory). */
+  focus: {
+    /** Last length picked, in minutes. */
+    minutes: number;
+    rhythm: 'single' | 'cycles';
+    /** Lengths offered as one-tap chips. */
+    presets: number[];
+    /** Open the full-screen focus view when a session starts. */
+    fullscreen: boolean;
+  };
+  /** Screen cues around the edge of the display (this computer only). */
+  screen: {
+    /** Only during a focus session, or for every block that is running. */
+    when: 'focus' | 'blocks';
+    glow: boolean;
+    glowStrength: 'soft' | 'medium' | 'strong';
+    bar: boolean;
+    barDock: 'top' | 'bottom' | 'left' | 'right';
+    barSize: 'thin' | 'bold';
+    hud: boolean;
+    hudCorner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  };
 }
+
+export type VoiceLanguage = 'auto' | 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pl';
 
 export const DEFAULT_SETTINGS: Settings = {
   preset: 'field12',
@@ -85,6 +118,18 @@ export const DEFAULT_SETTINGS: Settings = {
   recentZones: [],
   autoUpdate: true,
   nudges: { checkIn: true, overrun: true, anchors: 'off', gapIdeas: true, windDown: 22 * 60 - 60 },
+  voice: { language: 'en', chimes: true, hotkey: true },
+  focus: { minutes: 25, rhythm: 'single', presets: [15, 25, 50, 90], fullscreen: true },
+  screen: {
+    when: 'focus',
+    glow: false,
+    glowStrength: 'medium',
+    bar: false,
+    barDock: 'top',
+    barSize: 'thin',
+    hud: false,
+    hudCorner: 'top-right',
+  },
 };
 
 export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) => ({
@@ -94,4 +139,7 @@ export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) 
   cycles: { ...DEFAULT_SETTINGS.cycles, ...(raw?.cycles ?? {}) },
   google: { ...DEFAULT_SETTINGS.google, ...(raw?.google ?? {}) },
   nudges: { ...DEFAULT_SETTINGS.nudges, ...(raw?.nudges ?? {}) },
+  voice: { ...DEFAULT_SETTINGS.voice, ...(raw?.voice ?? {}) },
+  focus: { ...DEFAULT_SETTINGS.focus, ...(raw?.focus ?? {}) },
+  screen: { ...DEFAULT_SETTINGS.screen, ...(raw?.screen ?? {}) },
 }));

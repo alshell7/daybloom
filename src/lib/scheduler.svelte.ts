@@ -9,6 +9,7 @@ import { settings } from './stores/settings.svelte';
 import { timer } from './stores/timer.svelte';
 import { view } from './stores/view.svelte';
 import { nudges } from './nudges.svelte';
+import { toggleDone } from './actions';
 
 export function startScheduler() {
   const fired = new Set<string>();
@@ -81,7 +82,13 @@ export function startScheduler() {
           if (timer.active?.segments.at(-1)?.kind === 'focus') timer.noteFocusDone();
           sounds.timerEnd();
           if (cfg.notify) platform.notify('Timer done', timer.active?.label ?? '');
-          view.say(`${timer.active?.label ?? 'Timer'} finished`);
+          const target = timer.active?.target;
+          const done = target?.key ? view.todayBlocks.find((b) => b.key === target.key)?.done : true;
+          view.say(
+            `${timer.active?.label ?? 'Timer'} · focus done`,
+            target?.key && !done ? { label: 'Mark it done', run: () => toggleDone(target.key!) } : undefined,
+            9000,
+          );
           timer.stop();
           lastTimerIndex = -1;
         }

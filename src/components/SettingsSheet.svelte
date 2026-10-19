@@ -11,9 +11,22 @@
   import Panel from './Panel.svelte';
   import Segmented from './Segmented.svelte';
   import { checkForUpdates, installUpdate, loadVersion, updates } from '../lib/updater.svelte';
-  import { needle } from '../lib/assistant/engine.svelte';
+  import { needle, whistle } from '../lib/assistant/engine.svelte';
+  import type { VoiceLanguage } from '../lib/stores/settings.svelte';
+
+  const VOICE_LANGS: { value: VoiceLanguage; label: string }[] = [
+    { value: 'en', label: 'English' },
+    { value: 'auto', label: 'Detect' },
+    { value: 'de', label: 'Deutsch' },
+    { value: 'fr', label: 'Français' },
+    { value: 'es', label: 'Español' },
+    { value: 'it', label: 'Italiano' },
+    { value: 'nl', label: 'Nederlands' },
+    { value: 'pl', label: 'Polski' },
+  ];
   import ThemeGallery from './ThemeGallery.svelte';
   import SyncSettings from './SyncSettings.svelte';
+  import ScreenPicker from './ScreenPicker.svelte';
 
   const s = $derived(settings.value);
   const open = $derived(view.sheet?.kind === 'settings');
@@ -221,6 +234,79 @@
     </section>
 
     <section>
+      <h3>Screen cues</h3>
+      <p class="hint top">Quiet signals at the edge of your screen that keep the time in view — they never take a click or the keyboard.</p>
+      <div class="row">
+        <span>Show them</span>
+        <Segmented
+          label="When screen cues show"
+          value={s.screen.when}
+          options={[
+            { value: 'focus', label: 'In focus sessions' },
+            { value: 'blocks', label: 'For every block' },
+          ]}
+          onchange={(v) => (settings.value.screen.when = v as 'focus' | 'blocks')}
+        />
+      </div>
+
+      <label class="row">
+        <span class="lbl"><Icon name="scan" size={15} /> Edge glow <small>the screen's edge breathes, quicker near the end</small></span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.screen.glow} />
+      </label>
+      {#if s.screen.glow}
+        <div class="row sub">
+          <span>Strength</span>
+          <Segmented
+            label="Glow strength"
+            value={s.screen.glowStrength}
+            options={[
+              { value: 'soft', label: 'Soft' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'strong', label: 'Strong' },
+            ]}
+            onchange={(v) => (settings.value.screen.glowStrength = v as 'soft' | 'medium' | 'strong')}
+          />
+        </div>
+      {/if}
+
+      <label class="row">
+        <span class="lbl"><Icon name="panel-top" size={15} /> Time bar <small>drains as the time goes</small></span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.screen.bar} />
+      </label>
+      {#if s.screen.bar}
+        <div class="row sub picker">
+          <span>Dock</span>
+          <ScreenPicker mode="edge" label="Where the time bar docks" value={s.screen.barDock} onchange={(v) => (settings.value.screen.barDock = v as 'top' | 'bottom' | 'left' | 'right')} />
+        </div>
+        <div class="row sub">
+          <span>Thickness</span>
+          <Segmented
+            label="Bar thickness"
+            value={s.screen.barSize}
+            options={[
+              { value: 'thin', label: 'Thin' },
+              { value: 'bold', label: 'Bold' },
+            ]}
+            onchange={(v) => (settings.value.screen.barSize = v as 'thin' | 'bold')}
+          />
+        </div>
+      {/if}
+
+      <label class="row">
+        <span class="lbl"><Icon name="gauge" size={15} /> HUD <small>a small pill with the time left</small></span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.screen.hud} />
+      </label>
+      {#if s.screen.hud}
+        <div class="row sub picker">
+          <span>Corner</span>
+          <ScreenPicker mode="corner" label="HUD corner" value={s.screen.hudCorner} onchange={(v) => (settings.value.screen.hudCorner = v as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right')} />
+        </div>
+      {/if}
+      {#if !platform.isNative}<p class="hint">Screen cues need the desktop app.</p>{/if}
+      <p class="hint">Turning one on shows a few seconds' preview. The HUD is a lighter companion to the widget: use either, or both.</p>
+    </section>
+
+    <section>
       <h3>Desktop widget</h3>
       <label class="row">
         <span>Show the widget</span>
@@ -338,6 +424,40 @@
         <span class="dl" aria-hidden="true"><i style:transform={`scaleX(${needle.progress})`}></i></span>
       {/if}
       <p class="hint">“Ask Daybloom” (⌘K) runs Needle by Cactus Compute (Apache-2.0) entirely on your computer — downloaded once, SHA-256 verified, then offline. Without it the assistant still works in basic mode.</p>
+
+      <h4>Voice</h4>
+      <div class="row">
+        <span>
+          {#if whistle.status === 'ready'}Whistle is on this device{whistle.loaded ? ` · ${Math.round(whistle.memory / 1048576)} MB in use` : ''}
+          {:else if whistle.status === 'downloading'}Downloading Whistle… {Math.round(whistle.progress * 100)}%
+          {:else if whistle.status === 'loading'}Waking up…
+          {:else if whistle.status === 'error'}Couldn't set up: {whistle.error}
+          {:else}Speech recognition is not downloaded yet{/if}
+        </span>
+        {#if whistle.status === 'ready'}
+          <button class="btn btn-quiet" onclick={() => whistle.forget()}>Remove</button>
+        {:else if whistle.status !== 'downloading' && whistle.status !== 'loading'}
+          <button class="btn btn-soft" onclick={() => whistle.ensureReady().catch(() => {})}>{whistle.status === 'error' ? 'Try again' : 'Download (17 MB)'}</button>
+        {/if}
+      </div>
+      {#if whistle.status === 'downloading'}
+        <span class="dl" aria-hidden="true"><i style:transform={`scaleX(${whistle.progress})`}></i></span>
+      {/if}
+      <div class="row">
+        <span>Language</span>
+        <select class="field compact" bind:value={settings.value.voice.language} aria-label="Voice language">
+          {#each VOICE_LANGS as l (l.value)}<option value={l.value}>{l.label}</option>{/each}
+        </select>
+      </div>
+      <label class="row">
+        <span>Hold <kbd>V</kbd> to talk</span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.voice.hotkey} />
+      </label>
+      <label class="row">
+        <span>Soft tones when listening</span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.voice.chimes} />
+      </label>
+      <p class="hint">Hold V and talk, or tap V and speak — it stops when you pause. Whistle by Cactus Compute (Apache-2.0) turns speech into text on this computer; the microphone is on only while you talk. Commands are understood in English.</p>
     </section>
 
     <section>
@@ -397,6 +517,39 @@
     font-family: var(--font-ui);
     font-size: var(--t-md);
     font-weight: 500;
+  }
+  .lbl {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .lbl small {
+    flex-basis: 100%;
+    padding-left: 23px;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .row.sub {
+    padding-left: 23px;
+  }
+  .row.picker {
+    align-items: center;
+  }
+  .hint.top {
+    margin: -6px 0 var(--s-3);
+  }
+  h4 {
+    margin: var(--s-5) 0 var(--s-2);
+    font-family: var(--font-ui);
+    font-size: var(--t-sm);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+  .field.compact {
+    width: auto;
+    height: 32px;
+    padding: 0 10px;
   }
   .refs {
     display: grid;

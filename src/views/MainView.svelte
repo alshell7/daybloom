@@ -28,6 +28,9 @@
   import AssistantPanel from '../components/assistant/AssistantPanel.svelte';
   import Sparks from '../components/Sparks.svelte';
   import Toast from '../components/Toast.svelte';
+  import VoiceDock from '../components/voice/VoiceDock.svelte';
+  import FocusLauncher from '../components/focus/FocusLauncher.svelte';
+  import { voice } from '../lib/voice/voice.svelte';
   import TopBar from '../components/TopBar.svelte';
 
   const presetId = $derived(settings.value.preset);
@@ -67,7 +70,7 @@
           remainingMs: ts.remainingMs,
           paused: ts.paused,
           index: ts.index,
-          count: timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1),
+          count: Math.ceil(timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1)),
           kind: timer.active.kind,
           segment: ts.segment.kind,
         }
@@ -118,6 +121,19 @@
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // Voice first: Esc lets it go, Enter sends what you said now.
+    if (voice.active && voice.surface === 'overlay') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        voice.cancel();
+        return;
+      }
+      if (e.key === 'Enter' && voice.phase === 'listening' && !typing(e)) {
+        e.preventDefault();
+        void voice.stop();
+        return;
+      }
+    }
     if (e.key === 'Escape') {
       if (view.focus) view.focus = false;
       else if (view.sheet) view.sheet = null;
@@ -126,13 +142,19 @@
     }
     if (typing(e)) return;
     const k = e.key.toLowerCase();
+    // V: hold to talk, or tap and speak (it stops when you pause).
+    if (k === 'v' && settings.value.voice.hotkey) {
+      e.preventDefault();
+      if (!e.repeat) voice.press(view.sheet?.kind === 'assistant' ? 'assistant' : 'overlay');
+      return;
+    }
     if (k === 'n') {
       e.preventDefault();
       createNext();
     } else if (k === 't') view.goToday();
     else if (e.key === 'ArrowLeft') view.shiftDay(-1);
     else if (e.key === 'ArrowRight') view.shiftDay(1);
-    else if (k === 'f') view.focus = !view.focus;
+    else if (k === 'f') openFocus();
     else if (k === 'w') toggleWidget();
     else if (k === ',') view.sheet = { kind: 'settings' };
     else if (k === 'b') view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' };
@@ -142,6 +164,13 @@
       e.preventDefault();
       toggleDone(view.selected);
     } else if ((e.key === 'Backspace' || e.key === 'Delete') && view.selected) removeBlock(view.selected);
+  }
+
+  /** F: a running session toggles the focus view; otherwise the launcher opens. */
+  function openFocus() {
+    if (view.focus) view.focus = false;
+    else if (timer.active) view.focus = true;
+    else view.sheet = view.sheet?.kind === 'focus' ? null : { kind: 'focus' };
   }
 
   async function toggleWidget() {
@@ -162,7 +191,13 @@
   const sleep = $derived({ wake: settings.value.wake, sleep: settings.value.sleep });
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window
+  onkeydown={onKey}
+  onkeyup={(e) => {
+    if (e.key.toLowerCase() === 'v') voice.release();
+  }}
+  onblur={() => voice.release()}
+/>
 
 <div class="shell" class:mac class:sheet-open={!!view.sheet}>
   <TopBar {mac} ontogglewidget={toggleWidget} />
@@ -224,11 +259,13 @@
   <BacklogPanel />
   <WindDown />
   <AssistantPanel />
+  <FocusLauncher />
   {#if !view.focus && !view.sheet}
     <Nudges />
   {/if}
   <Sparks />
   <Toast />
+  <VoiceDock />
   {#if view.focus}
     <FocusMode />
   {/if}

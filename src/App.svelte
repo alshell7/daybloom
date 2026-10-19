@@ -16,6 +16,8 @@
   import { initCalendars } from './lib/calendarBridge.svelte';
   import MainView from './views/MainView.svelte';
   import WidgetView from './views/WidgetView.svelte';
+  import OverlayView from './views/OverlayView.svelte';
+  import { cuePreview, startScreenCues } from './lib/screenCues.svelte';
 
   const label = windowLabel();
   let ready = $state(false);
@@ -29,7 +31,7 @@
   }
 
   onMount(() => {
-    if (label === 'widget') document.body.classList.add('widget-mode');
+    if (label !== 'main') document.body.classList.add('widget-mode');
     // Dev-only: ?at=HH:MM previews the UI at another time of day.
     const at = new URLSearchParams(location.search).get('at');
     if (at && import.meta.env.DEV) {
@@ -43,8 +45,9 @@
     let stopWidgetSync: (() => void) | undefined;
     let stopUpdates: (() => void) | undefined;
     let stopGitSync: (() => void) | undefined;
+    let stopCues: (() => void) | undefined;
     (async () => {
-      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load()]);
+      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load()]);
       if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0) {
         seedSampleDay(clock.now);
       }
@@ -60,6 +63,7 @@
         greet();
         stopUpdates = startUpdateChecks();
         stopGitSync = startSync();
+        stopCues = startScreenCues();
         // Tray / OS changes to the widget flow back into settings.
         stopWidgetSync = platform.onWidgetChange(({ visible, layer }) => {
           settings.value.widget.visible = visible;
@@ -74,6 +78,7 @@
       stopWidgetSync?.();
       stopUpdates?.();
       stopGitSync?.();
+      stopCues?.();
     };
   });
 
@@ -116,6 +121,8 @@
   {#key clock.zone}
     {#if label === 'widget'}
       <WidgetView />
+    {:else if label === 'overlay'}
+      <OverlayView />
     {:else}
       <MainView />
     {/if}

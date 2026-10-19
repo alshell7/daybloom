@@ -4,7 +4,8 @@
   "description": "Permissions shared by the planner (main) and the desktop dial (widget).",
   "windows": [
     "main",
-    "widget"
+    "widget",
+    "overlay"
   ],
   "permissions": [
     "core:default",
