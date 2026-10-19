@@ -11,4 +11,25 @@ export {
   type SyncStatus,
 } from './service';
 export { getGoogleClient, type GoogleClientConfig } from './google';
-export { normalizeIcsUrl, parseIcs, zonedTimeToUtc, type IcsCalendar, type IcsOccurrence } from './ics';
+export {
+  icsSecretKey,
+  normalizeIcsUrl,
+  parseIcs,
+  redactIcsUrl,
+  zonedTimeToUtc,
+  type IcsCalendar,
+  type IcsOccurrence,
+} from './ics';
+export {
+  detectIcsProvider,
+  extractLink,
+  FIND_LINK,
+  PREVIEW_DAYS,
+  previewIcs,
+  type IcsPreview,
+  type IcsPreviewError,
+  type IcsPreviewErrorKind,
+  type IcsPreviewOk,
+  type IcsSource,
+  type PreviewOptions,
+} from './preview';

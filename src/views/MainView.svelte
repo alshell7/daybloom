@@ -30,6 +30,12 @@
   import Toast from '../components/Toast.svelte';
   import VoiceDock from '../components/voice/VoiceDock.svelte';
   import FocusLauncher from '../components/focus/FocusLauncher.svelte';
+  import AddonsPanel from '../components/addons/AddonsPanel.svelte';
+  import CalendarsPanel from '../components/calendars/CalendarsPanel.svelte';
+  import WorkPanel from '../components/addons/work/WorkPanel.svelte';
+  import TrackerPanel from '../components/addons/tracker/TrackerPanel.svelte';
+  import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
+  import { isOn } from '../lib/addons/registry';
   import { voice } from '../lib/voice/voice.svelte';
   import TopBar from '../components/TopBar.svelte';
 
@@ -120,6 +126,12 @@
       view.sheet = view.sheet?.kind === 'assistant' ? null : { kind: 'assistant' };
       return;
     }
+    // ⇧⌘P / Ctrl+Shift+P: privacy mode.
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+      togglePrivacy();
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     // Voice first: Esc lets it go, Enter sends what you said now.
     if (voice.active && voice.surface === 'overlay') {
@@ -164,6 +176,12 @@
       e.preventDefault();
       toggleDone(view.selected);
     } else if ((e.key === 'Backspace' || e.key === 'Delete') && view.selected) removeBlock(view.selected);
+  }
+
+  function togglePrivacy() {
+    const on = !settings.value.privacy.on;
+    settings.value.privacy.on = on;
+    view.say(on ? 'Privacy mode on · Daybloom stays out of screenshots and recordings' : 'Privacy mode off');
   }
 
   /** F: a running session toggles the focus view; otherwise the launcher opens. */
@@ -260,6 +278,11 @@
   <WindDown />
   <AssistantPanel />
   <FocusLauncher />
+  <AddonsPanel />
+  <CalendarsPanel />
+  {#if isOn('work')}<WorkPanel />{/if}
+  {#if isOn('tracker')}<TrackerPanel />{/if}
+  <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />
   {/if}

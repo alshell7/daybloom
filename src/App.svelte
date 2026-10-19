@@ -18,6 +18,7 @@
   import WidgetView from './views/WidgetView.svelte';
   import OverlayView from './views/OverlayView.svelte';
   import { cuePreview, startScreenCues } from './lib/screenCues.svelte';
+  import { startAddons } from './lib/addons/runtime.svelte';
 
   const label = windowLabel();
   let ready = $state(false);
@@ -46,6 +47,8 @@
     let stopUpdates: (() => void) | undefined;
     let stopGitSync: (() => void) | undefined;
     let stopCues: (() => void) | undefined;
+    let stopPrivacy: (() => void) | undefined;
+    let stopAddons: (() => void) | undefined;
     (async () => {
       await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load()]);
       if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0) {
@@ -64,6 +67,10 @@
         stopUpdates = startUpdateChecks();
         stopGitSync = startSync();
         stopCues = startScreenCues();
+        stopAddons = startAddons();
+        stopPrivacy = platform.onPrivacyChange((on) => {
+          if (settings.value.privacy.on !== on) settings.value.privacy.on = on;
+        });
         // Tray / OS changes to the widget flow back into settings.
         stopWidgetSync = platform.onWidgetChange(({ visible, layer }) => {
           settings.value.widget.visible = visible;
@@ -79,6 +86,8 @@
       stopUpdates?.();
       stopGitSync?.();
       stopCues?.();
+      stopPrivacy?.();
+      stopAddons?.();
     };
   });
 
@@ -104,6 +113,15 @@
     setTimeZone(settings.value.timeZone || null);
     clock.zone = activeTimeZone();
     if (wasToday) view.date = view.today;
+  });
+
+  // Privacy mode: the planner tells the shell, which protects every window (and new ones).
+  let privacyApplied: boolean | null = null;
+  $effect(() => {
+    const on = settings.value.privacy.on;
+    if (!ready || label !== 'main' || !platform.isNative || on === privacyApplied) return;
+    privacyApplied = on;
+    platform.setPrivacy(on).catch(() => (privacyApplied = null));
   });
 
   // Theme, reading font and motion live on <html> so every surface (and the widget) agrees.

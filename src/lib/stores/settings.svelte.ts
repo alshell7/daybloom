@@ -86,7 +86,17 @@ export interface Settings {
     barSize: 'thin' | 'bold';
     hud: boolean;
     hudCorner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    /** 'task' follows the category colour of what's being timed; otherwise a fixed colour. */
+    color: 'task' | string;
   };
+  /** Privacy mode: Daybloom's windows are left out of screenshots and screen recordings. */
+  privacy: {
+    on: boolean;
+    /** Also hide block names on the widget, HUD and menu bar. */
+    hideNames: boolean;
+  };
+  /** Addons the user switched on. */
+  addons: Record<string, boolean>;
 }
 
 export type VoiceLanguage = 'auto' | 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pl';
@@ -129,7 +139,10 @@ export const DEFAULT_SETTINGS: Settings = {
     barSize: 'thin',
     hud: false,
     hudCorner: 'top-right',
+    color: 'task',
   },
+  privacy: { on: false, hideNames: false },
+  addons: {},
 };
 
 export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) => ({
@@ -142,4 +155,6 @@ export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) 
   voice: { ...DEFAULT_SETTINGS.voice, ...(raw?.voice ?? {}) },
   focus: { ...DEFAULT_SETTINGS.focus, ...(raw?.focus ?? {}) },
   screen: { ...DEFAULT_SETTINGS.screen, ...(raw?.screen ?? {}) },
+  privacy: { ...DEFAULT_SETTINGS.privacy, ...(raw?.privacy ?? {}) },
+  addons: { ...(raw?.addons && typeof raw.addons === 'object' ? raw.addons : {}) },
 }));

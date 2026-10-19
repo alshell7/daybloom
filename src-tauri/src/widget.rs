@@ -57,6 +57,7 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .and_then(|b| b.build())
         .map_err(|e| e.to_string())?;
     apply_layer(&w, layer(app))?;
+    crate::privacy::apply(app, &w);
     Ok(w)
 }
 

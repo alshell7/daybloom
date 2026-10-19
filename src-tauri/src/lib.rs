@@ -1,7 +1,10 @@
+mod activity;
 mod assistant;
 mod commands;
+mod export;
 mod oauth;
 mod overlay;
+mod privacy;
 mod tray;
 mod widget;
 
@@ -58,6 +61,7 @@ pub fn run() {
         .manage(oauth::Listeners::default())
         .manage(assistant::Weights::default())
         .manage(widget::LayerState::default())
+        .manage(privacy::Privacy::default())
         .setup(|app| {
             tray::create(app.handle())?;
             Ok(())
@@ -99,6 +103,10 @@ pub fn run() {
             commands::widget_set_layer,
             commands::overlay_show,
             commands::overlay_metrics,
+            commands::privacy_set,
+            export::export_save,
+            activity::activity_idle_seconds,
+            activity::activity_foreground,
             commands::main_show,
             commands::set_tray_status,
             commands::set_dock_visible,

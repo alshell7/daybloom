@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { applyGoogleClient, calendarState, syncNow } from '../lib/calendarBridge.svelte';
+  import { calendarState } from '../lib/calendarBridge.svelte';
   import { formatMinutes } from '../lib/engine/time';
   import Icon from '../lib/Icon.svelte';
   import { platform } from '../lib/platform';
@@ -14,6 +14,17 @@
   import { needle, whistle } from '../lib/assistant/engine.svelte';
   import type { VoiceLanguage } from '../lib/stores/settings.svelte';
 
+  // Screen-cue colours: the task's own category colour, or one fixed calm colour.
+  const CUE_COLORS = [
+    { value: '#3D6FE3', label: 'Blue' },
+    { value: '#14899B', label: 'Teal' },
+    { value: '#25976A', label: 'Green' },
+    { value: '#D98A12', label: 'Amber' },
+    { value: '#D9467E', label: 'Rose' },
+    { value: '#7B61FF', label: 'Violet' },
+    { value: '#9AA4B8', label: 'Mist' },
+  ];
+
   const VOICE_LANGS: { value: VoiceLanguage; label: string }[] = [
     { value: 'en', label: 'English' },
     { value: 'auto', label: 'Detect' },
@@ -27,6 +38,7 @@
   import ThemeGallery from './ThemeGallery.svelte';
   import SyncSettings from './SyncSettings.svelte';
   import ScreenPicker from './ScreenPicker.svelte';
+  import { ADDONS, isOn, setOn } from '../lib/addons/registry';
 
   const s = $derived(settings.value);
   const open = $derived(view.sheet?.kind === 'settings');
@@ -42,41 +54,6 @@
     return h * 60 + (m || 0);
   }
 
-  let icsUrl = $state('');
-  let icsLabel = $state('');
-  let calBusy = $state(false);
-  let calError = $state('');
-
-  async function connectGoogle() {
-    calError = '';
-    calBusy = true;
-    try {
-      applyGoogleClient();
-      await calendarState.service?.connectGoogle();
-      await syncNow();
-    } catch (e: any) {
-      calError = e?.message ?? String(e);
-    } finally {
-      calBusy = false;
-    }
-  }
-
-  async function addIcs(e: SubmitEvent) {
-    e.preventDefault();
-    if (!icsUrl.trim()) return;
-    calError = '';
-    calBusy = true;
-    try {
-      await calendarState.service?.addIcs(icsUrl.trim(), icsLabel.trim() || undefined);
-      await syncNow();
-      icsUrl = '';
-      icsLabel = '';
-    } catch (e: any) {
-      calError = e?.message ?? String(e);
-    } finally {
-      calBusy = false;
-    }
-  }
 
   function exportData() {
     const blob = new Blob([JSON.stringify({ app: 'daybloom', version: 1, settings: $state.snapshot(settings.value), tasks: $state.snapshot(taskFile.value.tasks) }, null, 2)], { type: 'application/json' });
@@ -234,6 +211,30 @@
     </section>
 
     <section>
+      <h3>Addons</h3>
+      {#each ADDONS as a (a.id)}
+        <label class="row">
+          <span class="lbl"><span class="ad-dot" style:--ac={a.accent}><Icon name={a.icon} size={12} stroke={2.2} /></span> {a.name} <small>{a.tagline}</small></span>
+          <input type="checkbox" class="switch" checked={isOn(a.id)} onchange={(e) => setOn(a.id, e.currentTarget.checked)} />
+        </label>
+      {/each}
+      <button class="btn btn-soft" onclick={() => (view.sheet = { kind: 'addons' })}><Icon name="puzzle" size={14} /> Browse addons</button>
+    </section>
+
+    <section>
+      <h3>Privacy</h3>
+      <label class="row">
+        <span class="lbl"><Icon name="eye-off" size={15} /> Privacy mode <small>keep Daybloom out of screenshots, screen recordings and screen sharing · <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd></small></span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.privacy.on} />
+      </label>
+      <label class="row">
+        <span class="lbl"><Icon name="shield" size={15} /> Hide block names <small>on the widget, the HUD and the menu bar while privacy mode is on</small></span>
+        <input type="checkbox" class="switch" bind:checked={settings.value.privacy.hideNames} disabled={!s.privacy.on} />
+      </label>
+      <p class="hint">{platform.os === 'windows' ? 'Windows leaves protected windows out of captures (they show as empty).' : 'macOS leaves protected windows out of screenshots. Some screen recorders can still capture them, so also hide block names when you share your screen.'} You can also switch it from the {platform.os === 'mac' ? 'menu bar' : 'tray'} icon.</p>
+    </section>
+
+    <section>
       <h3>Screen cues</h3>
       <p class="hint top">Quiet signals at the edge of your screen that keep the time in view — they never take a click or the keyboard.</p>
       <div class="row">
@@ -302,6 +303,20 @@
           <ScreenPicker mode="corner" label="HUD corner" value={s.screen.hudCorner} onchange={(v) => (settings.value.screen.hudCorner = v as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right')} />
         </div>
       {/if}
+      {#if s.screen.glow || s.screen.bar || s.screen.hud}
+        <div class="row sub colors">
+          <span>Colour</span>
+          <div class="swatches" role="radiogroup" aria-label="Screen cue colour">
+            <button class="sw task" class:on={s.screen.color === 'task'} role="radio" aria-checked={s.screen.color === 'task'} title="The colour of the task" aria-label="The colour of the task" onclick={() => (settings.value.screen.color = 'task')}></button>
+            {#each CUE_COLORS as c (c.value)}
+              <button class="sw" class:on={s.screen.color === c.value} style:--sw={c.value} role="radio" aria-checked={s.screen.color === c.value} title={c.label} aria-label={c.label} onclick={() => (settings.value.screen.color = c.value)}></button>
+            {/each}
+            <label class="sw custom" class:on={s.screen.color !== 'task' && !CUE_COLORS.some((c) => c.value === s.screen.color)} style:--sw={s.screen.color !== 'task' ? s.screen.color : '#888'} title="Pick any colour">
+              <input type="color" value={s.screen.color !== 'task' ? s.screen.color : '#3d6fe3'} oninput={(e) => (settings.value.screen.color = e.currentTarget.value)} aria-label="Pick any colour" />
+            </label>
+          </div>
+        </div>
+      {/if}
       {#if !platform.isNative}<p class="hint">Screen cues need the desktop app.</p>{/if}
       <p class="hint">Turning one on shows a few seconds' preview. The HUD is a lighter companion to the widget: use either, or both.</p>
     </section>
@@ -360,47 +375,23 @@
       {#if !calendarState.service}
         <p class="hint">Calendar support isn't included in this build.</p>
       {:else}
-        {#each calendarState.accounts as acc (acc.id)}
-          <div class="account">
-            <div class="acc-head">
-              <Icon name={acc.provider === 'google' ? 'calendar' : 'link'} size={16} />
-              <span class="acc-label">{acc.label}</span>
-              {#if acc.error}<span class="acc-err">{acc.error === 'reconnect' ? 'Needs reconnecting' : 'Sync problem'}</span>{/if}
-              <button class="icon-btn" onclick={() => calendarState.service?.removeAccount(acc.id)} aria-label={`Remove ${acc.label}`}><Icon name="x" size={14} /></button>
-            </div>
-            {#each acc.calendars as cal (cal.id)}
-              <label class="cal">
-                <input type="checkbox" checked={cal.enabled} onchange={(e) => calendarState.service?.setCalendarEnabled(acc.id, cal.id, e.currentTarget.checked)} />
-                <i style:background={cal.color}></i>
-                <span>{cal.name}</span>
-              </label>
+        {#if calendarState.accounts.length}
+          <ul class="cal-sum">
+            {#each calendarState.accounts as acc (acc.id)}
+              <li>
+                <Icon name={acc.provider === 'google' ? 'calendar' : 'link'} size={15} />
+                <span>{acc.label}</span>
+                {#if acc.error}<span class="acc-err">Needs attention</span>{:else}<small>{acc.calendars.filter((c) => c.enabled).length} of {acc.calendars.length} shown</small>{/if}
+              </li>
             {/each}
-          </div>
-        {/each}
+          </ul>
+        {:else}
+          <p class="hint">Show events from Google Calendar, Apple iCloud, Outlook or any calendar link, read-only, beside your blocks.</p>
+        {/if}
         <div class="cal-actions">
-          <button class="btn btn-soft" onclick={connectGoogle} disabled={calBusy}>
-            <Icon name="plus" size={14} /> Add Google account
-          </button>
-          {#if calendarState.accounts.length}
-            <button class="btn btn-quiet" onclick={() => syncNow()} disabled={calBusy}><Icon name="refresh" size={14} /> Sync</button>
-          {/if}
+          <button class="btn btn-soft" onclick={() => (view.sheet = { kind: 'calendars' })}><Icon name="calendar" size={14} /> {calendarState.accounts.length ? 'Manage calendars' : 'Connect a calendar'}</button>
+          <button class="btn btn-quiet" onclick={() => (view.sheet = { kind: 'calendars', add: 'ics' })}><Icon name="link" size={14} /> Add a calendar link</button>
         </div>
-        <p class="hint">Add as many Google accounts as you use — work and personal sit side by side, read-only, hatched on the dial.</p>
-        <details>
-          <summary>Google client ID</summary>
-          <p class="hint">Daybloom needs a Google OAuth “Desktop app” client to sign in. See docs/calendar.md.</p>
-          <input class="field" placeholder="Client ID" bind:value={settings.value.google.clientId} />
-          <input class="field" placeholder="Client secret (desktop clients have one)" bind:value={settings.value.google.clientSecret} />
-        </details>
-        <form class="ics" onsubmit={addIcs}>
-          <p class="label">Or subscribe to any calendar link (ICS / webcal)</p>
-          <input class="field" placeholder="https://… .ics" bind:value={icsUrl} />
-          <div class="ics-row">
-            <input class="field" placeholder="Name" bind:value={icsLabel} />
-            <button class="btn btn-soft" disabled={calBusy || !icsUrl.trim()}>Subscribe</button>
-          </div>
-        </form>
-        {#if calError}<p class="error">{calError}</p>{/if}
       {/if}
     </section>
 
@@ -535,6 +526,59 @@
   }
   .row.picker {
     align-items: center;
+  }
+  .ad-dot {
+    display: inline-grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    color: #fff;
+    background: var(--ac);
+  }
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+  .sw {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--sw);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+    transition:
+      transform var(--dur-1) var(--ease-out),
+      box-shadow var(--dur-2) var(--ease-out);
+  }
+  .sw:hover {
+    transform: scale(1.1);
+  }
+  .sw.on {
+    box-shadow:
+      0 0 0 2px var(--raised),
+      0 0 0 4px var(--ink);
+  }
+  .sw.task {
+    background: conic-gradient(#3d6fe3, #25976a, #d98a12, #d9467e, #7b61ff, #3d6fe3);
+  }
+  .sw.custom {
+    display: grid;
+    place-items: center;
+    background: conic-gradient(from 90deg, #f55, #fd5, #5f9, #5cf, #a6f, #f55);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .sw.custom.on {
+    background: var(--sw);
+  }
+  .sw.custom input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
   }
   .hint.top {
     margin: -6px 0 var(--s-3);
@@ -684,125 +728,43 @@
     transform-origin: left;
     transition: transform 0.2s linear;
   }
-  .switch {
-    appearance: none;
-    width: 38px;
-    height: 22px;
-    border-radius: 11px;
-    background: var(--line-strong);
-    position: relative;
-    cursor: pointer;
-    transition: background var(--dur-2) var(--ease-out);
-    flex: none;
-  }
-  .switch::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: white;
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
-    transition: transform var(--dur-2) var(--ease-settle);
-  }
-  .switch:checked {
-    background: var(--focus-ring);
-  }
-  .switch:checked::after {
-    transform: translateX(16px);
-  }
-  /* the thumb squishes while pressed, like a real toggle */
-  .switch:active::after {
-    width: 23px;
-  }
-  .switch:checked:active::after {
-    transform: translateX(11px);
-  }
-  .switch::after {
-    transition:
-      transform var(--dur-2) var(--ease-settle),
-      width var(--dur-1) var(--ease-out);
-  }
   input[type='range'] {
     accent-color: var(--ink);
     width: 160px;
   }
-  .account {
-    padding: var(--s-2) var(--s-3);
-    border-radius: var(--r-md);
-    background: var(--surface);
-    margin-bottom: var(--s-2);
+  .cal-sum {
+    display: grid;
+    gap: 4px;
+    margin: 0 0 var(--s-3);
+    padding: 0;
+    list-style: none;
   }
-  .acc-head {
+  .cal-sum li {
     display: flex;
     align-items: center;
-    gap: var(--s-2);
+    gap: 8px;
     font-size: var(--t-sm);
   }
-  .acc-label {
+  .cal-sum li span {
     flex: 1;
-    font-weight: 500;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cal-sum small {
+    font-size: var(--t-xs);
+    color: var(--ink-3);
   }
   .acc-err {
     font-size: var(--t-xs);
     color: var(--danger);
-  }
-  .cal {
-    display: flex;
-    align-items: center;
-    gap: var(--s-2);
-    min-height: 30px;
-    padding-left: var(--s-5);
-    font-size: var(--t-sm);
-  }
-  .cal i {
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
   }
   .cal-actions {
     display: flex;
     flex-wrap: wrap;
     gap: var(--s-2);
     margin-top: var(--s-2);
-  }
-  details {
-    margin-top: var(--s-3);
-    font-size: var(--t-sm);
-  }
-  summary {
-    cursor: pointer;
-    color: var(--ink-2);
-  }
-  details .field {
-    margin-top: var(--s-2);
-    height: 34px;
-    font-size: var(--t-sm);
-  }
-  .ics {
-    margin-top: var(--s-3);
-    display: grid;
-    gap: var(--s-2);
-  }
-  .ics .label {
-    margin: 0;
-  }
-  .ics .field {
-    height: 34px;
-    font-size: var(--t-sm);
-  }
-  .ics-row {
-    display: flex;
-    gap: var(--s-2);
-  }
-  .error {
-    margin: var(--s-2) 0 0;
-    font-size: var(--t-sm);
-    color: var(--danger);
   }
   .keys {
     line-height: 2;

@@ -10,6 +10,7 @@ import { timer } from './stores/timer.svelte';
 import { view } from './stores/view.svelte';
 import { nudges } from './nudges.svelte';
 import { toggleDone } from './actions';
+import { shownTitle } from './privacy';
 
 export function startScheduler() {
   const fired = new Set<string>();
@@ -153,16 +154,18 @@ export function startScheduler() {
       let title: string | null = null;
       let tip = 'Daybloom';
       if (ts && !ts.finished) {
-        title = `${timer.active?.label ?? 'Timer'} · ${formatDuration(ts.remainingMs)}`;
+        title = `${timer.active ? shownTitle(timer.active.label, timer.active.category) : 'Timer'} · ${formatDuration(ts.remainingMs)}`;
         tip = title;
       } else if (s.current) {
-        title = `${s.current.title} · ${formatDuration(s.remainingMs)}`;
-        tip = `${title} left${s.next ? ` — next: ${s.next.title}` : ''}`;
+        title = `${shownTitle(s.current.title, s.current.category)} · ${formatDuration(s.remainingMs)}`;
+        tip = `${title} left${s.next ? ` — next: ${shownTitle(s.next.title, s.next.category)}` : ''}`;
       } else if (s.next) {
-        title = `${formatDuration(s.remainingMs)} → ${s.next.title}`;
-        tip = `Free for ${formatDuration(s.remainingMs)}, then ${s.next.title}`;
+        title = `${formatDuration(s.remainingMs)} → ${shownTitle(s.next.title, s.next.category)}`;
+        tip = `Free for ${formatDuration(s.remainingMs)}, then ${shownTitle(s.next.title, s.next.category)}`;
       }
       if (nudges.attention) tip = `${nudges.attention} to check in · ${tip}`;
+      void settings.value.privacy.hideNames;
+      void settings.value.privacy.on;
       if (!settings.value.menuBarTimer) title = null;
       if (title && title.length > 28) title = `${title.slice(0, 26)}…`;
       const key = `${title}|${tip}`;

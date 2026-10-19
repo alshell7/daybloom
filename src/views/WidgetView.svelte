@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { hidingNames, shownTitle } from '../lib/privacy';
   import Dial from '../lib/dial/Dial.svelte';
   import Readout from '../lib/dial/Readout.svelte';
   import { mix } from '../lib/engine/categories';
@@ -19,7 +20,15 @@
   const timed = $derived(presetId === 'timer60' || presetId === 'chrono');
   const ts = $derived(timer.active ? timer.status(clock.now) : null);
 
-  const blocks = $derived(timed && timer.active ? timer.blocks(clock.minute, finish.dark) : view.pool);
+  const rawBlocks = $derived(timed && timer.active ? timer.blocks(clock.minute, finish.dark) : view.pool);
+  // Privacy mode can swap names for categories on this shared surface.
+  const blocks = $derived(hidingNames() ? rawBlocks.map((b) => ({ ...b, title: shownTitle(b.title, b.category) })) : rawBlocks);
+  const nowState = $derived.by(() => {
+    const st = view.now;
+    if (!hidingNames()) return st;
+    const hide = <T extends { title: string; category: import('../lib/engine/types').CategoryId } | null>(b: T): T => (b ? { ...b, title: shownTitle(b.title, b.category) } : b);
+    return { ...st, current: hide(st.current), next: hide(st.next) };
+  });
   const wedge = $derived.by(() => {
     if (!timed) return null;
     if (ts && !ts.finished) {
@@ -107,7 +116,7 @@
       label="Daybloom widget"
     >
       <Readout
-        state={view.now}
+        state={nowState}
         now={clock.now}
         date={view.today}
         isToday={true}

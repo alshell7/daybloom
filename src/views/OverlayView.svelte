@@ -15,6 +15,7 @@
   import { clock } from '../lib/stores/clock.svelte';
   import { settings } from '../lib/stores/settings.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { hidingNames } from '../lib/privacy';
 
   const cfg = $derived(settings.value.screen);
   const s = $derived(cueSubject(clock.now));
@@ -79,7 +80,7 @@
 
 <div
   class="ov"
-  style:--c={s?.color ?? 'transparent'}
+  style:--c={s ? (cfg.color && cfg.color !== 'task' ? cfg.color : s.color) : 'transparent'}
   style:--in-top={`${inset.top}px`}
   style:--in-right={`${inset.right}px`}
   style:--in-bottom={`${inset.bottom}px`}
@@ -109,7 +110,7 @@
       </svg>
       <span class="icon"><Icon name={s.icon} size={13} stroke={2.2} /></span>
       <span class="txt">
-        <b>{s.title}</b>
+        <b>{s.kind === 'preview' ? s.title : hidingNames() ? 'Focus' : s.title}</b>
         <small class="tnum">{s.paused ? 'Paused' : s.round ?? `until ${formatTime(s.endMs, view.hour12)}`}</small>
       </span>
       <span class="time tnum">{left(s.remainingMs)}</span>

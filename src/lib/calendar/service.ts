@@ -5,11 +5,12 @@
 import type { CalendarEvent } from '../engine/types';
 import { platform } from '../platform';
 import { createGoogleProvider, getGoogleClient, setGoogleClient as applyGoogleClient, type GoogleClientConfig } from './google';
-import { createIcsProvider } from './ics';
+import { createIcsProvider, icsSecretKey, redactIcsUrl, scrubUrls } from './ics';
 import {
   CalendarError,
   RECONNECT,
   type CalendarAccount,
+  type CalendarErrorCode,
   type CalendarInfo,
   type CalendarProvider,
   type ConnectInput,
@@ -47,11 +48,14 @@ export interface CalendarService {
   /** Whether a Google OAuth client id is configured (env or Settings). */
   readonly googleConfigured: boolean;
   init(): Promise<void>;
+  /** Connected accounts. ICS links are never included: see `displayUrl` for a safe short form. */
   getAccounts(): readonly CalendarAccount[];
   /** Called after any change (accounts, events, status). Returns unsubscribe. */
   subscribe(listener: () => void): () => void;
   connectGoogle(): Promise<CalendarAccount>;
+  /** Subscribe to an ICS/webcal link. The link is kept in the OS keychain, not in the account file. */
   addIcs(url: string, label?: string): Promise<CalendarAccount>;
+  /** Forget an account, its cached events and its keychain entries. */
   removeAccount(id: string): Promise<void>;
   setAccountEnabled(id: string, on: boolean): Promise<void>;
   setCalendarEnabled(accountId: string, calendarId: string, on: boolean): Promise<void>;
@@ -100,19 +104,26 @@ function mergeCalendars(previous: CalendarInfo[], fresh: CalendarInfo[]): Calend
   });
 }
 
-function describeError(e: unknown): string {
-  if (e instanceof CalendarError) return e.code === 'reconnect' ? RECONNECT : e.message;
-  if (e instanceof Error) return e.message;
-  return String(e);
+/** A message that is safe to show and to store (links inside it are shortened), plus its kind. */
+function describeError(e: unknown): { error: string; errorCode: CalendarErrorCode | null } {
+  if (e instanceof CalendarError) return { error: e.code === 'reconnect' ? RECONNECT : scrubUrls(e.message), errorCode: e.code };
+  return { error: scrubUrls(e instanceof Error ? e.message : String(e)), errorCode: null };
 }
 
-/** Whitelist persisted fields so nothing token-like can ever reach disk. */
-function storable(a: CalendarAccount): CalendarAccount {
+/**
+ * Whitelist persisted fields so nothing token-like can ever reach disk. ICS links live in the
+ * keychain; the file keeps only their short display form. `legacyUrl` is for one case only: a
+ * plain link written by an older version that the keychain refused to take, which stays where
+ * it already was until a later load can move it.
+ */
+function storable(a: CalendarAccount, legacyUrl?: string): CalendarAccount {
   return {
     id: a.id,
     provider: a.provider,
     label: a.label,
-    ...(a.url ? { url: a.url } : {}),
+    ...(legacyUrl ? { url: legacyUrl } : {}),
+    ...(typeof a.displayUrl === 'string' && a.displayUrl ? { displayUrl: a.displayUrl } : {}),
+    ...(a.urlInKeychain ? { urlInKeychain: true } : {}),
     calendars: (a.calendars ?? []).map((c) => ({
       id: c.id,
       name: c.name,
@@ -122,7 +133,8 @@ function storable(a: CalendarAccount): CalendarAccount {
     })),
     enabled: a.enabled !== false,
     ...(a.lastSyncAt ? { lastSyncAt: a.lastSyncAt } : {}),
-    error: a.error ?? null,
+    error: a.error ? scrubUrls(a.error) : null,
+    errorCode: a.errorCode ?? null,
   };
 }
 
@@ -175,6 +187,10 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
   const limit = createLimiter(Math.max(1, options.concurrency ?? 4));
 
   let accounts: CalendarAccount[] = [];
+  /** accountId → full ICS link. Memory only: the keychain holds the lasting copy. */
+  const links = new Map<string, string>();
+  /** ICS accounts whose old plain link the keychain refused; see `storable`. */
+  const unmigrated = new Set<string>();
   /** accountId → eventId → event */
   const cache = new Map<string, Map<string, CalendarEvent>>();
   /** Last sync attempt per account, for throttling. */
@@ -206,7 +222,11 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
 
   const load = async (key: string) => parseJson(await platform.load(key).catch(() => null));
 
-  const saveAccounts = () => persist(ACCOUNTS_KEY, { version: 1, accounts: accounts.map(storable) });
+  const saveAccounts = () =>
+    persist(ACCOUNTS_KEY, {
+      version: 1,
+      accounts: accounts.map((a) => storable(a, unmigrated.has(a.id) ? links.get(a.id) : undefined)),
+    });
 
   const saveCache = () => {
     const range = defaultSyncWindow(now());
@@ -219,13 +239,61 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
 
   async function loadAccounts() {
     const stored = await load(ACCOUNTS_KEY);
-    accounts = Array.isArray(stored?.accounts) ? stored.accounts.filter(isAccount).map(storable) : [];
+    const raw: CalendarAccount[] = Array.isArray(stored?.accounts) ? stored.accounts.filter(isAccount) : [];
+    const legacy: string[] = [];
+    accounts = raw.map((a) => {
+      const plain = a.provider === 'ics' && typeof a.url === 'string' && a.url ? a.url : null;
+      if (!plain) return storable(a);
+      legacy.push(a.id);
+      links.set(a.id, plain);
+      return { ...storable(a), displayUrl: a.displayUrl || redactIcsUrl(plain) };
+    });
+    const known = new Set(accounts.map((a) => a.id));
     for (const id of [...cache.keys()]) {
-      if (!accounts.some((a) => a.id === id)) {
+      if (!known.has(id)) {
         cache.delete(id);
         attempted.delete(id);
       }
     }
+    for (const id of [...links.keys()]) if (!known.has(id)) links.delete(id);
+    for (const id of [...unmigrated]) if (!known.has(id)) unmigrated.delete(id);
+    if (legacy.length) await moveLinksToKeychain(legacy);
+  }
+
+  /** Older versions kept ICS links in the plain account file. Move them to the keychain, then rewrite the file. */
+  async function moveLinksToKeychain(ids: string[]) {
+    let moved = 0;
+    for (const id of ids) {
+      const url = links.get(id);
+      if (!url) continue;
+      try {
+        await platform.secrets.set(icsSecretKey(id), url);
+        unmigrated.delete(id);
+        patch(id, { urlInKeychain: true });
+        moved++;
+      } catch {
+        unmigrated.add(id);
+        console.warn('[calendar] the keychain refused a calendar link; it stays in the account file for now');
+      }
+    }
+    if (moved) await saveAccounts();
+  }
+
+  /** The account as providers need it: with its ICS link, from memory or the keychain. */
+  async function withLink(acc: CalendarAccount): Promise<CalendarAccount> {
+    if (acc.provider !== 'ics') return acc;
+    let url = links.get(acc.id);
+    if (!url) {
+      let saved: string | null;
+      try {
+        saved = await platform.secrets.get(icsSecretKey(acc.id));
+      } catch (e) {
+        throw new CalendarError('config', 'Daybloom couldn’t open the system keychain to read this calendar’s link.', { cause: e });
+      }
+      if (!saved) throw new CalendarError('invalid', 'Daybloom can’t find the link for this calendar. Add the link again.');
+      links.set(acc.id, (url = saved));
+    }
+    return { ...acc, url };
   }
 
   async function loadCache() {
@@ -287,16 +355,18 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
   }
 
   async function syncAccount(id: string, range: TimeRange): Promise<void> {
-    const acc = accounts.find((a) => a.id === id);
-    const provider = acc && providers[acc.provider];
-    if (!acc || !provider) return;
+    const found = accounts.find((a) => a.id === id);
+    const provider = found && providers[found.provider];
+    if (!found || !provider) return;
     attempted.set(id, { at: now(), range });
 
+    let acc: CalendarAccount;
     let calendars: CalendarInfo[];
     try {
+      acc = await withLink(found);
       calendars = mergeCalendars(acc.calendars, await limit(() => provider.listCalendars(acc)));
     } catch (e) {
-      patch(id, { error: describeError(e) }); // cached events stay as the last good copy
+      patch(id, describeError(e)); // cached events stay as the last good copy
       return;
     }
     const wanted = calendars.filter((c) => c.enabled);
@@ -308,7 +378,7 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
     const current = accounts.find((a) => a.id === id);
     if (!current) return; // removed while we were fetching
     const bucket = cache.get(id) ?? new Map<string, CalendarEvent>();
-    let error: string | null = null;
+    let problem: ReturnType<typeof describeError> | null = null;
     let anyOk = wanted.length === 0;
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
@@ -316,7 +386,7 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
         replaceRange(bucket, wanted[i].id, range, r.value);
         anyOk = true;
       } else {
-        error ??= describeError(r.reason);
+        problem ??= describeError(r.reason);
       }
     }
     const known = new Set(calendars.map((c) => c.id));
@@ -324,7 +394,8 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
     cache.set(id, bucket);
     patch(id, {
       calendars: mergeCalendars(current.calendars, calendars), // keep toggles made mid-sync
-      error,
+      error: problem?.error ?? null,
+      errorCode: problem?.errorCode ?? null,
       ...(anyOk ? { lastSyncAt: now() } : {}),
     });
   }
@@ -369,7 +440,20 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
     await init();
     const provider = providers[kind];
     if (!provider) throw new CalendarError('config', 'This kind of calendar isn’t available.');
-    const incoming = await provider.connect(input);
+    const { url, ...incoming } = await provider.connect(input);
+    if (kind === 'ics' && url) {
+      // The link is the credential for an ICS feed: it goes to the keychain, never to the file.
+      try {
+        await platform.secrets.set(icsSecretKey(incoming.id), url);
+      } catch (e) {
+        throw new CalendarError('config', 'Daybloom couldn’t keep this link safe in your system keychain, so it didn’t add the calendar.', {
+          cause: e,
+        });
+      }
+      links.set(incoming.id, url);
+      unmigrated.delete(incoming.id);
+      Object.assign(incoming, { displayUrl: redactIcsUrl(url), urlInKeychain: true });
+    }
     const existing = accounts.find((a) => a.id === incoming.id);
     const account: CalendarAccount = existing
       ? {
@@ -379,8 +463,9 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
           lastSyncAt: existing.lastSyncAt,
           enabled: true,
           error: null,
+          errorCode: null,
         }
-      : { ...incoming, enabled: true, error: null };
+      : { ...incoming, enabled: true, error: null, errorCode: null };
     accounts = existing ? accounts.map((a) => (a.id === account.id ? account : a)) : [...accounts, account];
     attempted.delete(account.id);
     notify();
@@ -421,21 +506,25 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
       await init();
       const acc = accounts.find((a) => a.id === id);
       if (!acc) return;
+      const url = links.get(id);
       accounts = accounts.filter((a) => a.id !== id);
       cache.delete(id);
       attempted.delete(id);
+      links.delete(id);
+      unmigrated.delete(id);
       notify();
       await Promise.all([saveAccounts(), saveCache()]);
       let cleaned = false;
       try {
         const provider = providers[acc.provider];
         if (provider) {
-          await provider.disconnect(acc);
+          await provider.disconnect(url ? { ...acc, url } : acc);
           cleaned = true;
         }
       } catch {
         /* fall through to the direct keychain delete */
       }
+      if (acc.provider === 'ics') await platform.secrets.delete(icsSecretKey(id)).catch(() => {});
       if (!cleaned) await platform.secrets.delete(id).catch(() => {});
     },
 

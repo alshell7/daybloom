@@ -14,6 +14,8 @@
   import { taskFile } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
   import { timer } from '../lib/stores/timer.svelte';
+  import { enabledAddons, isOn } from '../lib/addons/registry';
+  import TrackerPill from './addons/tracker/TrackerPill.svelte';
 
   let { mac = false, ontogglewidget }: { mac?: boolean; ontogglewidget: () => void } = $props();
 
@@ -127,6 +129,12 @@
     </nav>
 
     <div class="actions">
+      {#if settings.value.privacy.on}
+        <button class="private" onclick={() => (settings.value.privacy.on = false)} title="Privacy mode is on: Daybloom stays out of screenshots and recordings. Click to turn it off · ⇧⌘P" aria-label="Privacy mode is on. Turn it off" in:scale={{ start: 0.8, duration: view.reducedMotion ? 0 : 220, easing: cubicOut }}>
+          <Icon name="eye-off" size={14} stroke={2.1} /><span>Private</span>
+        </button>
+      {/if}
+      {#if isOn('tracker')}<TrackerPill />{/if}
       <UpdateChip />
       <button class="icon-btn ask" onclick={() => (view.sheet = view.sheet?.kind === 'assistant' ? null : { kind: 'assistant' })} aria-pressed={view.sheet?.kind === 'assistant'} aria-label="Ask Daybloom (⌘K)" title="Ask Daybloom · ⌘K">
         <Icon name="sparkles" size={18} />
@@ -138,6 +146,21 @@
       </button>
       <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' })} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
         <Icon name="chart" size={18} />
+      </button>
+      {#each enabledAddons() as a (a.id)}
+        <button
+          class="icon-btn fold-a"
+          onclick={() => (view.sheet = view.sheet?.kind === a.sheet ? null : { kind: a.sheet })}
+          aria-pressed={view.sheet?.kind === a.sheet}
+          aria-label={a.name}
+          title={a.name}
+          in:scale={{ start: 0.6, duration: view.reducedMotion ? 0 : 260, easing: cubicOut }}
+        >
+          <Icon name={a.icon} size={18} />
+        </button>
+      {/each}
+      <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'addons' ? null : { kind: 'addons' })} aria-pressed={view.sheet?.kind === 'addons'} aria-label="Addons" title="Addons">
+        <Icon name="puzzle" size={18} />
       </button>
       <button class="icon-btn fold-a" onclick={openFocus} aria-pressed={view.sheet?.kind === 'focus' || !!timer.active} aria-label="Focus (F)" title="Focus · F">
         <Icon name="focus" size={18} />
@@ -156,12 +179,29 @@
         {#if moreOpen}
           <div class="scrim" role="presentation" onclick={() => (moreOpen = false)}></div>
           <div class="menu" role="menu" transition:scale={{ start: 0.94, duration: view.reducedMotion ? 0 : 180, easing: cubicOut }}>
+            <button class="item always" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'calendars' }))}>
+              <Icon name="calendar" size={16} /><span>Calendars</span>
+            </button>
+            <button class="item always" role="menuitemcheckbox" aria-checked={settings.value.privacy.on} onclick={() => pick(() => (settings.value.privacy.on = !settings.value.privacy.on))}>
+              <Icon name="eye-off" size={16} /><span>Privacy mode</span>
+              {#if settings.value.privacy.on}<span class="check"><Icon name="check" size={14} stroke={2.4} /></span>{:else}<kbd>⇧⌘P</kbd>{/if}
+            </button>
+            <div class="sep a" aria-hidden="true"></div>
             <button class="item b" role="menuitem" onclick={(e) => { const el = e.currentTarget; pick(() => toggleTheme(el)); }}>
               <Icon name={view.dark ? 'sun' : 'moon'} size={16} /><span>{view.dark ? 'Light mode' : 'Dark mode'}</span>
             </button>
             <button class="item b" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'insights' }))}>
               <Icon name="chart" size={16} /><span>Your week</span><kbd>I</kbd>
             </button>
+            {#each enabledAddons() as a (a.id)}
+              <button class="item a" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: a.sheet }))}>
+                <Icon name={a.icon} size={16} /><span>{a.name}</span>
+              </button>
+            {/each}
+            <button class="item b" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'addons' }))}>
+              <Icon name="puzzle" size={16} /><span>Addons</span>
+            </button>
+
             <button class="item a" role="menuitem" onclick={() => pick(openFocus)}>
               <Icon name="focus" size={16} /><span>Focus</span><kbd>F</kbd>
             </button>
@@ -371,9 +411,26 @@
   .wrap {
     display: contents;
   }
+  .private {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    margin-right: 4px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-xs);
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--sunken);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    transition: background var(--dur-1) var(--ease-out);
+  }
+  .private:hover {
+    background: color-mix(in srgb, var(--ink) 8%, var(--sunken));
+  }
   .more-wrap {
     position: relative;
-    display: none;
   }
   .more.on {
     background: var(--sunken);
@@ -389,7 +446,7 @@
     top: calc(100% + 6px);
     right: 0;
     z-index: 45;
-    min-width: 210px;
+    min-width: 236px;
     padding: 6px;
     border-radius: var(--r-lg);
     background: var(--raised);
@@ -409,12 +466,29 @@
     text-align: left;
     transition: background var(--dur-1) var(--ease-out);
   }
+  .item.always {
+    display: flex;
+  }
+  .item .check {
+    width: 16px;
+    color: var(--ink);
+  }
+  .sep {
+    display: none;
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--line);
+  }
   .item:hover {
     background: var(--sunken);
     color: var(--ink);
   }
   .item span {
     flex: 1;
+    white-space: nowrap;
+  }
+  .item span.check {
+    flex: none;
   }
   .item kbd {
     font-family: var(--font-ui);
@@ -461,6 +535,9 @@
   }
   /* Narrow: the week below already says which day it is; quieter actions fold away. */
   @container topbar (max-width: 700px) {
+    .private span {
+      display: none;
+    }
     .date:not(.solo) {
       display: none !important;
     }
@@ -470,11 +547,11 @@
     .fold-a {
       display: none;
     }
-    .more-wrap {
-      display: block;
-    }
     .item.a {
       display: flex;
+    }
+    .sep.a {
+      display: block;
     }
   }
   @container topbar (max-width: 560px) {

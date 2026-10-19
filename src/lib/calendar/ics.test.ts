@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../platform', () => ({ platform: { fetch: vi.fn() } }));
 
-import { normalizeIcsUrl, parseIcs, readIcsMeta, unescapeText, zonedTimeToUtc } from './ics';
+import { icsSecretKey, normalizeIcsUrl, parseIcs, readIcsMeta, redactIcsUrl, scrubUrls, unescapeText, zonedTimeToUtc } from './ics';
 
 const cal = (...lines: (string | string[])[]) =>
   ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Daybloom//Test//EN', ...lines.flat(), 'END:VCALENDAR'].join('\r\n');
@@ -128,6 +128,12 @@ describe('parseIcs: values', () => {
     const text = cal('X-WR-CALNAME:Family\\, shared', 'X-APPLE-CALENDAR-COLOR:#FF2968FF', vevent('UID:x', 'DTSTART:20261020T090000Z'));
     expect(readIcsMeta(text)).toEqual({ name: 'Family, shared', color: '#ff2968' });
     expect(parseIcs(text, ALL)).toMatchObject({ name: 'Family, shared', color: '#ff2968' });
+  });
+
+  it('reads the calendar time zone, resolving Windows names', () => {
+    expect(readIcsMeta(cal('X-WR-TIMEZONE:Europe/Berlin')).timeZone).toBe('Europe/Berlin');
+    expect(readIcsMeta(cal('X-WR-TIMEZONE:W. Europe Standard Time')).timeZone).toBe('Europe/Berlin');
+    expect(readIcsMeta(cal('X-WR-TIMEZONE:Not/AZone')).timeZone).toBeUndefined();
   });
 });
 
@@ -276,5 +282,39 @@ describe('normalizeIcsUrl', () => {
     expect(normalizeIcsUrl('webcals://example.com/a.ics')).toBe('https://example.com/a.ics');
     expect(() => normalizeIcsUrl('not a url')).toThrow(/calendar link/);
     expect(() => normalizeIcsUrl('ftp://example.com/a.ics')).toThrow(/https/);
+  });
+
+  it('drops quotes and angle brackets copied with the link', () => {
+    expect(normalizeIcsUrl('"https://example.com/cal.ics"')).toBe('https://example.com/cal.ics');
+    expect(normalizeIcsUrl(' <webcal://example.com/cal.ics> ')).toBe('https://example.com/cal.ics');
+    expect(normalizeIcsUrl('“https://example.com/cal.ics”')).toBe('https://example.com/cal.ics');
+  });
+});
+
+describe('redactIcsUrl', () => {
+  it('keeps the host and a plain file name, and hides tokens', () => {
+    // Synthetic links shaped like the real services' secret feeds.
+    expect(redactIcsUrl('https://calendar.google.com/calendar/ical/someone%40example.test/private-0123abcd/basic.ics')).toBe(
+      'calendar.google.com/…/basic.ics',
+    );
+    expect(redactIcsUrl('webcal://p01-caldav.icloud.com/published/2/TOKENTOKENTOKEN')).toBe('p01-caldav.icloud.com/…');
+    expect(redactIcsUrl('https://outlook.office365.com/owa/calendar/abc@example.test/def123/calendar.ics')).toBe(
+      'outlook.office365.com/…/calendar.ics',
+    );
+    expect(redactIcsUrl('https://user.fm/calendar/v1-0123456789abcdef/Work.ics')).toBe('user.fm/…/Work.ics');
+    expect(redactIcsUrl('https://example.test/v1-0123456789abcdef.ics')).toBe('example.test/…');
+    expect(redactIcsUrl('https://www.example.test/holidays.ics')).toBe('example.test/holidays.ics');
+    expect(redactIcsUrl('https://me:pw@example.test/feed.ics?token=abc')).toBe('example.test/feed.ics?…');
+    expect(redactIcsUrl('https://example.test/?token=abc')).toBe('example.test/?…');
+    expect(redactIcsUrl('not a link')).toBe('calendar link');
+  });
+
+  it('shortens every link inside a message', () => {
+    expect(scrubUrls('GET https://example.test/a/SECRET123/cal.ics?k=SECRET123 failed')).toBe('GET example.test/…/cal.ics?… failed');
+    expect(scrubUrls('no links here')).toBe('no links here');
+  });
+
+  it('derives the keychain entry from the account id', () => {
+    expect(icsSecretKey('ics:abc')).toBe('ics:abc:url');
   });
 });

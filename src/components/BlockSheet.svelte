@@ -13,6 +13,7 @@
   import { tasks, uid } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
   import Panel from './Panel.svelte';
+  import AddonBlockFields from './addons/AddonBlockFields.svelte';
 
   const sheetKey = $derived(view.sheet?.kind === 'edit' ? view.sheet.key : null);
   const target = $derived.by(() => {
@@ -351,6 +352,8 @@
         {/each}
       </div>
     </section>
+
+    <AddonBlockFields taskId={task.id} blockKey={sheetKey && !sheetKey.startsWith('later:') ? sheetKey : null} minutes={duration} {done} />
 
     <section class="group">
       <textarea class="field notes" placeholder="Notes, links, how you'll know it's done…" bind:value={task.notes} rows="3" aria-label="Notes"></textarea>

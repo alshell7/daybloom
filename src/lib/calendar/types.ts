@@ -27,8 +27,16 @@ export interface CalendarAccount {
   provider: ProviderKind;
   /** Google: the account email. ICS: the name the user gave the subscription. */
   label: string;
-  /** ICS feed URL (already normalised from webcal:// to https://). */
+  /**
+   * ICS feed URL (already normalised from webcal:// to https://). Only providers see it: the
+   * service keeps it in the OS keychain and in memory, never in the account list on disk or
+   * in `CalendarService.getAccounts()`.
+   */
   url?: string;
+  /** ICS: a short form of the link that is safe to show and store, e.g. `calendar.google.com/…/basic.ics`. */
+  displayUrl?: string;
+  /** ICS: the full link is in the OS keychain (see `icsSecretKey`). */
+  urlInKeychain?: boolean;
   calendars: CalendarInfo[];
   enabled: boolean;
   lastSyncAt?: number;
@@ -38,6 +46,8 @@ export interface CalendarAccount {
    * human-readable message.
    */
   error?: string | null;
+  /** What kind of problem `error` is, so the UI can offer the right fix. */
+  errorCode?: CalendarErrorCode | null;
 }
 
 /** Value of `CalendarAccount.error` when the user has to sign in again. */

@@ -14,6 +14,7 @@ pub struct TrayItems {
     show_widget: CheckMenuItem<Wry>,
     on_top: CheckMenuItem<Wry>,
     on_desktop: CheckMenuItem<Wry>,
+    privacy: CheckMenuItem<Wry>,
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -23,6 +24,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .build(app)?;
     let on_desktop =
         CheckMenuItemBuilder::with_id("layer-desktop", "Widget Sits on Desktop").build(app)?;
+    let privacy = CheckMenuItemBuilder::with_id("privacy", "Privacy Mode").build(app)?;
 
     let menu = MenuBuilder::new(app)
         .item(&MenuItemBuilder::with_id("open", "Open Daybloom").build(app)?)
@@ -31,6 +33,8 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .item(&on_top)
         .item(&on_desktop)
         .separator()
+        .item(&privacy)
+        .separator()
         .item(&MenuItemBuilder::with_id("new-block", "New Block…").build(app)?)
         .item(&MenuItemBuilder::with_id("focus-now", "Focus on Now").build(app)?)
         .item(&MenuItemBuilder::with_id("open-settings", "Settings…").build(app)?)
@@ -38,7 +42,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .item(&MenuItemBuilder::with_id("quit", "Quit Daybloom").build(app)?)
         .build()?;
 
-    app.manage(TrayItems { show_widget, on_top, on_desktop });
+    app.manage(TrayItems { show_widget, on_top, on_desktop, privacy });
 
     let builder = TrayIconBuilder::with_id(ID)
         .tooltip("Daybloom")
@@ -73,6 +77,12 @@ pub fn sync(app: &AppHandle, visible: bool, layer: Layer) {
     }
 }
 
+pub fn sync_privacy(app: &AppHandle, on: bool) {
+    if let Some(items) = app.try_state::<TrayItems>() {
+        let _ = items.privacy.set_checked(on);
+    }
+}
+
 fn on_menu(app: &AppHandle, event: MenuEvent) {
     match event.id().as_ref() {
         "open" => crate::show_main(app),
@@ -94,6 +104,7 @@ fn on_menu(app: &AppHandle, event: MenuEvent) {
             crate::show_main(app);
             let _ = app.emit("daybloom://tray", json!({ "action": action }));
         }
+        "privacy" => crate::privacy::set(app, !crate::privacy::is_on(app)),
         "quit" => app.exit(0),
         _ => {}
     }
