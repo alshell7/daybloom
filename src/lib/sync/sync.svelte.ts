@@ -1,11 +1,15 @@
-// GitHub sync: keeps tasks, shared settings and progress the same on every computer
-// by reading and writing small JSON files in a private repo the user owns.
+// GitHub sync: keeps tasks, shared settings, progress and addon data the same on every
+// computer by reading and writing small JSON files in a private repo the user owns.
 //
 //   <folder>/tasks.json        tasks + tombstones
 //   <folder>/settings.json     the allow-listed settings (see SHARED_SETTINGS)
 //   <folder>/progress.json     earned badges
 //   <folder>/streaks.json      last celebrated rhythm milestone
+//   <folder>/work.json         the Work addon (see ./addons.ts)
+//   <folder>/tracker.json      the Time Tracker addon
 //   <folder>/device-<id>.json  a heartbeat per computer (name, last sync)
+//
+// An addon file is only written once some computer has used that addon.
 //
 // Each sync lists the folder once, fetches only files whose sha moved, three-way merges
 // them against the snapshot from the last sync (`sync-base-<file>`), writes back only
@@ -18,7 +22,12 @@ import { progressFile } from '../stores/progress.svelte';
 import { settings } from '../stores/settings.svelte';
 import { streakFile } from '../stores/streaks.svelte';
 import { taskFile } from '../stores/tasks.svelte';
+import { trackerFile } from '../addons/tracker/tracker.svelte';
+import type { TrackerFile } from '../addons/tracker/types';
+import type { WorkData } from '../addons/work/types';
+import { loadWork, workFile } from '../addons/work/work.svelte';
 import type { Task } from '../engine/types';
+import { mergeTrackerFiles, mergeWorkFiles, parseTrackerFile, parseWorkFile, trackerUnused, workUnused } from './addons';
 import { createGitHubClient, GitHubError, parseRepo, type DirEntry, type FetchLike, type GitHubClient, type RepoInfo } from './github';
 import {
   applySharedSettings,
@@ -55,8 +64,8 @@ const HEARTBEAT_ON_WRITE_MS = 15 * 60_000;
 /** Back-off before each attempt at writing one file (sha conflicts). */
 const ATTEMPT_DELAYS = [0, 400, 1500];
 
-const DATA_FILES = ['tasks.json', 'settings.json', 'progress.json', 'streaks.json'];
-const BASE_KEYS = ['tasks', 'settings', 'progress', 'streaks'] as const;
+const DATA_FILES = ['tasks.json', 'settings.json', 'progress.json', 'streaks.json', 'work.json', 'tracker.json'];
+const BASE_KEYS = ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker'] as const;
 type BaseKey = (typeof BASE_KEYS)[number];
 
 export interface DeviceInfo {
@@ -111,6 +120,10 @@ export interface SyncStores {
   settings: Binding<object>;
   progress: Binding<{ version: 1; unlocked: { id: string; at: number }[]; viewedAt: number }>;
   streaks: Binding<{ celebrated: number }>;
+  /** The Work addon's whole file ('addon-work'). */
+  work: Binding<WorkData>;
+  /** The Time Tracker addon's whole file ('addon-tracker'). */
+  tracker: Binding<TrackerFile>;
   /**
    * Calls back after any change to the synced stores, but only while `active()` is true
    * (so nothing is watched for people who never turn sync on). Returns a stop function.
@@ -143,6 +156,8 @@ interface Codec<T> {
   file: string;
   /** On a first sync that chose "use the repo's", take the repo's copy as is. */
   replaceOnJoin: boolean;
+  /** For an addon: true when this device never used it, so a missing repo file stays missing. */
+  unused?(v: T): boolean;
   read(): T;
   write(v: T): void;
   parse(raw: unknown): T;
@@ -186,7 +201,27 @@ function codecs(s: SyncStores): Codec<any>[] {
     parse: parseStreakFile,
     merge: mergeStreakFiles,
   };
-  return [tasks, shared, progress, streaks];
+  const work: Codec<WorkData> = {
+    key: 'work',
+    file: 'work.json',
+    replaceOnJoin: true,
+    unused: workUnused,
+    read: () => parseWorkFile(s.work.read()),
+    write: (v) => s.work.write(v),
+    parse: parseWorkFile,
+    merge: mergeWorkFiles,
+  };
+  const tracker: Codec<TrackerFile> = {
+    key: 'tracker',
+    file: 'tracker.json',
+    replaceOnJoin: true,
+    unused: trackerUnused,
+    read: () => parseTrackerFile(s.tracker.read()),
+    write: (v) => s.tracker.write(v),
+    parse: parseTrackerFile,
+    merge: mergeTrackerFiles,
+  };
+  return [tasks, shared, progress, streaks, work, tracker];
 }
 
 export function normalizeFolder(input: string): string {
@@ -374,6 +409,11 @@ export function createSyncService(deps: SyncDeps) {
         remote = f ? parseRemote(c, f.text) : null;
       }
       const local = c.read();
+      if (remote === null && c.unused?.(local)) {
+        // Nothing here and nothing there: no empty file. The base records that both were empty.
+        await saveBase(c, { loc, sha: null, at: now(), data: local });
+        return false;
+      }
       let merged: T;
       if (remote === null) merged = local;
       else if (!base && replace && c.replaceOnJoin) merged = remote;
@@ -736,9 +776,14 @@ let appStores: Promise<SyncStores> | null = null;
 
 function bindApp(): Promise<SyncStores> {
   return (appStores ??= (async () => {
-    // Read anything the planner hasn't loaded yet (streaks load lazily), so a sync never
-    // writes defaults over data that's sitting on disk.
-    await Promise.all([taskFile, settings, progressFile, streakFile].filter((s) => !s.ready).map((s) => s.load()));
+    // Read anything the planner hasn't loaded yet (streaks and the addons load lazily, and
+    // an addon that is switched off is never loaded), so a sync never writes defaults over
+    // data that's sitting on disk. The Work store starts its load on import; `loadWork`
+    // shares that one rather than reading the file twice.
+    await Promise.all([
+      ...[taskFile, settings, progressFile, streakFile, trackerFile].filter((s) => !s.ready).map((s) => s.load()),
+      workFile.ready ? null : loadWork(),
+    ]);
     const bind = <T>(s: { value: T }): Binding<T> => ({
       read: () => plain(s.value),
       write: (v) => {
@@ -750,6 +795,8 @@ function bindApp(): Promise<SyncStores> {
       settings: bind(settings),
       progress: bind(progressFile),
       streaks: bind(streakFile),
+      work: bind(workFile),
+      tracker: bind(trackerFile),
       watch(onChange, active) {
         return $effect.root(() => {
           $effect(() => {
@@ -758,6 +805,8 @@ function bindApp(): Promise<SyncStores> {
             JSON.stringify(settings.value);
             JSON.stringify(progressFile.value);
             JSON.stringify(streakFile.value);
+            JSON.stringify(workFile.value);
+            JSON.stringify(trackerFile.value);
             untrack(onChange);
           });
         });

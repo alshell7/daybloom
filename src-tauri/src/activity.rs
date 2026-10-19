@@ -142,3 +142,20 @@ fn idle_seconds() -> f64 {
 fn foreground(_with_title: bool) -> Option<Foreground> {
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Real readings on this machine: `cargo test --lib activity -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn reads_idle_time_and_the_front_app() {
+        let idle = activity_idle_seconds();
+        let front = activity_foreground(false);
+        eprintln!("idle {idle:.1}s, front {:?}", front.as_ref().map(|f| f.app.clone()));
+        assert!(idle >= 0.0);
+        #[cfg(any(target_os = "macos", windows))]
+        assert!(front.is_some_and(|f| !f.app.is_empty()));
+    }
+}

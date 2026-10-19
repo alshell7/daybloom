@@ -564,7 +564,7 @@ Calendar events are read-only. When the same event is in two accounts, Daybloom 
 
 ### Sync with GitHub
 
-Sync keeps your blocks, settings and badges the same on all your computers. Daybloom writes small JSON files to a private GitHub repo that you own. There is no Daybloom server.
+Sync keeps your blocks, settings, badges, Work projects and bills, and Time Tracker entries the same on all your computers. Daybloom writes small JSON files to a private GitHub repo that you own. There is no Daybloom server.
 
 <img src="docs/media/sync.png" width="360" align="right" alt="The 'Sync with GitHub' section in Settings.">
 
@@ -619,7 +619,7 @@ Daybloom syncs a short time after each change, and every 5 minutes. The token st
   - macOS: `~/Library/Application Support/app.daybloom.desktop/state/`
   - Windows: `%APPDATA%\app.daybloom.desktop\state\`
 - Tokens, calendar sign-ins and calendar links stay in the system keychain (macOS Keychain or Windows Credential Manager).
-- Work and Time Tracker data stay on your computer. GitHub sync does not include them yet.
+- Work and Time Tracker data stay on your computer, and sync with GitHub when you turn sync on. App activity tracking is a setting for each computer and never syncs.
 - Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
 - Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
 - To make a backup, open **Settings › Your data** and click **Export**. To restore, click **Import**.

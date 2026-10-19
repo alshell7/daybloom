@@ -130,14 +130,14 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 /** Keys of `first` in order, then keys only `second` has. */
-function unionKeys(first: Obj | Map<string, unknown>, second: Obj | Map<string, unknown>): string[] {
+export function unionKeys(first: Obj | Map<string, unknown>, second: Obj | Map<string, unknown>): string[] {
   const a = first instanceof Map ? [...first.keys()] : Object.keys(first);
   const b = second instanceof Map ? [...second.keys()] : Object.keys(second);
   const seen = new Set(a);
   return [...a, ...b.filter((k) => !seen.has(k))];
 }
 
-function byId<T extends { id: string }>(list: readonly T[]): Map<string, T> {
+export function byId<T extends { id: string }>(list: readonly T[]): Map<string, T> {
   const m = new Map<string, T>();
   for (const x of list) if (!m.has(x.id)) m.set(x.id, x);
   return m;
@@ -148,7 +148,7 @@ function byId<T extends { id: string }>(list: readonly T[]): Map<string, T> {
  * either does; if both changed differently, `preferLocal` decides. Without a base
  * there is no "changed", so a value only one side has is kept.
  */
-function pick(b: unknown, l: unknown, r: unknown, hasBase: boolean, preferLocal: boolean): unknown {
+export function pick(b: unknown, l: unknown, r: unknown, hasBase: boolean, preferLocal: boolean): unknown {
   if (deepEqual(l, r)) return r;
   if (hasBase) {
     if (deepEqual(l, b)) return r;
