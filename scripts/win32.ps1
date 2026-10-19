@@ -332,7 +332,7 @@ switch ($Cmd) {
         if (-not $t0.ContainsKey([int]$p.ProcessId)) { continue }
         $ms = $gp.TotalProcessorTime.TotalMilliseconds - $t0[[int]$p.ProcessId]
         [pscustomobject]@{
-          pid = $p.ProcessId; name = $p.Name; role = (Get-Role $p)
+          pid = $p.ProcessId; name = $p.Name; role = (Get-Role $p); started = $gp.StartTime.ToString('o')
           cpu = [math]::Round(100 * $ms / $el, 2)
           privateMB = [math]::Round($gp.PrivateMemorySize64 / 1MB, 1)
           workingSetMB = [math]::Round($gp.WorkingSet64 / 1MB, 1)

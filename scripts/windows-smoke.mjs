@@ -253,7 +253,7 @@ function diagnose(run, what) {
 
 // Launches the app and waits for the planner, then the widget (shown at launch from the seeded
 // settings; opened through the app's own widget_show command if it was not).
-async function start(app) {
+async function start(app, { widget: wantWidget = true } = {}) {
   const run = { ...app, ...launch(app) };
   const planner = await waitFor('planner window', () => {
     const procs = list(ps('procs'));
@@ -262,6 +262,7 @@ async function start(app) {
   }, 90_000, 1000).catch(() => null);
   if (!planner) throw new Error(diagnose(run, 'planner window never appeared'));
   run.pid = planner.pid;
+  if (!wantWidget) return { run, main: planner, widget: null };
 
   let widget = await waitFor('widget window', () => widgetOf(run.pid)?.visible && widgetOf(run.pid), 20_000).catch(() => null);
   if (!widget) {
@@ -891,6 +892,110 @@ async function screenCues(app) {
   }
 }
 
+// ---- CPU study (SMOKE_MODE=cpu): the same four idle states for any build -----------------
+
+const STUDY_SECONDS = { a: 60, b: 120, c: 60, d: 120 };
+
+function setWidgetVisible(visible) {
+  const file = path.join(process.env.APPDATA, IDENTIFIER, 'state', 'settings.json');
+  const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
+  settings.widget = { ...(settings.widget ?? {}), visible };
+  fs.writeFileSync(file, JSON.stringify(settings));
+}
+
+// % of one core by kind. Renderers are listed in start order: the planner's starts first.
+function split(r) {
+  const rows = list(r.processes);
+  const sum = (f) => Math.round(rows.filter(f).reduce((t, p) => t + p.cpu, 0) * 100) / 100;
+  const known = ['app', 'browser', 'gpu-process', 'renderer'];
+  return {
+    total: r.oneCore,
+    app: sum((p) => p.role === 'app'),
+    browser: sum((p) => p.role === 'browser'),
+    gpu: sum((p) => p.role === 'gpu-process'),
+    renderers: rows.filter((p) => p.role === 'renderer').sort((x, y) => String(x.started).localeCompare(String(y.started))).map((p) => p.cpu),
+    other: sum((p) => !known.includes(p.role)),
+    privateMB: r.privateMB,
+  };
+}
+
+const ANIMATIONS = `(() => {
+  const n = {};
+  for (const a of document.getAnimations()) {
+    if (a.playState !== 'running') continue;
+    const t = a.effect?.target;
+    const el = t ? t.tagName.toLowerCase() + ((t.getAttribute && t.getAttribute('class')) ? '.' + t.getAttribute('class').trim().split(/\\s+/).slice(0, 2).join('.') : '') : '?';
+    const k = (a.animationName || a.transitionProperty || a.constructor.name) + ' on ' + el;
+    n[k] = (n[k] ?? 0) + 1;
+  }
+  return n;
+})()`;
+
+async function cpuStudy(app) {
+  const label = process.env.SMOKE_LABEL ?? SOURCE;
+  const study = [];
+  const measure = (pid, state, what) => {
+    const r = ps('cpu', { A: pid, B: STUDY_SECONDS[state] });
+    const s = { state, what, ...split(r) };
+    study.push(s);
+    cpu.push({ scenario: `(${state}) ${what}`, ...r });
+    record(`Idle CPU (${state}) ${what}`, 'info', `${s.total}% of one core: app ${s.app}, browser ${s.browser}, GPU ${s.gpu}, renderers ${s.renderers.join(' / ') || '–'}, other ${s.other}; ${s.privateMB} MB`);
+  };
+  const animations = {};
+
+  let run = app;
+  try {
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    await sleep(30_000);
+    ps('front', { A: started.main.hwnd });
+    await sleep(2000);
+    if (SOURCE !== 'release') {
+      const pg = await pages();
+      for (const l of ['main', 'widget']) {
+        if (!pg) break;
+        animations[l] = await pg[l].eval(ANIMATIONS);
+        const list_ = Object.entries(animations[l]).map(([k, v]) => `${v}× ${k}`);
+        record(`Running animations (a), ${l === 'main' ? 'planner' : 'widget'}`, 'info', list_.join('; ') || 'none');
+      }
+      if (!pg) record('Running animations (a)', 'warn', await devtoolsWhy(pid));
+      closeAll(pg);
+      await sleep(3000);
+    }
+    measure(pid, 'a', 'planner + widget shown');
+    await hideMain(pid);
+    await sleep(15_000);
+    measure(pid, 'b', 'planner in the tray + widget');
+    await trayClick(pid);
+    await sleep(3000);
+    ps('show', { A: mainOf(pid).hwnd, B: 6 }); // SW_MINIMIZE
+    await sleep(15_000);
+    measure(pid, 'c', 'planner minimised + widget');
+  } finally {
+    await quit(run);
+    await sleep(2000);
+  }
+
+  // (d) No widget at all: the saved settings say it is off, so it is never built.
+  setWidgetVisible(false);
+  run = app;
+  try {
+    const started = await start(app, { widget: false });
+    run = started.run;
+    const { pid } = run;
+    await sleep(30_000);
+    await hideMain(pid);
+    await sleep(15_000);
+    if (widgetOf(pid)) record('State (d) has no widget', 'fail', 'a widget window exists');
+    measure(pid, 'd', 'planner in the tray, no widget');
+  } finally {
+    await quit(run);
+    setWidgetVisible(true);
+  }
+  fs.writeFileSync(path.join(OUT, 'cpu-study.json'), JSON.stringify({ label, study, animations }, null, 2));
+}
+
 function msiInstall(msi) {
   if (!msi) return record('MSI install', 'fail', 'no .msi built');
   try {
@@ -928,14 +1033,18 @@ try {
   console.log('screen', ps('resolution', { A: 1920, B: 1080 }));
   ps('wallpaper', { A: WALL.join(',') });
   const app = install();
-  const lnk = findFiles(path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), (n) => /^Daybloom\.lnk$/i.test(n))[0];
-  const aumid = lnk ? ps('aumid', { A: lnk }) : null;
-  record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
   seedState();
-  await behaviour(app);
-  await idle(app);
-  await screenCues(app);
-  msiInstall(app.msi);
+  if (process.env.SMOKE_MODE === 'cpu') {
+    await cpuStudy(app);
+  } else {
+    const lnk = findFiles(path.join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'), (n) => /^Daybloom\.lnk$/i.test(n))[0];
+    const aumid = lnk ? ps('aumid', { A: lnk }) : null;
+    record('Start menu shortcut carries the AppUserModelID (toasts are attributed to Daybloom)', aumid === IDENTIFIER ? 'pass' : 'fail', lnk ? `${path.basename(lnk)}: '${aumid}'` : 'no Daybloom.lnk');
+    await behaviour(app);
+    await idle(app);
+    await screenCues(app);
+    msiInstall(app.msi);
+  }
 } catch (e) {
   record('Smoke test aborted', 'fail', String(e.stack ?? e));
   try {

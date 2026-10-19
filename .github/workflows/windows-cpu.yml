@@ -1,0 +1,142 @@
+# Idle CPU of Daybloom on a clean Windows runner, build by build: published releases next to
+# test builds of this branch, each measured in the same four states
+# (scripts/windows-smoke.mjs with SMOKE_MODE=cpu, merged by scripts/windows-cpu-table.mjs).
+# The "widget-shown-later" build reverts only the widget's build-visible change (widget.rs), to
+# tell whether that is what keeps the GPU busy once the planner is hidden.
+name: windows-cpu
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-cpu.yml'
+      - 'scripts/windows-cpu-table.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [main, widget-shown-later]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+      - run: npm ci
+      - name: Revert the widget's build-visible change
+        if: matrix.variant == 'widget-shown-later'
+        shell: bash
+        run: |
+          sed -i '/b\.visible(true)/d' src-tauri/src/widget.rs
+          ! grep -n 'visible(true)' src-tauri/src/widget.rs
+      # Same test-build config as windows.yml: unsigned, with a DevTools port in both windows.
+      - name: Tauri config for the test build
+        shell: bash
+        run: |
+          node -e "
+            const c = require('./src-tauri/tauri.conf.json');
+            const windows = c.app.windows.map((w) => ({ ...w, additionalBrowserArgs: (w.additionalBrowserArgs ?? '') + ' --remote-debugging-port=9222' }));
+            require('fs').writeFileSync('smoke.conf.json', JSON.stringify({ bundle: { createUpdaterArtifacts: false }, app: { windows } }));
+          "
+      - run: npx tauri build --config smoke.conf.json
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpu-installer-${{ matrix.variant }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+
+  releases:
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [v0.1.3, v0.1.4, v0.1.5, v0.1.6]
+    name: cpu (${{ matrix.tag }})
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Download the ${{ matrix.tag }} installers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A release is published before its Windows installers are attached; wait for them.
+          for i in $(seq 1 12); do
+            gh release download "${{ matrix.tag }}" -R "$GITHUB_REPOSITORY" -p '*-setup.exe' -p '*.msi' -D artifact --clobber && exit 0
+            echo "installers not attached yet; retrying in 90 s"
+            sleep 90
+          done
+          exit 1
+      - run: node scripts/windows-smoke.mjs cpu-out artifact
+        env:
+          SMOKE_MODE: cpu
+          SMOKE_SOURCE: release
+          SMOKE_LABEL: ${{ matrix.tag }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-${{ matrix.tag }}
+          path: cpu-out
+
+  builds:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [main, widget-shown-later]
+    name: cpu (build ${{ matrix.variant }})
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: cpu-installer-${{ matrix.variant }}
+          path: artifact
+      - run: node scripts/windows-smoke.mjs cpu-out artifact
+        env:
+          SMOKE_MODE: cpu
+          SMOKE_SOURCE: build
+          SMOKE_LABEL: 'build: ${{ matrix.variant }}'
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-build-${{ matrix.variant }}
+          path: cpu-out
+
+  table:
+    needs: [releases, builds]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: study-*
+          path: studies
+      - run: node scripts/windows-cpu-table.mjs studies
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpu-table
+          path: studies/cpu-table.md
