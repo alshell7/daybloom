@@ -209,6 +209,16 @@ switch ($Cmd) {
     $item = $sh.Namespace((Split-Path $A)).ParseName((Split-Path $A -Leaf))
     Out-Json ([string]$item.ExtendedProperty('System.AppUserModel.ID'))
   }
+  'procs' {
+    Out-Json @(Get-Process -Name daybloom -ErrorAction SilentlyContinue | ForEach-Object {
+      @{ pid = $_.Id; responding = $_.Responding; title = $_.MainWindowTitle; started = $_.StartTime.ToString('HH:mm:ss') }
+    })
+  }
+  'webview2' {
+    $key = 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    $pv = foreach ($root in 'HKLM:', 'HKCU:') { (Get-ItemProperty "$root\$key" -ErrorAction SilentlyContinue).pv }
+    Out-Json ([string](@($pv) | Where-Object { $_ } | Select-Object -First 1))
+  }
   'tree' {
     Out-Json @(Get-Tree ([int]$A) | ForEach-Object { @{ pid = $_.ProcessId; name = $_.Name; role = (Get-Role $_) } })
   }

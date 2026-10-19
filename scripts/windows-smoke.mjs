@@ -116,15 +116,15 @@ class Cdp {
   }
 }
 
-// { main, widget } DevTools clients, or null when the debug port never opened.
-async function pages() {
+// DevTools clients by window label ({ main, widget }), or null if the wanted pages never showed.
+async function pages(want = ['main', 'widget']) {
   const targets = await waitFor(
-    'two WebView2 pages on the debug port',
+    `${want.join(' + ')} on the debug port`,
     async () => {
       try {
         const r = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
         const t = (await r.json()).filter((x) => x.type === 'page');
-        return t.length >= 2 ? t : null;
+        return t.length >= want.length ? t : null;
       } catch {
         return null;
       }
@@ -141,7 +141,9 @@ async function pages() {
     if (label) byLabel[label] = c;
     else c.close();
   }
-  return byLabel.main && byLabel.widget ? byLabel : null;
+  if (want.every((l) => byLabel[l])) return byLabel;
+  closeAll(byLabel);
+  return null;
 }
 
 const closeAll = (pg) => pg && Object.values(pg).forEach((c) => c.close());
@@ -174,7 +176,7 @@ function install() {
   const dirs = [path.join(process.env.LOCALAPPDATA, 'Daybloom'), path.join(process.env.LOCALAPPDATA, 'Programs', 'Daybloom'), path.join(process.env.ProgramFiles, 'Daybloom')];
   const exe = dirs.flatMap((d) => findFiles(d, (n) => /\.exe$/i.test(n) && !/uninstall/i.test(n)))[0];
   if (!exe) throw new Error(`installed exe not found in ${dirs.join(', ')}`);
-  record('NSIS silent install', 'pass', exe);
+  record('NSIS silent install', 'pass', `${exe}; WebView2 runtime ${ps('webview2') || 'not found'}`);
   // tauri.conf.json is compiled into the exe; reuse its WebView2 args so the debug launch
   // differs from a normal one only by the port (the env var replaces the app's own args).
   const found = fs.readFileSync(exe).toString('latin1').match(/--disable-features=[\w,]+/g) ?? [];
@@ -190,19 +192,31 @@ function seedState() {
   fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify({ widget: { visible: true, layer: 'top' }, motion: 'full', notify: true, autoUpdate: false }));
 }
 
+const exits = new Map();
+let launches = 0;
+
+// The app's stdout/stderr go to app-N.log: a GUI-subsystem exe still writes a panic there.
 function launch({ exe, webviewArgs }) {
   const env = { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: webviewArgs };
-  const child = spawn(exe, [], { env, detached: true, stdio: 'ignore' });
+  const log = path.join(OUT, `app-${++launches}.log`);
+  const fd = fs.openSync(log, 'w');
+  const child = spawn(exe, [], { env, detached: true, stdio: ['ignore', fd, fd] });
+  child.on('exit', (code) => exits.set(child.pid, `0x${(code >>> 0).toString(16)}`));
   child.unref();
-  return child.pid;
+  return { pid: child.pid, log };
 }
 
-function quit(pid) {
+function taskkill(...args) {
   try {
-    execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    execFileSync('taskkill', [...args, '/F'], { stdio: 'ignore' });
   } catch {
     /* already gone */
   }
+}
+
+function quit(app) {
+  if (app.pid) taskkill('/PID', String(app.pid), '/T');
+  taskkill('/IM', path.basename(app.exe));
 }
 
 const windowsOf = (pid) => list(ps('windows', { A: pid }));
@@ -210,18 +224,44 @@ const mainOf = (pid) => windowsOf(pid).find((w) => w.title === 'Daybloom');
 const widgetOf = (pid) => windowsOf(pid).find((w) => w.title === 'Daybloom Widget');
 const TOPMOST = 0x8;
 
-async function waitWindows(pid) {
-  return waitFor(
-    'planner and widget windows',
-    () => {
-      const ws = windowsOf(pid);
-      const main = ws.find((w) => w.title === 'Daybloom' && w.visible);
-      const widget = ws.find((w) => w.title === 'Daybloom Widget' && w.visible);
-      return main && widget ? { main, widget } : null;
-    },
-    60_000,
-    1000,
-  );
+// What the app looked like when something never showed up: written to diagnostics-N.json.
+function diagnose(run, what) {
+  const procs = list(ps('procs'));
+  const pids = new Set([run.pid, ...procs.map((p) => p.pid)]);
+  const windows = list(ps('windows')).filter((w) => pids.has(w.pid) || /daybloom/i.test(w.title));
+  const log = fs.existsSync(run.log) ? fs.readFileSync(run.log, 'utf8').slice(-4000) : '';
+  const d = { what, spawned: run.pid, exit: exits.get(run.pid) ?? 'still running', procs, windows, log };
+  fs.writeFileSync(path.join(OUT, `diagnostics-${launches}.json`), JSON.stringify(d, null, 2));
+  try {
+    shot(`diagnostics-${launches}.png`);
+  } catch {
+    /* ignore */
+  }
+  return `${what}: spawned pid ${run.pid} exit ${d.exit}; daybloom processes ${JSON.stringify(procs)}; windows ${JSON.stringify(windows.map((w) => [w.pid, w.title, w.cls, w.visible]))}; log ${JSON.stringify(log.slice(-600))}`;
+}
+
+// Launches the app and waits for the planner, then the widget (shown at launch from the seeded
+// settings; opened through the app's own widget_show command if it was not).
+async function start(app) {
+  const run = { ...app, ...launch(app) };
+  const planner = await waitFor('planner window', () => {
+    const procs = list(ps('procs'));
+    const pids = [run.pid, ...procs.map((p) => p.pid)];
+    return list(ps('windows', { A: pids.join(',') })).find((w) => w.title === 'Daybloom' && w.visible);
+  }, 90_000, 1000).catch(() => null);
+  if (!planner) throw new Error(diagnose(run, 'planner window never appeared'));
+  run.pid = planner.pid;
+
+  let widget = await waitFor('widget window', () => widgetOf(run.pid)?.visible && widgetOf(run.pid), 20_000).catch(() => null);
+  if (!widget) {
+    const pg = await pages(['main']);
+    await pg?.main.eval(`__TAURI_INTERNALS__.invoke('widget_show', { show: true })`).catch((e) => console.log('widget_show', e.message));
+    closeAll(pg);
+    widget = await waitFor('widget window', () => widgetOf(run.pid)?.visible && widgetOf(run.pid), 15_000).catch(() => null);
+    if (!widget) throw new Error(diagnose(run, 'widget window never appeared'));
+    record(`Widget shown at launch ${launches}`, 'warn', 'not shown from saved settings; opened with widget_show');
+  }
+  return { run, main: planner, widget };
 }
 
 async function hideMain(pid) {
@@ -241,10 +281,13 @@ async function trayClick(pid) {
 // ---- phase A: behaviour ----------------------------------------------------------------
 
 async function behaviour(app) {
-  const pid = launch(app);
+  let run = app;
   let pg = null;
   try {
-    const { widget } = await waitWindows(pid);
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    const { widget } = started;
     await sleep(8000); // fonts, first springs, sample day
     pg = await pages();
     if (!pg) record('DevTools connection to the WebView2 pages', 'fail', 'debug port never offered both pages; page-level checks skipped');
@@ -364,7 +407,7 @@ async function behaviour(app) {
         s = z();
         record('Widget returns to floating on top', s.widget.exStyle & TOPMOST ? 'pass' : 'fail');
       }
-      quit(notepad.pid);
+      taskkill('/PID', String(notepad.pid));
     }
 
     // Widget double-click opens the planner, and clicks never leave the window stuck to the cursor.
@@ -398,7 +441,7 @@ async function behaviour(app) {
     }
   } finally {
     closeAll(pg);
-    quit(pid);
+    quit(run);
     await sleep(2000);
   }
 }
@@ -406,9 +449,12 @@ async function behaviour(app) {
 // ---- phase B: idle CPU (nothing attached while sampling) -----------------------------
 
 async function idle(app) {
-  const pid = launch(app);
+  let run = app;
   try {
-    const { main } = await waitWindows(pid);
+    const started = await start(app);
+    run = started.run;
+    const { pid } = run;
+    const { main } = started;
     await sleep(30_000);
     ps('front', { A: main.hwnd });
     const sample = (scenario, seconds = CPU_SECONDS) => {
@@ -449,7 +495,7 @@ async function idle(app) {
     await sleep(10_000);
     sample('planner minimised + widget');
   } finally {
-    quit(pid);
+    quit(run);
     await sleep(2000);
   }
 }
