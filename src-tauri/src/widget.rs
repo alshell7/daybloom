@@ -97,11 +97,30 @@ fn apply_layer(w: &WebviewWindow, layer: Layer) -> Result<(), String> {
 pub fn set_layer(app: &AppHandle, layer: Layer) -> Result<(), String> {
     *app.state::<LayerState>().0.lock().unwrap() = layer;
     if let Some(w) = window(app) {
+        let shown = w.is_visible().unwrap_or(false);
         apply_layer(&w, layer)?;
+        if shown {
+            keep_shown(app, &w);
+        }
     }
     changed(app);
     Ok(())
 }
+
+/// Windows: tao keeps its own "visible" flag, which `show_quietly`'s raw SW_SHOWNOACTIVATE
+/// doesn't set, and it hides a window whose styles change while that flag says hidden. So
+/// after a layer change, show the widget quietly again, queued on the main thread behind
+/// tao's own style update so it runs last.
+#[cfg(windows)]
+fn keep_shown(app: &AppHandle, w: &WebviewWindow) {
+    let w = w.clone();
+    let _ = app.run_on_main_thread(move || {
+        let _ = crate::show_quietly(&w);
+    });
+}
+
+#[cfg(not(windows))]
+fn keep_shown(_app: &AppHandle, _w: &WebviewWindow) {}
 
 #[derive(Clone, Serialize)]
 struct WidgetStatus {
