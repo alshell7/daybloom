@@ -216,6 +216,7 @@
   class:compact
   class:asleep
   class:light={screen ? !screen.dark : false}
+  class:noglare={screen ? !screen.sheen : false}
   style:--eye={eyeColor}
   style:--led={ledColor}
   style:--glow={glow}
@@ -342,7 +343,8 @@
     overflow: hidden;
     overflow: clip;
   }
-  .framed.light .face::after {
+  .framed.light .face::after,
+  .framed.noglare .face::after {
     display: none;
   }
   .framed .face::after {

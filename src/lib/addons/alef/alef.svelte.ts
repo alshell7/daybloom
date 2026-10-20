@@ -22,6 +22,7 @@ import { ACTS, BEHAVIOR_IDS, lengthOf, type ActId, type BehaviorId } from './beh
 import { chirp } from './chirps';
 import { moodGlow, moodLed } from './face';
 import { screenPalette, type ScreenPalette, type ScreenStyle } from './palette';
+import type { AboutYou } from './persona';
 import type { Finish } from '../../presets';
 import { lateLine, lineFor, type Chattiness } from './lines';
 import type { LlmConfig, ProviderId } from './llm';
@@ -35,6 +36,10 @@ export interface AlefSettings {
   eyes: string;
   /** The screen: in the dial's colours, or classic OLED black. */
   screen: ScreenStyle;
+  /** A glassy shine on the screen. */
+  glare: boolean;
+  /** About you: a name to use, a few lines in your words, and how Alef talks. */
+  you: AboutYou;
   /** The mood light: 'feeling' follows Alef's feelings, or one fixed colour. */
   led: string;
   voice: VoiceMode;
@@ -80,6 +85,8 @@ export const EYE_COLORS = [
 export const DEFAULT_ALEF: AlefSettings = {
   eyes: 'dial',
   screen: 'dial',
+  glare: true,
+  you: { name: '', about: '', tone: 'warm' },
   led: 'feeling',
   voice: 'chirps',
   pitch: 1,
@@ -126,6 +133,12 @@ export function migrateAlef(raw: any): AlefFile {
     settings: {
       eyes: s.eyes === 'dial' ? 'dial' : hex(s.eyes, DEFAULT_ALEF.eyes),
       screen: s.screen === 'oled' ? 'oled' : 'dial',
+      glare: s.glare !== false,
+      you: {
+        name: typeof s.you?.name === 'string' ? s.you.name.slice(0, 40) : '',
+        about: typeof s.you?.about === 'string' ? s.you.about.slice(0, 1200) : '',
+        tone: ['warm', 'playful', 'calm', 'brief'].includes(s.you?.tone) ? s.you.tone : 'warm',
+      },
       led: s.led === 'feeling' ? 'feeling' : hex(s.led, 'feeling'),
       voice: VOICES.includes(s.voice) ? s.voice : DEFAULT_ALEF.voice,
       pitch: num(s.pitch, 1, 0.8, 1.3),
@@ -169,6 +182,7 @@ interface Mirror {
   affect?: Affect;
   talk?: { seq: number; starts: number[]; total: number } | null;
   bubble?: { text: string; seq: number } | null;
+  thinking?: boolean;
 }
 
 /** Feeling colours for the mood light. */
@@ -211,7 +225,7 @@ class Alef {
 
   /** The screen and eyes in this dial's colours. */
   screenFor(finish: Finish): ScreenPalette {
-    return screenPalette(finish, this.settings.screen, this.settings.eyes);
+    return screenPalette(finish, this.settings.screen, this.settings.eyes, this.settings.glare);
   }
 
   #seq = 0;
@@ -264,6 +278,7 @@ class Alef {
               name: o.name,
               hour: new Date(clock.now).getHours(),
               seed: this.#seq + Math.floor(clock.now / 1000),
+              who: this.settings.you.name.trim() || undefined,
             },
             this.settings.chattiness,
           );
@@ -386,6 +401,7 @@ class Alef {
     const reply = this.#push({ who: 'alef', text: '', pending: true });
     this.busy = true;
     this.thinking = true;
+    this.#send({ thinking: true });
     this.react('listening', { line: null, quiet: true });
     const think = setTimeout(() => this.thinking && this.perform('spinning'), 650);
     try {
@@ -402,6 +418,7 @@ class Alef {
     } finally {
       clearTimeout(think);
       this.thinking = false;
+      this.#send({ thinking: false });
       this.busy = false;
     }
   }
@@ -451,6 +468,7 @@ class Alef {
       this.#perfTimer = setTimeout(() => (this.performing = false), Math.min(lengthOf(ACTS[m.perf.id]), 6000) + 120);
     }
     if (m.talk !== undefined) this.talk = m.talk;
+    if (m.thinking !== undefined) this.thinking = m.thinking;
     if (m.bubble !== undefined) {
       this.bubble = m.bubble;
       if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
@@ -641,6 +659,10 @@ export function startAlef(): () => void {
 
   // Touches on the widget's face come here; the reaction goes back to it.
   const offTouch = platform.onBroadcast<{ kind: 'pet' | 'tickle' | 'squish' | 'poke' }>('alef-touch', (m) => alef.touch(m.kind));
+  // Words typed or said to Alef on the widget: the same conversation as here.
+  const offAsk = platform.onBroadcast<{ text: string }>('alef-ask', (m) => {
+    if (typeof m?.text === 'string' && m.text.trim()) void alef.ask(m.text.slice(0, 600));
+  });
 
   scheduleIdle();
   const settleTimer = setInterval(() => {
@@ -652,6 +674,7 @@ export function startAlef(): () => void {
     stopped = true;
     alef.mirror = false;
     offTouch();
+    offAsk();
     root();
     offers.forEach((f) => f());
     if (idleTimer) clearTimeout(idleTimer);

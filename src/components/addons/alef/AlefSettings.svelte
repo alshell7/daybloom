@@ -17,6 +17,7 @@
 
   const s = $derived(alefFile.value.settings);
   const set = (patch: Partial<typeof alefFile.value.settings>) => Object.assign(alefFile.value.settings, patch);
+  const setYou = (patch: Partial<typeof alefFile.value.settings.you>) => (alefFile.value.settings.you = { ...alefFile.value.settings.you, ...patch });
 
   onMount(() => {
     session.open();
@@ -134,6 +135,41 @@
 </script>
 
 <div class="as">
+  <!-- About you -->
+  <section>
+    <h4>About you</h4>
+    <div class="fieldset">
+      <span>What should Alef call you?</span>
+      <input class="field" value={s.you.name} oninput={(e) => setYou({ name: e.currentTarget.value.slice(0, 40) })} placeholder="Your name or a nickname" autocomplete="off" maxlength="40" />
+    </div>
+    <div class="fieldset">
+      <span>A few words about you <small>(optional)</small></span>
+      <textarea
+        class="field area about"
+        value={s.you.about}
+        oninput={(e) => setYou({ about: e.currentTarget.value.slice(0, 1200) })}
+        rows="4"
+        maxlength="1200"
+        placeholder="For example: I'm a designer. Mornings are my best time. Short, kind nudges help me; long lists don't. I'm learning Spanish."
+      ></textarea>
+      <small class="count">{s.you.about.length} / 1200 · Alef uses this to fit its help to you. With an AI brain, it is sent with your words.</small>
+    </div>
+    <div class="line">
+      <span class="lbl">Talk to me</span>
+      <Segmented
+        label="How Alef talks"
+        value={s.you.tone}
+        onchange={(v) => setYou({ tone: v })}
+        options={[
+          { value: 'warm', label: 'Warm' },
+          { value: 'playful', label: 'Playful' },
+          { value: 'calm', label: 'Calm' },
+          { value: 'brief', label: 'Brief' },
+        ]}
+      />
+    </div>
+  </section>
+
   <!-- Where -->
   <section>
     <h4>Where Alef shows</h4>
@@ -166,6 +202,10 @@
         ]}
       />
     </div>
+    <label class="row">
+      <span><b>Glass shine</b><small>A soft glint across Alef's screen, like light on glass.</small></span>
+      <input type="checkbox" class="switch" checked={s.glare} onchange={(e) => set({ glare: e.currentTarget.checked })} />
+    </label>
     <div class="line">
       <span class="lbl">Eyes</span>
       <div class="swatches" role="radiogroup" aria-label="Eye colour">
@@ -345,7 +385,7 @@
           <Icon name={agreed ? 'shield' : 'info'} size={16} />
           <div>
             <p>
-              To answer, Alef sends <b>{provider.name}</b> what you say, <b>today's blocks</b> (titles, times, notes) and <b>your Daybloom settings</b>.{s.mayChange ? ' It can also add, move or finish blocks; each change shows with an Undo.' : ''}
+              To answer, Alef sends <b>{provider.name}</b> what you say, <b>today's blocks</b> (titles, times, notes), <b>your Daybloom settings</b>{s.you.name.trim() || s.you.about.trim() ? ' and what you wrote under About you' : ''}.{s.mayChange ? ' It can also add, move or finish blocks; each change shows with an Undo.' : ''}
               {provider.name}'s own privacy terms apply. Nothing is sent until you agree.
             </p>
             {#if agreed}
@@ -580,6 +620,15 @@
     gap: 8px;
     font-size: var(--t-xs);
     color: var(--ink-2);
+  }
+  .area.about {
+    font-family: var(--font-ui);
+    font-size: var(--t-sm);
+    line-height: 1.45;
+  }
+  .count {
+    font-size: 11px;
+    color: var(--ink-3);
   }
   .area {
     height: auto;

@@ -127,6 +127,19 @@ describe('alef: words', () => {
 });
 
 describe('alef: face', () => {
+  it('draws both eyes of a frown or a sad face alike (the right eye is the mirror)', async () => {
+    const { eyeOf } = await import('./eyes');
+    const { BEHAVIORS } = await import('./behaviors');
+    for (const id of ['angry', 'grumpy', 'sad', 'miserable', 'afraid'] as const) {
+      for (const p of BEHAVIORS[id].poses) {
+        const l = eyeOf(p.l, -1);
+        const r = eyeOf(p.r, 1);
+        expect(r.upB).toBeCloseTo(l.upB);
+        expect(r.upA).toBeCloseTo(-l.upA);
+      }
+    }
+  });
+
   it('shows the mood at rest: round eyes that lift when glad, heavy lids when tired', () => {
     const glad = restPose({ v: 0.8, a: 0 }).l;
     expect(glad.smile).toBe(0);
@@ -301,5 +314,18 @@ describe('alef: a pet', async () => {
       expect(ACTS[id].poses.length).toBeGreaterThan(0);
       expect(PATTERNS[ACTS[id].chirp]).toBeDefined();
     }
+  });
+});
+
+describe('alef: about you', () => {
+  it('fits Alef to you: your name in its words, your notes and tone for an AI brain', () => {
+    const p = systemPrompt({ now: '9:00am', date: '2026-10-19', weekday: 'Monday', zone: 'UTC', hour12: true, mayChange: true, day: null, you: { name: 'Sam', about: 'Mornings are my best time.', tone: 'brief' } });
+    expect(p).toContain("The person's name is Sam");
+    expect(p).toContain('Mornings are my best time.');
+    expect(p).toContain('very brief');
+    expect(systemPrompt({ now: '9:00am', date: '2026-10-19', weekday: 'Monday', zone: 'UTC', hour12: true, mayChange: true, day: null, you: { name: '', about: '', tone: 'warm' } })).not.toContain('name is');
+    expect(smallTalk('hello', { hour: 9, seed: 1, name: 'Sam' })?.say).toMatch(/Sam/);
+    expect(lineFor('greet', { hour: 9, seed: 0, who: 'Sam' }, 'some')).toMatch(/Sam/);
+    expect(migrateAlef({ settings: { you: { name: 'x'.repeat(90), tone: 'shouty' } } }).settings.you).toEqual({ name: 'x'.repeat(40), about: '', tone: 'warm' });
   });
 });

@@ -21,6 +21,8 @@
   import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
   import { ACTS } from '../lib/addons/alef/behaviors';
   import { gesture, type Sample } from '../lib/addons/alef/pet';
+  import WidgetTalk from '../components/addons/alef/WidgetTalk.svelte';
+  import { voice } from '../lib/voice/voice.svelte';
 
   const alefOn = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.inWidget);
 
@@ -52,6 +54,30 @@
       void platform.broadcast('alef-touch', { kind: g });
     }
   }
+  // Talking to Alef here: the chat button, or click the widget and just type; hold Space (or
+  // the mic) to speak.
+  let talk = $state<{ start: string } | null>(null);
+  function openTalk(start = '') {
+    if (alefOn) talk = { start };
+  }
+  function onKey(e: KeyboardEvent) {
+    if (!alefOn || e.metaKey || e.ctrlKey || e.altKey) return;
+    const typing = (e.target as HTMLElement)?.closest?.('input, textarea');
+    if (!talk && !typing && e.key.length === 1 && e.key !== ' ') {
+      e.preventDefault();
+      openTalk(e.key);
+    } else if (e.key === ' ' && !typing) {
+      e.preventDefault();
+      if (!e.repeat) {
+        if (!talk) openTalk();
+        voice.press('alef');
+      }
+    }
+  }
+  function onKeyUp(e: KeyboardEvent) {
+    if (e.key === ' ' && !(e.target as HTMLElement)?.closest?.('input, textarea')) voice.release();
+  }
+
   function onTap(e: MouseEvent) {
     if (alefOn && e.detail === 1 && faceAt(e)) void platform.broadcast('alef-touch', { kind: 'poke' });
   }
@@ -125,7 +151,7 @@
   let press: { x: number; y: number } | null = null;
 
   function onDown(e: PointerEvent) {
-    if (e.button !== 0 || (e.target as HTMLElement).closest('.tools')) return;
+    if (e.button !== 0 || (e.target as HTMLElement).closest('.tools, .talk')) return;
     if (dragOnMove) press = { x: e.screenX, y: e.screenY };
     else platform.startDrag();
   }
@@ -146,6 +172,8 @@
     if (timer.active) await platform.trayAction('focus-now');
   }
 </script>
+
+<svelte:window onkeydown={onKey} onkeyup={onKeyUp} />
 
 {#snippet alefFace(info: { big: string; tone: string })}
   <AlefFace framed={false} perf={alef.perf} performing={alef.performing} affect={alef.affect} talk={alef.talk} screen={alef.screenFor(finish)} led={alefFile.value.settings.led} reduced={view.reducedMotion} compact interactive={false} gaze={false} />
@@ -198,7 +226,7 @@
         compact
         reduced={view.reducedMotion}
         face={alefOn ? alefFace : undefined}
-        note={alefOn ? (alef.bubble?.text ?? null) : null}
+        note={alefOn && !talk ? (alef.bubble?.text ?? null) : null}
       />
     </Dial>
     </AlefPosture>
@@ -210,7 +238,14 @@
     </button>
   {/if}
 
-  <div class="tools" style:--face={finish.face} style:--ink={finish.ink}>
+  {#if talk}
+    <WidgetTalk start={talk.start} ink={finish.ink} face={finish.face} onclose={() => (talk = null)} />
+  {/if}
+
+  <div class="tools" class:hidden={!!talk} style:--face={finish.face} style:--ink={finish.ink}>
+    {#if alefOn}
+      <button onclick={() => openTalk()} aria-label="Talk to Alef" title="Talk to Alef · or just start typing"><Icon name="message" size={14} stroke={2} /></button>
+    {/if}
     <button onclick={cyclePreset} aria-label="Switch dial" title="Switch dial"><Icon name="dial" size={14} stroke={2} /></button>
     <button onclick={toggleLayer} aria-pressed={w.layer === 'top'} aria-label={w.layer === 'top' ? 'Floating on top' : 'Sitting on desktop'} title={w.layer === 'top' ? 'Floating on top — click to sit on the desktop' : 'On the desktop — click to float on top'}><Icon name="pin" size={14} stroke={2} /></button>
     {#if platform.isNative}
@@ -268,7 +303,7 @@
       opacity 0.2s var(--ease-out),
       transform 0.25s var(--ease-out);
   }
-  .widget:hover .tools {
+  .widget:hover .tools:not(.hidden) {
     opacity: 1;
     transform: translate(-50%, 0);
     pointer-events: auto;

@@ -16,6 +16,8 @@ export interface LineCtx {
   name?: string;
   hour: number;
   seed: number;
+  /** What Alef calls you. */
+  who?: string;
 }
 
 /** Which moments Alef speaks up for, by chattiness ('quiet' only answers when spoken to). */
@@ -36,13 +38,13 @@ const q = (t?: string) => (t ? `“${t.length > 38 ? `${t.slice(0, 36).trimEnd()
 
 const LINES: Partial<Record<AffectEvent, ((c: LineCtx) => string)[]>> = {
   greet: [
-    (c) => (c.hour < 12 ? 'Good morning!' : c.hour < 17 ? 'Hello again!' : 'Good evening!') + (c.count ? ` ${c.count} ${c.count === 1 ? 'block' : 'blocks'} today.` : ''),
-    (c) => (c.title ? `Hi! First up: ${q(c.title)}${c.at ? ` at ${c.at}` : ''}.` : 'Hi! A fresh dial today.'),
-    () => "Hey, you're here! Let's take it one block at a time.",
+    (c) => (c.hour < 12 ? `Good morning${c.who ? `, ${c.who}` : ''}!` : c.hour < 17 ? `Hello again${c.who ? `, ${c.who}` : ''}!` : `Good evening${c.who ? `, ${c.who}` : ''}!`) + (c.count ? ` ${c.count} ${c.count === 1 ? 'block' : 'blocks'} today.` : ''),
+    (c) => (c.title ? `Hi${c.who ? ` ${c.who}` : ''}! First up: ${q(c.title)}${c.at ? ` at ${c.at}` : ''}.` : `Hi${c.who ? ` ${c.who}` : ''}! A fresh dial today.`),
+    (c) => `Hey${c.who ? ` ${c.who}` : ''}, you're here! Let's take it one block at a time.`,
   ],
   done: [(c) => `${q(c.title)}, done. Nice.`, () => 'One down!', () => 'That counts. Well done.', () => 'Done and dusted.'],
   bigDone: [(c) => `${q(c.title)} was a big one. Well done!`, () => 'That was a lot of good work.', () => 'Big block, finished. Take a breath.'],
-  allDone: [() => 'Every block today: done! I knew you could.', () => "That's the whole day. Look at that dial glow!", () => 'All done. Time is yours now.'],
+  allDone: [(c) => `Every block today: done! I knew you could${c.who ? `, ${c.who}` : ''}.`, () => "That's the whole day. Look at that dial glow!", () => 'All done. Time is yours now.'],
   badge: [() => 'A new badge! You earned it.'],
   blockStart: [(c) => `Time for ${q(c.title)}. I'm right here with you.`, (c) => `${q(c.title)} now. Let's start small.`, (c) => `Starting ${q(c.title)}. Two minutes is a fine start.`],
   headsUp: [(c) => `${q(c.title)} in ${c.inMin ?? 5} minutes.`, (c) => `Soon: ${q(c.title)}. A good moment to wrap up.`],

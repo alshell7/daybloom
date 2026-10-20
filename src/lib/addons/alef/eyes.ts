@@ -33,7 +33,10 @@ export const EYE_GAP = 36;
 
 /** A behaviour's pose (behaviors.ts) as eye parameters. `side` −1 left, +1 right. */
 export function eyeOf(e: Eye, side: -1 | 1): EyeP {
-  const sad = e.slant < 0 ? Math.min(1, -e.slant / 20) : 0;
+  // Slant is a rotation (clockwise +), mirrored on the right eye: for the left eye + lowers the
+  // inner corner, for the right eye − does. A sad brow is one whose inner corner is up.
+  const inner = side === -1 ? e.slant : -e.slant;
+  const sad = inner < 0 ? Math.min(1, -inner / 20) : 0;
   return {
     x: side * EYE_GAP + e.x,
     y: e.y,

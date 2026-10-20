@@ -619,7 +619,7 @@
         <circle cx={C} cy={C} r={screenR + 7} fill={sp.bezel} />
         <circle cx={C} cy={C} r={screenR} fill="url(#alef-well)" />
         <circle cx={C} cy={C} r={screenR - 3} fill="none" stroke="url(#alef-shade)" stroke-width="6" />
-        {#if sp.dark}
+        {#if sp.dark && sp.sheen}
           <ellipse cx={C - screenR * 0.18} cy={C - screenR * 0.46} rx={screenR * 0.62} ry={screenR * 0.36} fill="url(#alef-sheen)" transform={`rotate(-18 ${C} ${C})`} />
         {/if}
       </g>

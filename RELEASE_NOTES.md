@@ -8,6 +8,16 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ## Next
 
+### Addons
+
+- **Alef on the widget** — talk to Alef from the desktop widget: click the chat button or just start typing, or hold Space to speak. Its answer shows over the dial, and the talk stays in Alef's chat in the planner.
+- **Alef knows you** — under About you, tell Alef what to call you, a few words about yourself and how to talk to you (warm, playful, calm or brief). It greets you by name, and an AI brain uses your words to fit its help to you.
+- **Glass shine** — turn off the glint across Alef's screen in Alef's settings.
+
+### Fixes
+
+- **Alef's eyes** — when Alef frowned or looked sad, one eye's lid could cut too deep, so that eye looked cut off. Both eyes now match.
+
 ## 0.1.12
 ### New
 

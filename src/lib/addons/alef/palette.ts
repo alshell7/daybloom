@@ -21,6 +21,8 @@ export interface ScreenPalette {
   ink: string;
   ink2: string;
   chip: string;
+  /** A glassy shine across the screen. */
+  sheen: boolean;
   /** The eyes: colour, glow (0..1) and scanlines (0..1). */
   eye: string;
   glow: number;
@@ -39,8 +41,9 @@ export function eyeColorFor(finish: Finish, eyes: string, style: ScreenStyle): s
   return finish.dark ? base : mix(base, finish.ink, 0.5);
 }
 
-export function screenPalette(finish: Finish, style: ScreenStyle, eyes: string): ScreenPalette {
+export function screenPalette(finish: Finish, style: ScreenStyle, eyes: string, glare = true): ScreenPalette {
   const eye = eyeColorFor(finish, eyes, style);
+  const sheen = glare;
   if (style === 'oled')
     return {
       well: '#111722',
@@ -51,6 +54,7 @@ export function screenPalette(finish: Finish, style: ScreenStyle, eyes: string):
       ink: '#eef4fb',
       ink2: 'rgba(220,230,242,0.62)',
       chip: 'rgba(255,255,255,0.09)',
+      sheen,
       eye,
       glow: 1,
       scan: 0.13,
@@ -66,6 +70,7 @@ export function screenPalette(finish: Finish, style: ScreenStyle, eyes: string):
       ink: finish.ink,
       ink2: mix(finish.ink, finish.face, 0.42),
       chip: mix(finish.ink, finish.face, 0.9),
+      sheen,
       eye,
       glow: 0.85,
       scan: 0.08,
@@ -80,6 +85,7 @@ export function screenPalette(finish: Finish, style: ScreenStyle, eyes: string):
     ink: finish.ink,
     ink2: mix(finish.ink, finish.face, 0.45),
     chip: mix(finish.ink, finish.face, 0.92),
+    sheen,
     eye,
     glow: 0,
     scan: 0,

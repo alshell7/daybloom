@@ -90,6 +90,7 @@ async function withAi(text: string, history: Msg[]): Promise<Answer> {
         hour12: view.hour12,
         mayChange: s.mayChange,
         day: dayJson(),
+        you: s.you,
       }),
     },
     ...history.filter((m) => m.text && !m.error).map((m): ChatMessage => ({ role: m.who === 'you' ? 'user' : 'assistant', content: m.text })),
@@ -120,7 +121,7 @@ async function withAi(text: string, history: Msg[]): Promise<Answer> {
 
 export async function answer(text: string, o: { history: Msg[]; aiReady: boolean }): Promise<Answer> {
   const hour = new Date(clock.now).getHours();
-  const st = smallTalk(text, { hour, seed: Math.floor(clock.now / 1000) });
+  const st = smallTalk(text, { hour, seed: Math.floor(clock.now / 1000), name: alefFile.value.settings.you.name });
   if (st) return { text: st.say, feeling: st.feeling, via: 'device', thanks: st.thanks };
   if (o.aiReady) {
     try {

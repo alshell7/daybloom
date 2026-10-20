@@ -315,6 +315,13 @@ export const platform = {
     await getCurrentWindow().startDragging();
   },
 
+  /** Take keyboard focus (the widget, when you start typing to Alef). */
+  async focusSelf(): Promise<void> {
+    if (!isTauri) return;
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    await getCurrentWindow().setFocus();
+  },
+
   async hideSelf(): Promise<void> {
     if (!isTauri) return;
     // The widget goes through the native command so the tray checkmark stays in sync.
