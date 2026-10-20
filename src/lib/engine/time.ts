@@ -203,6 +203,10 @@ export function formatClockCountdown(ms: number): string {
 }
 
 let hour12Cache: boolean | null = null;
+/** The computer's own clock setting, once the native side has said (see platform.systemHour12). */
+export function setPrefers12h(v: boolean) {
+  hour12Cache = v;
+}
 /** Respect the OS/locale clock preference unless the user overrides it. */
 export function prefers12h(): boolean {
   if (hour12Cache === null) {

@@ -217,15 +217,17 @@
 
   <div class="side">
     {#if editable && !drag}
+      <!-- Shown on hover, over the end of the text: they never take room from the words. -->
       <div class="tools">
-        {#if missed}
-          <button class="icon-btn" onclick={() => moveToNextGap(block.key)} title="Slide into the next free gap" aria-label="Move to the next free gap"><Icon name="move-later" size={15} /></button>
-        {:else}
+        {#if !missed}
           <button class="icon-btn" onclick={() => moveToTomorrow(block.key)} title="Move to tomorrow" aria-label="Move to tomorrow"><Icon name="arrow-right" size={15} /></button>
         {/if}
         <button class="icon-btn" onclick={() => duplicateBlock(block.key)} title="Duplicate" aria-label="Duplicate"><Icon name="plus" size={15} /></button>
         <button class="icon-btn" onclick={() => removeBlock(block.key)} title="Remove" aria-label="Remove"><Icon name="trash-ui" size={15} /></button>
       </div>
+      {#if missed}
+        <button class="icon-btn slide" onclick={() => moveToNextGap(block.key)} title="Slide into the next free gap" aria-label="Move to the next free gap"><Icon name="move-later" size={15} /></button>
+      {/if}
     {/if}
     {#if block.kind === 'task'}
       <button class="check" onclick={check} aria-pressed={block.done} aria-label={block.done ? `Mark ${block.title} not done` : `Mark ${block.title} done`}>
@@ -239,6 +241,8 @@
 
 <style>
   .row {
+    /* The row's own colour, for things laid over it (the hover tools' fade). */
+    --row-bg: var(--surface);
     position: relative;
     display: grid;
     grid-template-columns: 52px 44px minmax(0, 1fr) auto;
@@ -252,13 +256,16 @@
       transform var(--dur-3) var(--ease-out);
   }
   .row:hover {
-    background: color-mix(in srgb, var(--sunken) 55%, transparent);
+    --row-bg: color-mix(in srgb, var(--sunken) 55%, var(--surface));
+    background: var(--row-bg);
   }
   .row.selected {
-    background: var(--raised);
+    --row-bg: var(--raised);
+    background: var(--row-bg);
     box-shadow: var(--shadow-1);
   }
   .row.dragging {
+    --row-bg: var(--raised);
     z-index: 5;
     background: var(--raised);
     box-shadow: var(--shadow-3);
@@ -557,6 +564,7 @@
   }
   .waiting {
     justify-self: start;
+    white-space: nowrap;
     margin-top: 2px;
     padding: 1px 8px;
     border-radius: 999px;
@@ -632,14 +640,43 @@
 
   /* --- actions --------------------------------------------------------------- */
   .side {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 2px;
     padding: 6px var(--s-2) 0 0;
   }
   .tools {
+    position: absolute;
+    right: 100%;
+    top: 6px;
+    z-index: 1;
     display: flex;
     gap: 0;
+    padding-left: 22px;
+    pointer-events: none;
+  }
+  /* A soft fade so the tools sit cleanly over the end of a long title. */
+  .tools::before {
+    content: '';
+    position: absolute;
+    inset: -4px 0 -4px 0;
+    z-index: -1;
+    background: linear-gradient(90deg, transparent, var(--row-bg) 22px);
+    opacity: 0;
+    transition: opacity var(--dur-2) var(--ease-out);
+  }
+  .row:hover .tools,
+  .tools:focus-within {
+    pointer-events: auto;
+  }
+  .row:hover .tools::before,
+  .tools:focus-within::before {
+    opacity: 1;
+  }
+  .slide {
+    width: 28px;
+    height: 28px;
   }
   .tools .icon-btn {
     width: 28px;
@@ -662,9 +699,22 @@
     opacity: 1;
     transform: none;
   }
-  .missed .tools .icon-btn:first-child {
+  .tools:focus-within .icon-btn {
     opacity: 1;
     transform: none;
+  }
+
+  /* A narrow rail gives the words more room: slimmer time and capsule columns. */
+  @container rail (max-width: 359px) {
+    .row {
+      grid-template-columns: 44px 38px minmax(0, 1fr) auto;
+    }
+    .capsule {
+      width: 34px;
+    }
+    .body {
+      padding-inline: var(--s-2);
+    }
   }
   .check {
     position: relative;

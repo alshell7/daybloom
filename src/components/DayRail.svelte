@@ -16,6 +16,7 @@
   import RhythmChip from './RhythmChip.svelte';
   import Capture from './backlog/Capture.svelte';
   import { dueNow } from '../lib/backlog';
+  import { dragWidth, layout, RAIL_MIN, railDrag, railMax } from '../lib/stores/layout.svelte';
 
   type Row =
     | { kind: 'block'; key: string; block: Block }
@@ -58,13 +59,114 @@
 
   const due = $derived(dueNow(taskFile.value.tasks, view.today).length);
 
+  // ── Resizing: drag the left edge; double-click (or Enter) fits it again ──
+  let rail = $state<HTMLElement>();
+  let railW = $state(0);
+  let gripY = $state(0);
+  let held: { id: number; grabX: number; start: number; auto: number; max: number; keep: number } | null = null;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** The automatic width right now (the stage's --rail-auto, measured). */
+  function autoWidth(): number {
+    const stage = rail?.parentElement;
+    if (!stage) return RAIL_MIN;
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;visibility:hidden;height:0;width:var(--rail-auto)';
+    stage.append(probe);
+    const w = probe.offsetWidth;
+    probe.remove();
+    return w;
+  }
+  function settle() {
+    clearTimeout(settleTimer);
+    if (view.reducedMotion) return;
+    railDrag.settling = true;
+    settleTimer = setTimeout(() => (railDrag.settling = false), 420);
+  }
+  function gripDown(e: PointerEvent) {
+    if (e.button !== 0 || !rail) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const start = rail.offsetWidth;
+    held = { id: e.pointerId, grabX: e.clientX, start, auto: autoWidth(), max: railMax(innerWidth), keep: start };
+    clearTimeout(settleTimer);
+    railDrag.settling = false;
+    railDrag.width = start;
+    railDrag.auto = layout.value.railWidth === 0;
+    railDrag.active = true;
+    document.documentElement.classList.add('col-resizing');
+  }
+  function gripMove(e: PointerEvent) {
+    gripY = e.clientY - (rail?.getBoundingClientRect().top ?? 0);
+    if (!held || e.pointerId !== held.id) return;
+    const d = dragWidth(held.start + (held.grabX - e.clientX), held.auto, held.max);
+    railDrag.width = d.shown;
+    railDrag.auto = d.auto;
+    held.keep = d.keep;
+  }
+  function gripUp(e: PointerEvent) {
+    if (!held || e.pointerId !== held.id) return;
+    layout.value.railWidth = railDrag.auto ? 0 : held.keep;
+    held = null;
+    settle();
+    railDrag.active = false;
+    document.documentElement.classList.remove('col-resizing');
+  }
+  function fit() {
+    layout.value.railWidth = 0;
+    settle();
+  }
+  function gripKey(e: KeyboardEvent) {
+    const max = railMax(innerWidth);
+    const step = e.shiftKey ? 48 : 16;
+    const cur = rail?.offsetWidth ?? RAIL_MIN;
+    const to = (w: number) => {
+      e.preventDefault();
+      layout.value.railWidth = Math.round(Math.min(max, Math.max(RAIL_MIN, w)));
+      settle();
+    };
+    if (e.key === 'ArrowLeft') to(cur + step);
+    else if (e.key === 'ArrowRight') to(cur - step);
+    else if (e.key === 'Home') to(RAIL_MIN);
+    else if (e.key === 'End') to(max);
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      fit();
+    }
+  }
+
   function anytimeToggle(b: Block, e: MouseEvent) {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     toggleDone(b.key, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
   }
 </script>
 
-<aside class="rail" aria-label="Day timeline">
+<aside class="rail" aria-label="Day timeline" bind:this={rail} bind:clientWidth={railW}>
+  <!-- A focusable window splitter (ARIA separator): drag it, or use the arrow keys. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+  <div
+    class="grip"
+    class:held={railDrag.active}
+    class:snapped={railDrag.active && railDrag.auto}
+    style:--y={`${gripY}px`}
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Timeline width"
+    aria-valuenow={railW}
+    aria-valuemin={RAIL_MIN}
+    aria-valuemax={railMax(innerWidth)}
+    tabindex="0"
+    title={layout.value.railWidth ? 'Drag to resize · double-click to fit' : 'Drag to resize'}
+    onpointerdown={gripDown}
+    onpointermove={gripMove}
+    onpointerup={gripUp}
+    onpointercancel={gripUp}
+    ondblclick={fit}
+    onkeydown={gripKey}
+  >
+    <span class="pill" aria-hidden="true"></span>
+    <span class="tag" aria-hidden="true">Fit</span>
+  </div>
   <div class="scroll">
     <div class="quick-wrap"><QuickAdd /></div>
 
@@ -172,10 +274,116 @@
 
 <style>
   .rail {
+    position: relative;
     min-height: 0;
     border-left: 1px solid var(--line);
     background: var(--surface);
     display: grid;
+    container: rail / inline-size;
+  }
+
+  /* ── The resize handle: a quiet seam that wakes on hover ── */
+  .grip {
+    position: absolute;
+    z-index: 4;
+    top: 0;
+    bottom: 0;
+    left: -7px;
+    width: 13px;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+  }
+  .grip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 5px;
+    width: 3px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--ink) 22%, transparent);
+    opacity: 0;
+    transform: scaleY(0.7);
+    transition:
+      opacity var(--dur-2) var(--ease-out),
+      transform var(--dur-3) var(--ease-out),
+      background var(--dur-2) var(--ease-out);
+  }
+  .grip:hover::before {
+    transition-delay: 120ms;
+  }
+  .grip:hover::before,
+  .grip.held::before,
+  .grip:focus-visible::before {
+    opacity: 1;
+    transform: none;
+  }
+  .grip.held::before {
+    background: color-mix(in srgb, var(--ink) 34%, transparent);
+  }
+  .grip:focus-visible::before {
+    background: var(--focus-ring);
+  }
+  .pill {
+    position: absolute;
+    left: 2px;
+    top: clamp(24px, var(--y), calc(100% - 24px));
+    width: 9px;
+    height: 36px;
+    margin-top: -18px;
+    border-radius: 5px;
+    background:
+      radial-gradient(circle, var(--ink-3) 0 1px, transparent 1.5px) 50% 50% / 3px 6px repeat-y,
+      var(--raised);
+    box-shadow:
+      var(--shadow-1),
+      inset 0 0 0 1px var(--line-strong);
+    opacity: 0;
+    transform: scale(0.6);
+    transition:
+      opacity var(--dur-2) var(--ease-out),
+      transform var(--dur-2) var(--ease-settle);
+  }
+  .grip:hover .pill {
+    transition-delay: 120ms;
+  }
+  .grip:hover .pill,
+  .grip.held .pill {
+    opacity: 1;
+    transform: none;
+  }
+  .grip.held .pill {
+    transform: scaleY(1.15);
+  }
+  .tag {
+    position: absolute;
+    right: 15px;
+    top: clamp(24px, var(--y), calc(100% - 24px));
+    margin-top: -11px;
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink-inverse);
+    background: var(--ink);
+    box-shadow: var(--shadow-2);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(4px) scale(0.9);
+    transition:
+      opacity var(--dur-1) var(--ease-out),
+      transform var(--dur-2) var(--ease-settle);
+  }
+  .grip.snapped .tag {
+    opacity: 1;
+    transform: none;
+  }
+  :global(html.col-resizing),
+  :global(html.col-resizing *) {
+    cursor: col-resize !important;
+    user-select: none !important;
   }
   .scroll {
     overflow-y: auto;
@@ -249,6 +457,8 @@
   .any {
     display: inline-flex;
     align-items: center;
+    max-width: 100%;
+    min-width: 0;
     gap: 2px;
     height: 32px;
     padding: 0 var(--s-3) 0 5px;
@@ -294,8 +504,19 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
     padding-left: 4px;
     font-size: var(--t-sm);
+  }
+  .any-title span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .any-title :global(svg),
+  .tick,
+  .cal-mark {
+    flex: none;
   }
   .timeline {
     list-style: none;
@@ -556,12 +777,25 @@
     margin-top: var(--s-2);
   }
 
+  /* A narrow rail gives the words more room: slimmer time and capsule columns. */
+  @container rail (max-width: 359px) {
+    .gap {
+      grid-template-columns: 44px 38px 1fr auto;
+    }
+    .now-line {
+      grid-template-columns: 44px 1fr;
+    }
+  }
+
   @media (max-width: 860px) {
     /* The page scrolls as one; the rail just flows under the dial. */
     .rail {
       display: block;
       border-left: 0;
       border-top: 1px solid var(--line);
+    }
+    .grip {
+      display: none;
     }
     .scroll {
       overflow: visible;

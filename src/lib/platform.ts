@@ -15,6 +15,7 @@
 //   main_show()                      -> void
 //   set_tray_status(title, tooltip)  -> void               macOS menu-bar text + tooltip
 //   set_dock_visible(visible)        -> void               macOS only; no-op elsewhere
+//   system_hour12()                  -> boolean | null     the computer's own 12/24-hour setting
 //   mcp_set(on, rotate?)             -> McpStatus          MCP addon server on 127.0.0.1
 //   mcp_status()                     -> McpStatus
 //   mcp_reply(id, answer)            -> void               answers a `daybloom://mcp` request
@@ -146,6 +147,12 @@ export const platform = {
       dead = true;
       off?.();
     };
+  },
+
+  /** Whether this computer shows 12-hour time (its region and time settings), if it can tell. */
+  async systemHour12(): Promise<boolean | null> {
+    if (isTauri) return invoke<boolean | null>('system_hour12');
+    return null;
   },
 
   /** The MCP addon. In a plain browser there is no server: a stand-in status for the UI. */

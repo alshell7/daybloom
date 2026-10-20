@@ -148,6 +148,44 @@ pub fn set_tray_status(app: AppHandle, title: Option<String>, tooltip: String) -
     tray.set_tooltip(Some(tooltip)).map_err(err)
 }
 
+// ---- Clock style --------------------------------------------------------------------
+
+/// Whether this computer shows 12-hour time. A webview only knows the language (English (UK)
+/// means 24-hour), not the region or the time setting (region India, or a 12-hour override).
+#[tauri::command]
+pub fn system_hour12() -> Option<bool> {
+    system_time_format().map(|f| uses_12h(&f))
+}
+
+/// "h:mm a" → true, "HH:mm" → false. Literal text sits in single quotes ("H 'h' mm").
+fn uses_12h(format: &str) -> bool {
+    let bare: String = format.split('\'').step_by(2).collect();
+    bare.contains(['h', 'K'])
+}
+
+#[cfg(target_os = "macos")]
+fn system_time_format() -> Option<String> {
+    use objc2_foundation::{NSDateFormatter, NSLocale, NSString};
+    // "j" asks for the hour as this person's settings show it (12- or 24-hour).
+    let locale = NSLocale::currentLocale();
+    NSDateFormatter::dateFormatFromTemplate_options_locale(&NSString::from_str("j"), 0, Some(&locale)).map(|f| f.to_string())
+}
+
+#[cfg(windows)]
+fn system_time_format() -> Option<String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Globalization::{GetLocaleInfoEx, LOCALE_STIMEFORMAT};
+    let mut buf = [0u16; 80];
+    // SAFETY: a null name is the user's default locale; the buffer is ours and sized.
+    let n = unsafe { GetLocaleInfoEx(PCWSTR::null(), LOCALE_STIMEFORMAT, Some(&mut buf)) };
+    (n > 1).then(|| String::from_utf16_lossy(&buf[..n as usize - 1]))
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn system_time_format() -> Option<String> {
+    None
+}
+
 #[tauri::command]
 pub fn set_dock_visible(app: AppHandle, visible: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -159,4 +197,25 @@ pub fn set_dock_visible(app: AppHandle, visible: bool) -> Result<(), String> {
     #[cfg(not(target_os = "macos"))]
     let _ = (app, visible);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::uses_12h;
+
+    #[test]
+    fn reads_clock_formats() {
+        assert!(uses_12h("h:mm a"));
+        assert!(uses_12h("h:mm:ss tt"));
+        assert!(uses_12h("K:mm a"));
+        assert!(!uses_12h("HH:mm"));
+        assert!(!uses_12h("H 'h' mm"));
+    }
+
+    /// `cargo test system_clock -- --ignored --nocapture` shows what this computer uses.
+    #[test]
+    #[ignore]
+    fn system_clock() {
+        println!("time format {:?} → 12-hour {:?}", super::system_time_format(), super::system_hour12());
+    }
 }

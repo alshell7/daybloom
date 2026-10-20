@@ -164,6 +164,7 @@ pub fn run() {
             commands::main_show,
             commands::set_tray_status,
             commands::set_dock_visible,
+            commands::system_hour12,
             oauth::oauth_listen,
             oauth::oauth_wait,
             assistant::assistant_weights_status,

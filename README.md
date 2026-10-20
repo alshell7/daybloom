@@ -299,6 +299,9 @@ The guide uses these terms:
 
 To change the dial type, click **12 h**, **24 h**, **Hour** or **Cycles** below the dial. You can also press <kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd> or <kbd>4</kbd>.
 
+- **Clock style:** times show as 12-hour (2:30pm) or 24-hour (14:30), the same as your computer's clock. To change this, open **Settings › Rhythm** and select **12h** or **24h**.
+- **Timeline width:** the timeline on the right uses the space that the dial does not need. To make it wider or narrower, drag its left edge. Double-click the edge to make it fit again.
+
 ### Add a block
 
 **With words:**

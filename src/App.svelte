@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { activeTimeZone, atMinutes, formatTime, hourOf, setTimeZone, todayISO } from './lib/engine/time';
+  import { activeTimeZone, atMinutes, formatTime, hourOf, setPrefers12h, setTimeZone, todayISO } from './lib/engine/time';
   import { platform, windowLabel } from './lib/platform';
   import { startScheduler } from './lib/scheduler.svelte';
   import { clock } from './lib/stores/clock.svelte';
@@ -13,6 +13,7 @@
   import { startUpdateChecks } from './lib/updater.svelte';
   import { startSync } from './lib/sync/sync.svelte';
   import { streakFile } from './lib/stores/streaks.svelte';
+  import { layout } from './lib/stores/layout.svelte';
   import { initCalendars } from './lib/calendarBridge.svelte';
   import MainView from './views/MainView.svelte';
   import WidgetView from './views/WidgetView.svelte';
@@ -50,8 +51,20 @@
     let stopCues: (() => void) | undefined;
     let stopPrivacy: (() => void) | undefined;
     let stopAddons: (() => void) | undefined;
+    // "Auto" clock style: what this computer shows (region and time settings), read before the
+    // first paint and again when the window comes back (the setting may have changed).
+    const readClockStyle = () =>
+      platform
+        .systemHour12()
+        .then((v) => {
+          if (v === null) return;
+          view.systemHour12 = v;
+          setPrefers12h(v);
+        })
+        .catch(() => {});
+    addEventListener('focus', readClockStyle);
     (async () => {
-      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load()]);
+      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load(), layout.load(), readClockStyle()]);
       if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0) {
         seedSampleDay(clock.now);
       }
@@ -81,6 +94,7 @@
     })();
 
     return () => {
+      removeEventListener('focus', readClockStyle);
       stopScheduler?.();
       stopCalendars?.();
       stopWidgetSync?.();

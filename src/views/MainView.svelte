@@ -19,6 +19,7 @@
   import BlockSheet from '../components/BlockSheet.svelte';
   import Coach from '../components/Coach.svelte';
   import DayRail from '../components/DayRail.svelte';
+  import { layout, railDrag } from '../lib/stores/layout.svelte';
   import FocusMode from '../components/FocusMode.svelte';
   import PresetBar from '../components/PresetBar.svelte';
   import SettingsSheet from '../components/SettingsSheet.svelte';
@@ -247,7 +248,13 @@
 <div class="shell" class:mac class:sheet-open={!!view.sheet}>
   <TopBar {mac} ontogglewidget={toggleWidget} />
 
-  <main class="stage">
+  <main
+    class="stage"
+    class:custom={railDrag.active ? !railDrag.auto : layout.value.railWidth > 0}
+    class:resizing={railDrag.active}
+    class:settling={railDrag.settling}
+    style:--rail-user={railDrag.active ? `${railDrag.width}px` : layout.value.railWidth ? `${layout.value.railWidth}px` : null}
+  >
     <section class="dial-col" aria-label="Dial">
       <div class="dial-box">
         {#key view.date}
@@ -339,10 +346,25 @@
     background: var(--ground);
     overflow: hidden;
   }
+  /* The rail takes the room the dial doesn't need (the dial is sized by the window's height),
+     between 320 and 480 px. A width you drag to is kept, within limits that always leave the
+     dial its column (see lib/stores/layout.svelte.ts). */
   .stage {
+    --rail-auto: clamp(320px, calc(100vw - min(100vh - 230px, 660px) - 64px), 480px);
+    --rail: var(--rail-auto);
+    position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(320px, 31vw, 420px);
+    grid-template-columns: minmax(0, 1fr) var(--rail);
     min-height: 0;
+  }
+  .stage.custom {
+    --rail: clamp(320px, var(--rail-user), max(320px, min(640px, 100vw - 480px)));
+  }
+  .stage.resizing {
+    --rail: var(--rail-user);
+  }
+  .stage.settling {
+    transition: grid-template-columns var(--dur-3) var(--ease-settle);
   }
   .dial-col {
     display: grid;

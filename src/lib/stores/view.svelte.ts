@@ -113,15 +113,17 @@ class View {
   reducedMotion = $derived(
     settings.value.motion === 'system' ? this.systemReduced : settings.value.motion === 'calm',
   );
+  /** The computer's own 12/24-hour setting (null until known, or in a browser). */
+  systemHour12 = $state<boolean | null>(null);
   hour12 = $derived(
     settings.value.clock === 'auto'
-      ? (() => {
+      ? (this.systemHour12 ?? (() => {
           try {
             return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hour12 ?? false;
           } catch {
             return false;
           }
-        })()
+        })())
       : settings.value.clock === '12',
   );
 
