@@ -8,6 +8,7 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ## Next
 
+## 0.1.13
 ### Addons
 
 - **Alef on the widget** — talk to Alef from the desktop widget: click the chat button or just start typing, or hold Space to speak. Its answer shows over the dial, and the talk stays in Alef's chat in the planner.
