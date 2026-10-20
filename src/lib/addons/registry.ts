@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro';
 
 export interface AddonMeta {
   id: AddonId;
@@ -17,7 +17,7 @@ export interface AddonMeta {
   accent: string;
   features: { icon: string; text: string }[];
   /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
-  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings';
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro';
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
@@ -121,6 +121,20 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'shuffle', text: 'Back-to-back blocks show in the timeline, with “Make room” one tap away' },
     ],
     sheet: 'landings',
+  },
+  {
+    id: 'retro',
+    name: 'Retrospection',
+    tagline: 'Look back kindly, plan a little better',
+    description: 'A look back over your week or month: the story in a few lines, what went well, your days at a glance, and where things could be easier — each with a gentle tip and a fix you can make in one tap.',
+    icon: 'trend-up',
+    accent: '#138FA6',
+    features: [
+      { icon: 'star', text: 'Bright spots first: best days, focus time, your strongest hours' },
+      { icon: 'lightbulb', text: 'Patterns that get in the way, with a gentle tip and a one-tap fix' },
+      { icon: 'pen', text: 'Keep, change, try: three lines of your own each week' },
+    ],
+    sheet: 'retro',
   },
   {
     id: 'mcp',

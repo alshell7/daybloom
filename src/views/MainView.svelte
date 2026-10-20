@@ -45,6 +45,7 @@
   import WhatsNew from '../components/WhatsNew.svelte';
   import LandingCard from '../components/addons/landings/LandingCard.svelte';
   import LandingsPanel from '../components/addons/landings/LandingsPanel.svelte';
+  import RetroPanel from '../components/addons/retro/RetroPanel.svelte';
   import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
@@ -327,6 +328,7 @@
   {#if isOn('waqt')}<WaqtPanel /><WaqtMoment />{/if}
   {#if isOn('mcp')}<McpPanel />{/if}
   {#if isOn('landings')}<LandingsPanel /><LandingCard />{/if}
+  {#if isOn('retro')}<RetroPanel />{/if}
   <WhatsNew />
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}

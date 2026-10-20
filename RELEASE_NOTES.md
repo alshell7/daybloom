@@ -17,6 +17,7 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ### Addons
 
+- **Retrospection** — look back over a week or a month, kindly: the story in a few lines, bright spots, your days at a glance, the rhythm of your day and where the time went; then what could be easier, each with a gentle tip and a one-tap fix, and three lines of your own.
 - **Soft landings** — after meetings, energy dips. Daybloom keeps a few minutes free to land, marks back-to-back hand-offs in the timeline with “Make room”, and when a meeting ends offers three small stepping stones: a reset, a little spark, and a two-minute first step into what’s next.
 - **Waqt: your salah** — mark each prayer on time, in jamaat or made up late, and qasr while travelling. See a week or a month: how the prayers went, each prayer's streak, and kind notes on what's going well.
 

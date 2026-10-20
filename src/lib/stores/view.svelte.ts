@@ -30,7 +30,8 @@ export type Sheet =
   | { kind: 'waqt' }
   | { kind: 'mcp' }
   | { kind: 'whatsnew'; version?: string }
-  | { kind: 'landings' };
+  | { kind: 'landings' }
+  | { kind: 'retro' };
 
 const DOCK_ORDER = ['crumb', 'waqt', 'landing'];
 

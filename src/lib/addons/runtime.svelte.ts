@@ -10,6 +10,7 @@ import { startWaqt, startWaqtView, waqtFile } from './waqt/waqt.svelte';
 import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { startLandings } from './landings/landings.svelte';
 import { landingsFile } from './landings/pad.svelte';
+import { retroFile, startRetro } from './retro/retro.svelte';
 import { view } from '../stores/view.svelte';
 
 /**
@@ -52,7 +53,19 @@ export function startAddons(): () => void {
   let stopWaqt: (() => void) | null = null;
   let stopMcp: (() => void) | null = null;
   let stopLandings: (() => void) | null = null;
+  let stopRetro: (() => void) | null = null;
   const root = $effect.root(() => {
+    $effect(() => {
+      const on = isOn('retro');
+      if (on && !stopRetro) {
+        void loaded(retroFile).then(() => {
+          if (isOn('retro') && !stopRetro) stopRetro = startRetro();
+        });
+      } else if (!on && stopRetro) {
+        stopRetro();
+        stopRetro = null;
+      }
+    });
     $effect(() => {
       const on = isOn('landings');
       if (on && !stopLandings) {
@@ -135,6 +148,7 @@ export function startAddons(): () => void {
     stopWaqt?.();
     stopMcp?.();
     stopLandings?.();
+    stopRetro?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();
