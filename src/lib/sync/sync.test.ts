@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { migrateCrumbs, type Crumb, type CrumbsFile } from '../addons/crumbs/migrate';
+import { migrateReality, type RealityFile, type Sample } from '../addons/reality/reality';
 import { migrateTrackerFile } from '../addons/tracker/migrate';
 import type { Entry, TrackerFile } from '../addons/tracker/types';
+import { migrateWaqt } from '../addons/waqt/defaults';
+import type { WaqtFile } from '../addons/waqt/types';
 import { migrateWork } from '../addons/work/migrate';
 import type { Invoice, WorkData } from '../addons/work/types';
 import type { Task } from '../engine/types';
@@ -87,6 +91,9 @@ interface Data {
   streaks: { celebrated: number };
   work: WorkData;
   tracker: TrackerFile;
+  crumbs: CrumbsFile;
+  reality: RealityFile;
+  waqt: WaqtFile;
 }
 
 interface Device {
@@ -106,6 +113,9 @@ function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<
     streaks: { celebrated: 0 },
     work: migrateWork(null),
     tracker: migrateTrackerFile(null),
+    crumbs: migrateCrumbs(null),
+    reality: migrateReality(null),
+    waqt: migrateWaqt(null),
   };
   const bind = <K extends keyof Data>(k: K) => ({
     read: () => structuredClone(data[k]),
@@ -121,6 +131,9 @@ function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<
     streaks: bind('streaks'),
     work: bind('work'),
     tracker: bind('tracker'),
+    crumbs: bind('crumbs'),
+    reality: bind('reality'),
+    waqt: bind('waqt'),
     watch(cb, active) {
       watcher = { cb, active };
       return () => (watcher = null);
@@ -200,6 +213,9 @@ const synced = (d: Device) => ({
   streaks: d.data.streaks,
   work: d.data.work,
   tracker: d.data.tracker,
+  crumbs: d.data.crumbs,
+  reality: d.data.reality,
+  waqt: d.data.waqt,
 });
 
 afterEach(() => {
@@ -482,7 +498,7 @@ describe('github sync, end to end', () => {
     expect(a.secrets.has(TOKEN_ACCOUNT)).toBe(false);
     expect(a.svc.hasToken).toBe(false);
     expect(a.svc.config.enabled).toBe(false);
-    for (const k of ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker']) expect(a.storage.get(BASE_PREFIX + k)).toBe('');
+    for (const k of ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker', 'crumbs', 'reality', 'waqt']) expect(a.storage.get(BASE_PREFIX + k)).toBe('');
     expect(repo.files).toEqual(before);
     expect(a.data.tasks.tasks.map((t) => t.id)).toEqual(['t1']);
   });
@@ -660,6 +676,53 @@ describe('github sync, addon files', () => {
     await b.svc.syncNow();
     expect(synced(a)).toEqual(synced(c));
     expect(synced(b)).toEqual(synced(c));
+  });
+
+  it('carries Breadcrumbs, Reality check and Waqt between computers, and never an MCP file', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    const note: Crumb = { id: 'n1', taskId: 't1', title: 'Write', text: 'Stopped at section 2', at: T, source: 'leave' };
+    const real: Sample = { id: 't1@2026-10-19', taskId: 't1', title: 'Write', category: 'focus', icon: 'pen', planned: 30, actual: 45, source: 'focus', at: T + 45 * MIN };
+    a.data.crumbs = migrateCrumbs({ crumbs: [note], parked: [{ id: 'p1', text: 'Call Sam', at: T + MIN }] });
+    a.data.reality = migrateReality({ samples: [real], focus: { [real.id]: 45 * MIN }, backfilledAt: T });
+    a.data.waqt = migrateWaqt({ settings: { place: { name: 'Leeds', country: 'GB', lat: 53.8, lng: -1.55 } }, prayed: { '2026-10-19': { fajr: 'prayed' } } });
+    await connect(a, 'Work Mac');
+    expect(repo.read('crumbs.json')).toEqual(a.data.crumbs);
+    expect(repo.read('reality.json')).toEqual(a.data.reality);
+    expect(repo.read('waqt.json')).toEqual(a.data.waqt);
+
+    // B saw the same tick arrive with the tasks, but had no focus session for it.
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    b.data.reality = migrateReality({ samples: [{ ...real, actual: 50, source: 'tick' }], backfilledAt: T + 1 });
+    await connect(b, 'Home PC', 'merge');
+    expect(b.data.crumbs).toEqual(a.data.crumbs);
+    expect(b.data.reality.samples).toEqual([real]);
+    expect(b.data.waqt).toEqual(a.data.waqt);
+
+    // Apart: B sends the parked thought on, marks Dhuhr and focuses 10 more minutes; A focuses 5 and changes a reminder.
+    clock.t += 1000;
+    b.data.crumbs.parked = [];
+    b.data.waqt.prayed['2026-10-19'].dhuhr = 'jamaat';
+    b.data.reality.focus[real.id] += 10 * MIN;
+    a.data.reality.focus[real.id] += 5 * MIN;
+    a.data.waqt.settings.remind.before = 15;
+    await b.svc.syncNow();
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(synced(a)).toEqual(synced(b));
+    expect(a.data.crumbs.parked).toEqual([]);
+    expect(a.data.waqt.prayed).toEqual({ '2026-10-19': { fajr: 'prayed', dhuhr: 'jamaat' } });
+    expect(b.data.waqt.settings.remind.before).toBe(15);
+    expect(a.data.reality.focus).toEqual({ [real.id]: 60 * MIN });
+    expect(a.data.reality.backfilledAt).toBe(T + 1);
+    expect([...repo.files.keys()].filter((k) => k.includes('mcp'))).toEqual([]);
+
+    // Settled: nothing more to write.
+    const puts = repo.puts;
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(repo.puts).toBe(puts);
   });
 
   it('two computers tracking at once: a sha conflict re-fetches, re-merges and retries, leaving one entry running', async () => {

@@ -1,6 +1,7 @@
 // Reality check, the live side: notices how long finished blocks really took and keeps it in
-// its own file on this computer. Focus time per task and day comes from focus sessions; tracked
-// time comes from the Time Tracker when it's on; else the moment a block was ticked.
+// its own file, which syncs with GitHub when sync is on. Focus time per task and day comes
+// from focus sessions; tracked time comes from the Time Tracker when it's on; else the moment
+// a block was ticked.
 
 import { untrack } from 'svelte';
 import { blockKey, parseBlockKey } from '../../engine/blocks';
@@ -12,30 +13,13 @@ import { taskFile } from '../../stores/tasks.svelte';
 import { timer, timerFile } from '../../stores/timer.svelte';
 import { isOn } from '../registry';
 import { trackerFile } from '../tracker/tracker.svelte';
-import { estimate, suggest, tickMinutes, type Estimate, type Sample, type SampleSource } from './reality';
+import { estimate, MAX_SAMPLES, migrateReality, suggest, tickMinutes, type Estimate, type RealityFile, type Sample, type SampleSource } from './reality';
 
-export interface RealityFile {
-  version: 1;
-  samples: Sample[];
-  /** Focus time (ms) per `taskId@date`. */
-  focus: Record<string, number>;
-  /** When past ticks were read in (0 = not yet). */
-  backfilledAt: number;
-}
+export { migrateReality, type RealityFile };
 
-const MAX_SAMPLES = 1500;
 const MIN_REAL = 3;
 
-export function migrateReality(raw: any): RealityFile {
-  const samples: Sample[] = Array.isArray(raw?.samples)
-    ? raw.samples.filter((s: any) => typeof s?.id === 'string' && typeof s?.taskId === 'string' && s.planned > 0 && s.actual > 0 && Number.isFinite(s.at))
-    : [];
-  const focus: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw?.focus ?? {})) if (typeof v === 'number' && v > 0) focus[k] = v;
-  return { version: 1, samples: samples.slice(-MAX_SAMPLES), focus, backfilledAt: Number.isFinite(raw?.backfilledAt) ? raw.backfilledAt : 0 };
-}
-
-export const realityFile = persisted<RealityFile>('addon-reality', { version: 1, samples: [], focus: {}, backfilledAt: 0 }, migrateReality);
+export const realityFile = persisted<RealityFile>('addon-reality', migrateReality(null), migrateReality);
 
 function planned(task: Task, date: ISODate): number {
   return task.overrides?.[date]?.duration ?? task.duration;

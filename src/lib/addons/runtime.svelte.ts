@@ -10,6 +10,12 @@ import { startWaqt, waqtFile } from './waqt/waqt.svelte';
 import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { view } from '../stores/view.svelte';
 
+/**
+ * Read a store from disk only if nothing has yet. GitHub sync loads these stores too, and a
+ * second read could land after a sync wrote to the store and put the older copy back.
+ */
+const loaded = (f: { ready: boolean; load(): Promise<void> }) => (f.ready ? Promise.resolve() : f.load());
+
 export function startAddons(): () => void {
   const disconnect = work.connect({
     entries: () => (isOn('tracker') ? trackerFile.value.entries : []),
@@ -28,7 +34,7 @@ export function startAddons(): () => void {
     $effect(() => {
       const on = isOn('crumbs');
       if (on && !stopCrumbs) {
-        void crumbsFile.load().then(() => {
+        void loaded(crumbsFile).then(() => {
           if (isOn('crumbs') && !stopCrumbs) stopCrumbs = startCrumbs();
         });
       } else if (!on && stopCrumbs) {
@@ -39,7 +45,7 @@ export function startAddons(): () => void {
     $effect(() => {
       const on = isOn('reality');
       if (on && !stopReality) {
-        void realityFile.load().then(() => {
+        void loaded(realityFile).then(() => {
           if (isOn('reality') && !stopReality) stopReality = startReality();
         });
       } else if (!on && stopReality) {
@@ -50,7 +56,7 @@ export function startAddons(): () => void {
     $effect(() => {
       const on = isOn('waqt');
       if (on && !stopWaqt) {
-        void waqtFile.load().then(() => {
+        void loaded(waqtFile).then(() => {
           if (isOn('waqt') && !stopWaqt) stopWaqt = startWaqt();
         });
       } else if (!on && stopWaqt) {

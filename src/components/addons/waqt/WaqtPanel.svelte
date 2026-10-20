@@ -159,7 +159,7 @@
             <path class="star" d="M48 18l1.8 4 4.2.4-3.2 2.8 1 4.2-3.8-2.3-3.8 2.3 1-4.2-3.2-2.8 4.2-.4z" />
           </svg>
           <h3>{waqt.ready ? 'Change your place' : 'Where do you pray?'}</h3>
-          <p class="lead">Waqt works out the salah times for your place, on this computer. Your location is never sent anywhere.</p>
+          <p class="lead">Waqt works out the salah times for your place, on this computer. Your place goes only to your own GitHub repo, and only when sync is on.</p>
           <input bind:this={searchBox} class="field search" bind:value={q} placeholder="Search a city" aria-label="Search a city" />
           {#if found.length}
             <ul class="found" transition:slide={{ duration: rm ? 0 : 160 }}>

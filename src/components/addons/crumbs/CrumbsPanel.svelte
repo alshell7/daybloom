@@ -92,7 +92,7 @@
           <span>When a focus session ends</span>
           <input type="checkbox" class="switch" bind:checked={crumbsFile.value.settings.askOnStop} />
         </label>
-        <p class="hint">You can leave a note on any task, any time, in its details. Notes stay on this computer.</p>
+        <p class="hint">You can leave a note on any task, any time, in its details. With GitHub sync on, your notes also go to your other computers.</p>
       </section>
     </div>
   </Panel>
