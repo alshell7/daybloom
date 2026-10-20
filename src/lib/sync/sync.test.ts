@@ -5,6 +5,7 @@ import { migrateWork } from '../addons/work/migrate';
 import type { Invoice, WorkData } from '../addons/work/types';
 import type { Task } from '../engine/types';
 import { DEFAULT_SETTINGS, type Settings } from '../stores/settings.svelte';
+import { pickSharedTracker } from './addons';
 import { decodeBase64, encodeBase64, type FetchLike } from './github';
 import type { Tombstone } from './merge';
 import { BASE_PREFIX, createSyncService, SETTLE_MS, SYNC_INTERVAL_MS, TOKEN_ACCOUNT, type SyncService, type SyncStores } from './sync.svelte';
@@ -634,7 +635,7 @@ describe('github sync, addon files', () => {
     a.data.tracker = migrateTrackerFile({ entries: [entry('e1', 0, 30, { taskId: 't1' })], settings: { roundTo: 15 } });
     await connect(a, 'Work Mac');
     expect(repo.read('work.json')).toEqual(a.data.work);
-    expect(repo.read('tracker.json')).toEqual(a.data.tracker);
+    expect(repo.read('tracker.json')).toEqual(pickSharedTracker(a.data.tracker));
 
     // "Use the repo's": B's own addon data gives way.
     const b = makeDevice(repo, 'pc-b', 'Home PC');
@@ -695,7 +696,7 @@ describe('github sync, addon files', () => {
     expect(b.svc.status.state).toBe('ok');
 
     await b.svc.syncNow();
-    expect(a.data.tracker).toEqual(repo.read('tracker.json'));
+    expect(pickSharedTracker(a.data.tracker)).toEqual(repo.read('tracker.json'));
     expect(b.data.tracker).toEqual(a.data.tracker);
     const t = a.data.tracker;
     expect(t.entries.map((e) => [e.id, e.endMs])).toEqual([
@@ -712,6 +713,73 @@ describe('github sync, addon files', () => {
     await a.svc.syncNow();
     await b.svc.syncNow();
     expect(repo.puts).toBe(puts);
+  });
+
+  it('app and title tracking stay on each computer, and never cause a write', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    a.data.tracker = migrateTrackerFile({ entries: [entry('e1', 0, 30)], settings: { trackApps: true, trackTitles: true } });
+    await connect(a, 'Work Mac');
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    b.data.tracker = migrateTrackerFile({ entries: [entry('b1', 40, 50)] });
+    await connect(b, 'Home PC', 'merge');
+
+    // A few rounds to settle, then a round with nothing new writes nothing.
+    for (let i = 0; i < 3; i++) {
+      clock.t += SYNC_INTERVAL_MS;
+      await a.svc.syncNow();
+      await b.svc.syncNow();
+    }
+    expect(entryIds(a.data.tracker)).toEqual(['e1', 'b1']);
+    expect(b.data.tracker.entries).toEqual(a.data.tracker.entries);
+    const puts = repo.puts;
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    await b.svc.syncNow();
+    expect(repo.puts).toBe(puts);
+    expect(a.data.tracker.settings).toMatchObject({ trackApps: true, trackTitles: true });
+    expect(b.data.tracker.settings).toMatchObject({ trackApps: false, trackTitles: false });
+
+    // Turning it on or off here is not a change to sync.
+    b.data.tracker.settings.trackApps = true;
+    clock.t += SYNC_INTERVAL_MS;
+    await b.svc.syncNow();
+    await a.svc.syncNow();
+    expect(repo.puts).toBe(puts);
+    expect(a.data.tracker.settings).toMatchObject({ trackApps: true, trackTitles: true });
+    expect(b.data.tracker.settings).toMatchObject({ trackApps: true, trackTitles: false });
+  });
+
+  it('a computer that adopts the repo’s tracker data keeps its own app and title tracking', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    a.data.tracker = migrateTrackerFile({ entries: [entry('e1', 0, 30)], settings: { trackApps: true, trackTitles: true, roundTo: 15 } });
+    await connect(a, 'Work Mac');
+    expect(repo.read('tracker.json').settings).not.toHaveProperty('trackApps');
+    expect(repo.read('tracker.json').settings).not.toHaveProperty('trackTitles');
+
+    const b = makeDevice(repo, 'pc-b', 'Home PC');
+    await connect(b, 'Home PC', 'replace');
+    expect(entryIds(b.data.tracker)).toEqual(['e1']);
+    expect(b.data.tracker.settings).toMatchObject({ trackApps: false, trackTitles: false, roundTo: 15 });
+    expect(a.data.tracker.settings).toMatchObject({ trackApps: true, trackTitles: true });
+  });
+
+  it('an older tracker.json that still holds app tracking is read without it and not rewritten', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    putRaw(repo, 'tracker.json', JSON.stringify(migrateTrackerFile({ entries: [entry('e1', 0, 30)], settings: { trackApps: true, trackTitles: true } })));
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    expect(entryIds(a.data.tracker)).toEqual(['e1']);
+    expect(a.data.tracker.settings).toMatchObject({ trackApps: false, trackTitles: false });
+
+    const puts = repo.puts;
+    clock.t += SYNC_INTERVAL_MS;
+    await a.svc.syncNow();
+    expect(repo.puts).toBe(puts);
+    expect(repo.read('tracker.json').settings.trackApps).toBe(true); // left as it is until there is a real change
   });
 
   it('two computers that issued the same invoice number at the same moment end with unique numbers', async () => {

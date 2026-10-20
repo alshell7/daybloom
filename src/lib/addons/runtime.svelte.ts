@@ -10,6 +10,12 @@ import { startWaqt, waqtFile } from './waqt/waqt.svelte';
 import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { view } from '../stores/view.svelte';
 
+/**
+ * Read a store from disk only if nothing has yet. GitHub sync loads these stores too, and a
+ * second read could land after a sync wrote to the store and put the older copy back.
+ */
+export const loaded = (f: { ready: boolean; load(): Promise<void> }) => (f.ready ? Promise.resolve() : f.load());
+
 export function startAddons(): () => void {
   const disconnect = work.connect({
     entries: () => (isOn('tracker') ? trackerFile.value.entries : []),
@@ -72,7 +78,7 @@ export function startAddons(): () => void {
     $effect(() => {
       const on = isOn('tracker');
       if (on && !stopTracker) {
-        void tracker.load().then(() => {
+        void loaded(tracker).then(() => {
           if (!isOn('tracker') || stopTracker) return;
           stopTracker = startTracker();
           stopFocus = startFollowingFocus();
