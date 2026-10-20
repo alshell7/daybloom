@@ -43,6 +43,12 @@ if (typeof document !== 'undefined') {
   });
 }
 
+/** The shared output (context and master gain), for other voices like Alef's; null when sound is off. */
+export function audioOut(): { ctx: AudioContext; master: GainNode } | null {
+  const c = audio();
+  return c && master ? { ctx: c, master } : null;
+}
+
 export function configureSound(on: boolean, vol: number) {
   enabled = on;
   volume = vol;

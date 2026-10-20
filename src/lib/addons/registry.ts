@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef';
 
 export interface AddonMeta {
   id: AddonId;
@@ -17,7 +17,7 @@ export interface AddonMeta {
   accent: string;
   features: { icon: string; text: string }[];
   /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
-  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro';
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef';
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
@@ -135,6 +135,20 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'pen', text: 'Keep, change, try: three lines of your own each week' },
     ],
     sheet: 'retro',
+  },
+  {
+    id: 'alef',
+    name: 'Alef',
+    tagline: 'A small robot friend in your dial',
+    description: 'Alef lives in the middle of your dial. It keeps you company while you work, feels how the day is going and shows it with its eyes, lights and little chirps. Talk to it to plan: on this device, or with an AI service you choose.',
+    icon: 'bot',
+    accent: '#0E9FB0',
+    features: [
+      { icon: 'smile', text: '32 expressions that follow your day: happy when you finish, sleepy late at night' },
+      { icon: 'focus', text: 'Works beside you in focus sessions, and cheers your wins' },
+      { icon: 'sparkles', text: 'Talk to plan your day: on this device, or with OpenAI, Anthropic, Gemini, OpenRouter, Cloudflare or your own' },
+    ],
+    sheet: 'alef',
   },
   {
     id: 'mcp',

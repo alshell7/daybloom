@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { NowState } from '../engine/blocks';
   import { formatClockCountdown, formatDayShort, formatDuration, formatTime, MINUTE } from '../engine/time';
   import type { ISODate } from '../engine/types';
@@ -21,6 +22,7 @@
     ontimer,
     breath = null,
     onbreathe,
+    face,
   }: {
     state: NowState;
     now: number;
@@ -35,6 +37,8 @@
     /** Where the breathing minute is, or null. */
     breath?: BreathState | null;
     onbreathe?: (on: boolean) => void;
+    /** A face in place of the big number (Alef), which shows the number on its screen. */
+    face?: Snippet<[{ big: string; tone: string }]>;
   } = $props();
 
   const breathPhase = $derived(breath ?? null);
@@ -98,7 +102,7 @@
   });
 </script>
 
-<div class="readout" class:compact data-tone={breathPhase ? 'breath' : view.tone} aria-live="polite">
+<div class="readout" class:compact class:with-face={!!face} data-tone={breathPhase ? 'breath' : view.tone} aria-live="polite">
   {#if breathPhase}
     <div class="breath-words">
       {#key `${breathPhase.round}:${breathPhase.id}`}
@@ -119,7 +123,11 @@
     <!-- the wall clock, always readable at a glance; the big number is time left -->
     <div class="clock tnum" aria-label={`It's ${formatTime(now, hour12)}`}><Rolling text={formatTime(now, hour12)} {reduced} /></div>
   {/if}
-  <div class="big tnum"><Rolling text={view.big} {reduced} /></div>
+  {#if face}
+    <div class="face">{@render face({ big: view.big, tone: view.tone })}</div>
+  {:else}
+    <div class="big tnum"><Rolling text={view.big} {reduced} /></div>
+  {/if}
   {#key view.title}
     <div class="title" in:fly={{ y: 8, duration: reduced ? 0 : 360, easing: cubicOut }}>
       {#if view.icon && !compact}<Icon name={view.icon} size={16} stroke={2} />{/if}
@@ -167,6 +175,24 @@
     font-weight: 500;
     letter-spacing: 0.01em;
     opacity: 0.85;
+  }
+  .face {
+    width: 34cqi;
+    margin: 0.4cqi 0 0.2cqi;
+  }
+  .compact .face {
+    width: 38cqi;
+    margin: 0.4cqi 0 0;
+  }
+  .compact.with-face .clock {
+    font-size: 5.2cqi;
+    margin-bottom: 0.8cqi;
+  }
+  .with-face .clock {
+    margin-bottom: 0.4cqi;
+  }
+  .with-face .title {
+    margin-top: 0.6cqi;
   }
   .compact .clock {
     font-size: 6cqi;

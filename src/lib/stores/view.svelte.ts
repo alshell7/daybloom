@@ -31,7 +31,8 @@ export type Sheet =
   | { kind: 'mcp' }
   | { kind: 'whatsnew'; version?: string }
   | { kind: 'landings' }
-  | { kind: 'retro' };
+  | { kind: 'retro' }
+  | { kind: 'alef'; tab?: 'talk' | 'alef' | 'feelings' };
 
 const DOCK_ORDER = ['crumb', 'waqt', 'landing'];
 

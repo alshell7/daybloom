@@ -53,6 +53,13 @@
   import { breath } from '../lib/breath.svelte';
   import TopBar from '../components/TopBar.svelte';
   import { closeTopSheet } from '../lib/sheets';
+  import AlefFace from '../components/addons/alef/AlefFace.svelte';
+  import AlefPosture from '../components/addons/alef/AlefPosture.svelte';
+  import AlefPanel from '../components/addons/alef/AlefPanel.svelte';
+  import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
+  import { BEHAVIORS } from '../lib/addons/alef/behaviors';
+
+  const alefOnDial = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.onDial);
 
   const presetId = $derived(settings.value.preset);
 
@@ -180,7 +187,7 @@
     // V: hold to talk, or tap and speak (it stops when you pause).
     if (k === 'v' && settings.value.voice.hotkey) {
       e.preventDefault();
-      if (!e.repeat) voice.press(view.sheet?.kind === 'assistant' ? 'assistant' : 'overlay');
+      if (!e.repeat) voice.press(view.sheet?.kind === 'assistant' ? 'assistant' : view.sheet?.kind === 'alef' ? 'alef' : 'overlay');
       return;
     }
     if (k === 'n') {
@@ -204,7 +211,7 @@
   /** The voice surface a field belongs to (`data-voice` on its form), else the capsule. */
   function voiceSurfaceAt(target: EventTarget | null): VoiceSurface {
     const at = target instanceof Element ? target.closest<HTMLElement>('[data-voice]')?.dataset.voice : undefined;
-    return at === 'quickadd' || at === 'assistant' || at === 'note' ? at : view.sheet?.kind === 'assistant' ? 'assistant' : 'overlay';
+    return at === 'quickadd' || at === 'assistant' || at === 'note' || at === 'alef' ? at : view.sheet?.kind === 'assistant' ? 'assistant' : view.sheet?.kind === 'alef' ? 'alef' : 'overlay';
   }
 
   function togglePrivacy() {
@@ -244,6 +251,23 @@
   const sleep = $derived({ wake: settings.value.wake, sleep: settings.value.sleep });
 </script>
 
+{#snippet alefFace(info: { big: string; tone: string })}
+  <AlefFace
+    perf={alef.perf}
+    performing={alef.performing}
+    affect={alef.affect}
+    talk={alef.talk}
+    eyes={alefFile.value.settings.eyes}
+    led={alefFile.value.settings.led}
+    line={info.big}
+    reduced={view.reducedMotion}
+    bubble={alef.bubble}
+    onpoke={() => alef.poke()}
+    onopen={() => (view.sheet = { kind: 'alef', tab: 'talk' })}
+    ondismiss={() => alef.dismissBubble()}
+  />
+{/snippet}
+
 <svelte:window
   onkeydown={onKey}
   onkeyup={(e) => {
@@ -266,6 +290,7 @@
       <div class="dial-box">
         {#key view.date}
         <div class="turn" in:turn={{ dir: view.dayDir }}>
+        <AlefPosture on={alefOnDial} reduced={view.reducedMotion}>
         <Dial
           {presetId}
           finish={view.finish}
@@ -291,6 +316,7 @@
           breathStart={view.breatheAt}
           prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
           prayerBloom={waqt.bloom}
+          lift={alefOnDial && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
         >
           <Readout
             state={view.now}
@@ -304,8 +330,10 @@
             ontimer={onTimer}
             breath={view.breathing ? breath.state : null}
             onbreathe={(on) => (view.breatheAt = on ? clock.now : 0)}
+            face={alefOnDial ? alefFace : undefined}
           />
         </Dial>
+        </AlefPosture>
         </div>
         {/key}
       </div>
@@ -332,6 +360,7 @@
   {#if isOn('mcp')}<McpPanel />{/if}
   {#if isOn('landings')}<LandingsPanel /><LandingCard />{/if}
   {#if isOn('retro')}<RetroPanel />{/if}
+  {#if isOn('alef')}<AlefPanel />{/if}
   <WhatsNew />
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}

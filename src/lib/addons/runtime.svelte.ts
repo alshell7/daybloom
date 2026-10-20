@@ -11,6 +11,7 @@ import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { startLandings } from './landings/landings.svelte';
 import { landingsFile } from './landings/pad.svelte';
 import { retroFile, startRetro } from './retro/retro.svelte';
+import { alefFile, startAlef, startAlefView } from './alef/alef.svelte';
 import { view } from '../stores/view.svelte';
 
 /**
@@ -19,10 +20,22 @@ import { view } from '../stores/view.svelte';
  */
 export const loaded = (f: { ready: boolean; load(): Promise<void> }) => (f.ready ? Promise.resolve() : f.load());
 
-/** The widget: what addons add to the dial (salah blocks), without their reminders. */
+/** The widget: what addons add to the dial (salah blocks, Alef's face), without their reminders. */
 export function startAddonViews(): () => void {
   let stop: (() => void) | null = null;
+  let stopAlef: (() => void) | null = null;
   const root = $effect.root(() => {
+    $effect(() => {
+      const on = isOn('alef');
+      if (on && !stopAlef) {
+        void loaded(alefFile).then(() => {
+          if (isOn('alef') && !stopAlef) stopAlef = startAlefView();
+        });
+      } else if (!on && stopAlef) {
+        stopAlef();
+        stopAlef = null;
+      }
+    });
     $effect(() => {
       const on = isOn('waqt');
       if (on && !stop) {
@@ -38,6 +51,7 @@ export function startAddonViews(): () => void {
   return () => {
     root();
     stop?.();
+    stopAlef?.();
   };
 }
 
@@ -54,7 +68,19 @@ export function startAddons(): () => void {
   let stopMcp: (() => void) | null = null;
   let stopLandings: (() => void) | null = null;
   let stopRetro: (() => void) | null = null;
+  let stopAlef: (() => void) | null = null;
   const root = $effect.root(() => {
+    $effect(() => {
+      const on = isOn('alef');
+      if (on && !stopAlef) {
+        void loaded(alefFile).then(() => {
+          if (isOn('alef') && !stopAlef) stopAlef = startAlef();
+        });
+      } else if (!on && stopAlef) {
+        stopAlef();
+        stopAlef = null;
+      }
+    });
     $effect(() => {
       const on = isOn('retro');
       if (on && !stopRetro) {
@@ -149,6 +175,7 @@ export function startAddons(): () => void {
     stopMcp?.();
     stopLandings?.();
     stopRetro?.();
+    stopAlef?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();

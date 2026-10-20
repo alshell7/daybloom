@@ -111,6 +111,39 @@ export const platform = {
     channel?.postMessage({ key, origin: windowLabel() });
   },
 
+  /** A passing message to the other windows (not stored), e.g. Alef's face mirrored in the widget. */
+  async broadcast(topic: string, payload: unknown): Promise<void> {
+    if (isTauri) {
+      const { emit } = await import('@tauri-apps/api/event');
+      await emit('daybloom://broadcast', { topic, payload, origin: windowLabel() });
+      return;
+    }
+    channel?.postMessage({ topic, payload, origin: windowLabel() });
+  },
+
+  /** Messages other windows `broadcast` on `topic`. Returns an unsubscribe function. */
+  onBroadcast<T>(topic: string, cb: (payload: T) => void): () => void {
+    const me = windowLabel();
+    if (isTauri) {
+      let off: (() => void) | null = null;
+      let dead = false;
+      import('@tauri-apps/api/event').then(({ listen }) =>
+        listen<{ topic: string; payload: T; origin: string }>('daybloom://broadcast', (e) => {
+          if (e.payload.topic === topic && e.payload.origin !== me) cb(e.payload.payload);
+        }).then((u) => (dead ? u() : (off = u))),
+      );
+      return () => {
+        dead = true;
+        off?.();
+      };
+    }
+    const handler = (e: MessageEvent) => {
+      if (e.data?.topic === topic && e.data.origin !== me) cb(e.data.payload as T);
+    };
+    channel?.addEventListener('message', handler);
+    return () => channel?.removeEventListener('message', handler);
+  },
+
   /** Fires when another window saved `key`. Returns an unsubscribe function. */
   onExternalChange(cb: (key: string) => void): () => void {
     const me = windowLabel();
@@ -128,6 +161,7 @@ export const platform = {
       };
     }
     const handler = (e: MessageEvent) => {
+      if (e.data?.topic) return;
       if (e.data?.origin !== me) cb(e.data.key);
     };
     channel?.addEventListener('message', handler);

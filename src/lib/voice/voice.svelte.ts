@@ -25,7 +25,7 @@ import { MicError, startCapture, type Capture, type MicProblem } from './capture
 import { normalizeSpoken } from './spoken';
 
 export type VoicePhase = 'idle' | 'needs-model' | 'downloading' | 'opening' | 'listening' | 'finishing' | 'thinking' | 'result' | 'error';
-export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd' | 'note';
+export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd' | 'note' | 'alef';
 
 export interface SpokenToken {
   id: number;

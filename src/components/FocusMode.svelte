@@ -18,6 +18,13 @@
   import CrumbNote from './addons/crumbs/CrumbNote.svelte';
   import ParkSpot from './addons/crumbs/ParkSpot.svelte';
   import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
+  import AlefFace from './addons/alef/AlefFace.svelte';
+  import AlefPosture from './addons/alef/AlefPosture.svelte';
+  import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
+  import { BEHAVIORS } from '../lib/addons/alef/behaviors';
+
+  // Alef works beside you here: body doubling.
+  const alefOn = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.onDial);
 
   // One thing fills the screen; the next is a glance away.
   const cur = $derived(view.now.current);
@@ -49,11 +56,28 @@
   }
 </script>
 
+{#snippet alefFace(info: { big: string; tone: string })}
+  <AlefFace
+    perf={alef.perf}
+    performing={alef.performing}
+    affect={alef.affect}
+    talk={alef.talk}
+    eyes={alefFile.value.settings.eyes}
+    led={alefFile.value.settings.led}
+    line={info.big}
+    reduced={view.reducedMotion}
+    bubble={alef.bubble}
+    onpoke={() => alef.poke()}
+    ondismiss={() => alef.dismissBubble()}
+  />
+{/snippet}
+
 <div class="focus" role="dialog" aria-label="Focus" style:--c={wedge?.color ?? 'var(--ink-3)'} transition:fade={{ duration: view.reducedMotion ? 0 : 260 }}>
   <button class="icon-btn close" onclick={leaveFocus} aria-label="Leave focus (Esc)"><Icon name="minimize" size={18} /></button>
 
   <div class="center">
     <div class="dial" in:scale={{ start: 0.92, duration: view.reducedMotion ? 0 : 520, easing: cubicOut }}>
+      <AlefPosture on={alefOn} reduced={view.reducedMotion}>
       <Dial
         presetId="timer60"
         finish={view.finish}
@@ -69,6 +93,7 @@
         label="Focus dial"
         prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
         prayerBloom={waqt.bloom}
+        lift={alefOn && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
       >
         <Readout
           state={view.now}
@@ -80,8 +105,10 @@
           timer={ts && !ts.finished && timer.active ? { label: ts.segment.label, remainingMs: ts.remainingMs, paused: ts.paused, index: ts.index, count: Math.ceil(timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1)), kind: timer.active.kind, segment: ts.segment.kind } : null}
           reduced={view.reducedMotion}
           ontimer={(a) => (a === 'pause' ? timer.pause() : a === 'resume' ? timer.resume() : a === 'skip' ? timer.skip() : timer.stop())}
+          face={alefOn ? alefFace : undefined}
         />
       </Dial>
+      </AlefPosture>
     </div>
 
     <div class="info" in:fly={{ y: 12, duration: view.reducedMotion ? 0 : 420, delay: 120, easing: cubicOut }}>

@@ -16,6 +16,12 @@
   import { taskFile } from '../lib/stores/tasks.svelte';
   import { isOn } from '../lib/addons/registry';
   import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
+  import AlefFace from '../components/addons/alef/AlefFace.svelte';
+  import AlefPosture from '../components/addons/alef/AlefPosture.svelte';
+  import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
+  import { BEHAVIORS } from '../lib/addons/alef/behaviors';
+
+  const alefOn = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.inWidget);
 
   // The desktop object: a watch on your wallpaper. Drag to move, double-click to open
   // the planner, hover for a few quiet controls.
@@ -108,6 +114,10 @@
   }
 </script>
 
+{#snippet alefFace(info: { big: string; tone: string })}
+  <AlefFace perf={alef.perf} performing={alef.performing} affect={alef.affect} talk={alef.talk} eyes={alefFile.value.settings.eyes} led={alefFile.value.settings.led} line={info.big} reduced={view.reducedMotion} compact interactive={false} gaze={false} />
+{/snippet}
+
 <div
   class="widget"
   role="presentation"
@@ -118,6 +128,7 @@
   title={`${PRESETS[presetId].name} · double-click to open ${timer.active ? 'your focus' : 'Daybloom'}`}
 >
   <div class="dial">
+    <AlefPosture on={alefOn} reduced={view.reducedMotion} compact>
     <Dial
       {presetId}
       {finish}
@@ -139,6 +150,7 @@
       prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
       prayerBloom={waqt.bloom}
       label="Daybloom widget"
+      lift={alefOn && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
     >
       <Readout
         state={nowState}
@@ -150,8 +162,10 @@
         timer={timed && ts && !ts.finished && timer.active ? { label: ts.segment.label, remainingMs: ts.remainingMs, paused: ts.paused, index: ts.index, count: Math.ceil(timer.active.segments.length / (timer.active.kind === 'cycles' ? 2 : 1)), kind: timer.active.kind, segment: ts.segment.kind } : null}
         compact
         reduced={view.reducedMotion}
+        face={alefOn ? alefFace : undefined}
       />
     </Dial>
+    </AlefPosture>
   </div>
 
   {#if nudges.attention}

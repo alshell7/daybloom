@@ -45,6 +45,7 @@
     breathStart = 0,
     prayers = [],
     prayerBloom = 0,
+    lift = 0,
     children,
   }: {
     presetId: PresetId;
@@ -81,8 +82,17 @@
     prayers?: { id: string; name: string; at: number; end: number; jamaat: number | null; current: boolean }[];
     /** Bumped at each adhan: the current prayer's band blooms once. */
     prayerBloom?: number;
+    /** Alef's feelings: the blocks rise (+) or sink (−) a little, in a wave around the ring. */
+    lift?: number;
     children?: Snippet;
   } = $props();
+
+  /** Where an arc moves when the blocks rise or sink: along its middle, out or in. */
+  function liftOf(a0: number, a1: number): string | null {
+    if (!lift || reduced) return null;
+    const [x, y] = polar(lift * (compact ? 1.6 : 1), (a0 + a1) / 2);
+    return `translate(${(x - C).toFixed(1)}px, ${(y - C).toFixed(1)}px)`;
+  }
 
   const preset = $derived(PRESETS[presetId]);
   const minuteNow = $derived(now - (now % MINUTE));
@@ -606,6 +616,7 @@
 
     <!-- blocks -->
     {#each arcs.filter((x) => x.lane < MAX_LANES) as a, i (a.block.key)}
+      <g class="lift" style:transform={liftOf(a.a0, a.a1)} style:transition-delay={lift ? `${i * 35}ms` : `${i * 20}ms`}>
       <DialArc
         enterDelay={booting ? 120 + i * 55 : 0}
         block={a.block}
@@ -627,6 +638,7 @@
         onpick={onPick}
         onhover={(b) => (hovered = b)}
       />
+      </g>
     {/each}
 
     {#each overflow as o (o.angle)}
@@ -882,6 +894,9 @@
     display: grid;
     place-items: center;
     max-width: 100%;
+  }
+  .lift {
+    transition: transform 620ms cubic-bezier(0.34, 1.45, 0.64, 1);
   }
   .readout {
     position: absolute;
