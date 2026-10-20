@@ -1,52 +1,60 @@
 <script lang="ts">
-  // A small, still Alef: one pose of a feeling, drawn in SVG (no timers, no motion), for chat
-  // avatars and the feelings gallery.
-  import { BEHAVIORS, type BehaviorId, type Eye } from '../../../lib/addons/alef/behaviors';
+  // A small, still Alef: the pose that says a feeling best, drawn once with the same eyes as
+  // the live face (no timers, no motion), for chat avatars and the feelings gallery.
+  import { BEHAVIORS, type BehaviorId } from '../../../lib/addons/alef/behaviors';
+  import { drawEyes, eyeOf } from '../../../lib/addons/alef/eyes';
+  import type { ScreenPalette } from '../../../lib/addons/alef/palette';
 
-  let { feeling = 'pleased', eyes = '#5CE1E6', size = 28 }: { feeling?: BehaviorId; eyes?: string; size?: number } = $props();
+  let { feeling = 'pleased', screen, size = 28 }: { feeling?: BehaviorId; screen: ScreenPalette; size?: number } = $props();
 
   const b = $derived(BEHAVIORS[feeling]);
-  // The pose that says it best: the first one held longest.
+  // The pose held longest is the one that reads best still.
   const pose = $derived(b.poses.reduce((a, p) => (p.hold > a.hold ? p : a), b.poses[0]));
-  const id = $props.id();
 
-  function eyePath(e: Eye, cx: number) {
-    const w = 46 * e.sx;
-    const h = 56 * e.sy;
-    const x = cx + e.x - w / 2;
-    const y = 54 + e.y - h / 2;
-    return { x, y, w, h, rx: w * 0.24, cx: cx + e.x, cy: 54 + e.y };
-  }
-  const L = $derived(eyePath(pose.l, 64));
-  const R = $derived(eyePath(pose.r, 136));
+  let canvas = $state<HTMLCanvasElement>();
+  const scratch = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+
+  $effect(() => {
+    const c = canvas;
+    const p = pose;
+    const pal = screen;
+    if (!c || !scratch) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.width = Math.round(size * dpr);
+    c.height = Math.round(size * dpr * 0.62);
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    // The eyes fill about three quarters of the little screen.
+    drawEyes(ctx, [eyeOf(p.l, -1), eyeOf(p.r, 1)], { scale: (c.width / 200) * 1.08, color: pal.eye, glow: 0.55 * pal.glow, scratch, shadow: pal.dark ? null : 'rgba(20, 28, 42, 0.2)' });
+  });
 </script>
 
-{#snippet one(g: ReturnType<typeof eyePath>, e: Eye, side: string)}
-  <g transform={`rotate(${e.rot} ${g.cx} ${g.cy})`}>
-    <clipPath id={`${id}-${side}`}><rect x={g.x} y={g.y} width={g.w} height={g.h} rx={g.rx} /></clipPath>
-    <g clip-path={`url(#${id}-${side})`}>
-      <rect x={g.x} y={g.y} width={g.w} height={g.h} fill={eyes} />
-      {#if e.lid > 0}
-        <rect x={g.x - g.w * 0.35} y={g.y - g.h * 1.04 + e.lid * g.h * 1.04} width={g.w * 1.7} height={g.h * 1.04} fill="#04060b" transform={`rotate(${e.slant} ${g.cx} ${g.y + e.lid * g.h * 1.04})`} />
-      {/if}
-      {#if e.smile > 0}
-        <ellipse cx={g.cx} cy={g.y + g.h - e.smile * g.h * 0.912 + g.h * 0.6} rx={g.w * 0.6} ry={g.h * 0.6} fill="#04060b" />
-      {/if}
-    </g>
-  </g>
-{/snippet}
-
-<svg class="mini" width={size} height={size * 0.6} viewBox="0 0 200 120" role="img" aria-label={`Alef, ${b.label.toLowerCase()}`}>
-  <rect width="200" height="120" rx="30" fill="#04060b" />
-  {@render one(L, pose.l, 'l')}
-  {@render one(R, pose.r, 'r')}
-</svg>
+<span class="mini" class:light={!screen.dark} style:width={`${size}px`} style:height={`${size * 0.62}px`} style:--well={screen.well} style:--well-edge={screen.wellEdge} style:--bezel={screen.bezel} style:--scan={screen.scan} role="img" aria-label={`Alef, ${b.label.toLowerCase()}`}>
+  <canvas bind:this={canvas}></canvas>
+</span>
 
 <style>
   .mini {
+    position: relative;
     display: block;
     flex: none;
-    border-radius: 22%;
-    box-shadow: 0 0 0 1.5px #1b2230;
+    border-radius: 999px;
+    background: radial-gradient(80% 70% at 50% 40%, var(--well), var(--well-edge));
+    box-shadow:
+      0 0 0 1.5px var(--bezel),
+      inset 0 2px 4px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+  }
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .mini::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, var(--scan)) 0 1px, transparent 1px 3px);
   }
 </style>

@@ -125,9 +125,8 @@
   {/if}
   {#if face}
     <div class="face">{@render face({ big: view.big, tone: view.tone })}</div>
-  {:else}
-    <div class="big tnum"><Rolling text={view.big} {reduced} /></div>
   {/if}
+  <div class="big tnum"><Rolling text={view.big} {reduced} /></div>
   {#key view.title}
     <div class="title" in:fly={{ y: 8, duration: reduced ? 0 : 360, easing: cubicOut }}>
       {#if view.icon && !compact}<Icon name={view.icon} size={16} stroke={2} />{/if}
@@ -176,23 +175,71 @@
     letter-spacing: 0.01em;
     opacity: 0.85;
   }
+  /* On Alef's glass screen: light on dark, the countdown lit in the eyes' colour. */
+  .with-face {
+    color: var(--screen-ink, #e6eef7);
+    gap: 0;
+  }
   .face {
-    width: 34cqi;
-    margin: 0.4cqi 0 0.2cqi;
+    width: 31cqi;
+    margin: 0 0 0.4cqi;
   }
   .compact .face {
-    width: 38cqi;
-    margin: 0.4cqi 0 0;
-  }
-  .compact.with-face .clock {
-    font-size: 5.2cqi;
-    margin-bottom: 0.8cqi;
+    width: 30cqi;
+    margin: 0 0 0.2cqi;
   }
   .with-face .clock {
-    margin-bottom: 0.4cqi;
+    background: var(--screen-chip, rgba(255, 255, 255, 0.07));
+    color: var(--screen-ink2, rgba(230, 238, 247, 0.72));
+    margin-bottom: 1.2cqi;
+    font-size: clamp(10px, 2.5cqi, 15px);
+  }
+  .with-face .big {
+    font-size: clamp(16px, 6.6cqi, 40px);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--alef-eye, #5ce1e6);
+    text-shadow: 0 0 1.6cqi color-mix(in srgb, var(--alef-eye, #5ce1e6) var(--eye-glow, 45%), transparent);
+    opacity: 1;
   }
   .with-face .title {
-    margin-top: 0.6cqi;
+    margin-top: 0.8cqi;
+    font-size: clamp(10px, 2.5cqi, 15px);
+    color: var(--screen-ink, #eef4fb);
+  }
+  .with-face .title span {
+    max-width: 30cqi;
+  }
+  .with-face .sub {
+    font-size: clamp(9px, 2cqi, 12px);
+    color: var(--screen-ink2, rgba(220, 230, 242, 0.6));
+    opacity: 1;
+    max-width: 30cqi;
+  }
+  .with-face .pill {
+    background: var(--screen-chip, rgba(255, 255, 255, 0.09));
+    color: var(--screen-ink, #e6eef7);
+  }
+  .with-face .pill:hover {
+    background: color-mix(in srgb, var(--screen-chip, rgba(255, 255, 255, 0.09)) 70%, var(--screen-ink, white) 12%);
+  }
+  .with-face .controls {
+    margin-top: 1cqi;
+  }
+  .compact.with-face .clock {
+    font-size: 4.2cqi;
+    padding: 0.2cqi 2cqi;
+    margin-bottom: 0.8cqi;
+  }
+  .compact.with-face .big {
+    font-size: 9cqi;
+  }
+  .compact.with-face .title {
+    font-size: 4.6cqi;
+    margin-top: 0.4cqi;
+  }
+  .compact.with-face .title span {
+    max-width: 34cqi;
   }
   .compact .clock {
     font-size: 6cqi;

@@ -14,6 +14,7 @@
   import { detent } from '../sound';
   import { angleOf, arcPath, C, laneRadii, MAX_LANES, nearestTurn, polar, R, radiusOf, sectorPath } from './geometry';
   import DialArc from './DialArc.svelte';
+  import type { ScreenPalette } from '../addons/alef/palette';
 
   type Range = { startMs: number; endMs: number };
 
@@ -46,6 +47,7 @@
     prayers = [],
     prayerBloom = 0,
     lift = 0,
+    screen = null,
     children,
   }: {
     presetId: PresetId;
@@ -84,8 +86,16 @@
     prayerBloom?: number;
     /** Alef's feelings: the blocks rise (+) or sink (−) a little, in a wave around the ring. */
     lift?: number;
+    /** A face lives in the middle (Alef): the centre becomes its screen, in these colours. */
+    screen?: { led: string; glow: number; palette: ScreenPalette } | null;
     children?: Snippet;
   } = $props();
+
+  /** The glass screen's radius: inside the numerals, under the time-left ring. */
+  const screenR = $derived(compact ? 244 : 272);
+  // On a black screen, the time-left ring reads as light on dark; in the dial's colours it stays.
+  const sp = $derived(screen?.palette ?? null);
+  const ringFinish = $derived(sp && sp.dark && !finish.dark ? { ...finish, track: 'rgba(170, 196, 228, 0.3)', face: sp.wellEdge, dark: true } : finish);
 
   /** Where an arc moves when the blocks rise or sink: along its middle, out or in. */
   function liftOf(a0: number, a1: number): string | null {
@@ -539,6 +549,22 @@
         <stop offset="0%" stop-color="white" stop-opacity={finish.dark ? 0.05 : 0.5} />
         <stop offset="100%" stop-color="white" stop-opacity="0" />
       </radialGradient>
+      {#if sp}
+        <radialGradient id="alef-well" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color={sp.well} />
+          <stop offset="100%" stop-color={sp.wellEdge} />
+        </radialGradient>
+        <linearGradient id="alef-shade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color={sp.shadeTop} />
+          <stop offset="55%" stop-color={sp.shadeTop} stop-opacity="0" />
+          <stop offset="100%" stop-color={sp.shadeBottom} />
+        </linearGradient>
+        <linearGradient id="alef-sheen" x1="0" y1="0" x2="0.7" y2="0.9">
+          <stop offset="0%" stop-color="white" stop-opacity="0.11" />
+          <stop offset="45%" stop-color="white" stop-opacity="0.02" />
+          <stop offset="100%" stop-color="white" stop-opacity="0" />
+        </linearGradient>
+      {/if}
     </defs>
 
     {#if withCase}
@@ -587,6 +613,18 @@
       <path d={majorPath} stroke={finish.lume} stroke-width={compact ? 7 : 5} stroke-linecap="round" opacity="0.5" />
     {/if}
 
+    {#if sp}
+      <!-- Alef's screen: a soft well in the dial's colours (or black glass), set in a slim bezel -->
+      <g class="screen" aria-hidden="true">
+        <circle cx={C} cy={C} r={screenR + 7} fill={sp.bezel} />
+        <circle cx={C} cy={C} r={screenR} fill="url(#alef-well)" />
+        <circle cx={C} cy={C} r={screenR - 3} fill="none" stroke="url(#alef-shade)" stroke-width="6" />
+        {#if sp.dark}
+          <ellipse cx={C - screenR * 0.18} cy={C - screenR * 0.46} rx={screenR * 0.62} ry={screenR * 0.36} fill="url(#alef-sheen)" transform={`rotate(-18 ${C} ${C})`} />
+        {/if}
+      </g>
+    {/if}
+
     <!-- time-timer wedge: numerals print over it, like the disc on a Time Timer -->
     {#if wedgeArc}
       <path d={wedgeArc.d} fill={wedgeArc.color} class="wedge" />
@@ -611,7 +649,7 @@
 
 
     {#if remain}
-      <RemainRing {...remain} {now} {finish} rIn={ringR.rIn} rOut={ringR.rOut} {reduced} />
+      <RemainRing {...remain} {now} finish={ringFinish} rIn={ringR.rIn} rOut={ringR.rOut} {reduced} />
     {/if}
 
     <!-- blocks -->
@@ -733,9 +771,14 @@
     {/key}
   {/if}
 
+  {#if screen}
+    <!-- The screen's edge light, in the feeling's colour (opacity only) -->
+    <div class="screen-light" class:soft={!sp?.dark} style:--led={screen.led} style:--r={`${screenR / 10}%`} style:opacity={(0.3 + screen.glow * 0.7) * (sp?.dark ? 1 : 0.7)} aria-hidden="true"></div>
+  {/if}
+
   {#if children}
     <!-- On the small widget, hovering an arc swaps the face to that block's details. -->
-    <div class="readout">
+    <div class="readout" class:on-screen={!!sp} style:--screen-ink={sp?.ink} style:--screen-ink2={sp?.ink2} style:--screen-chip={sp?.chip} style:--alef-eye={sp?.eye}>
       {#if tip && compact}
         {#key tip.block.key}
           <div class="face-swap" in:fade={{ duration: reduced ? 0 : 140 }}>
@@ -897,6 +940,23 @@
   }
   .lift {
     transition: transform 620ms cubic-bezier(0.34, 1.45, 0.64, 1);
+  }
+  .screen-light {
+    position: absolute;
+    left: calc(50% - var(--r));
+    top: calc(50% - var(--r));
+    width: calc(var(--r) * 2);
+    height: calc(var(--r) * 2);
+    border-radius: 50%;
+    pointer-events: none;
+    /* A thin edge light just inside the bezel, like light caught in the glass's rim. */
+    background: radial-gradient(closest-side, transparent 90%, color-mix(in srgb, var(--led) 14%, transparent) 96%, color-mix(in srgb, var(--led) 42%, transparent) 99.4%, transparent 100%);
+    transition:
+      opacity 800ms ease,
+      background 800ms ease;
+  }
+  .readout.on-screen {
+    inset: 24%;
   }
   .readout {
     position: absolute;

@@ -11,6 +11,8 @@ import { alef, alefFile, keyAccount, migrateAlef } from './alef.svelte';
 import { BEHAVIOR_IDS } from './behaviors';
 import { answer, feelingOfResult } from './conversation';
 import { moodGlow, moodLed, restPose } from './face';
+import { eyeColorFor, screenPalette } from './palette';
+import { FINISHES } from '../../presets';
 import { lineFor, speaksFor } from './lines';
 import { smallTalk, systemPrompt, FEELINGS } from './persona';
 import { awakeAt, moments, NOTHING_SEEN, signalsOf, type Snapshot } from './signals';
@@ -125,8 +127,11 @@ describe('alef: words', () => {
 });
 
 describe('alef: face', () => {
-  it('shows the mood at rest: a hint of a smile, heavy lids when tired', () => {
-    expect(restPose({ v: 0.8, a: 0 }).l.smile).toBeGreaterThan(0.1);
+  it('shows the mood at rest: round eyes that lift when glad, heavy lids when tired', () => {
+    const glad = restPose({ v: 0.8, a: 0 }).l;
+    expect(glad.smile).toBe(0);
+    expect(glad.sy).toBeGreaterThan(1);
+    expect(glad.y).toBeLessThan(0);
     expect(restPose({ v: 0, a: -0.9 }).l.lid).toBeGreaterThan(0.3);
     const low = restPose({ v: -0.8, a: 0 });
     expect(low.l.slant).toBeLessThan(0);
@@ -135,9 +140,23 @@ describe('alef: face', () => {
     expect(moodGlow({ v: 0, a: 0 }, 'victorious')).toBe(1);
   });
 
+  it("wears the dial's colours: inked eyes on light faces, glowing ones on dark", () => {
+    const light = screenPalette(FINISHES.glacier, 'dial', 'dial');
+    expect(light.dark).toBe(false);
+    expect(light.glow).toBe(0);
+    const plum = screenPalette(FINISHES.plum, 'dial', 'dial');
+    expect(plum.eye.toLowerCase()).toBe(FINISHES.plum.lume.toLowerCase());
+    expect(plum.glow).toBeGreaterThan(0.5);
+    expect(screenPalette(FINISHES.glacier, 'oled', 'dial').dark).toBe(true);
+    // A chosen colour deepens toward the ink on a light face, so it still reads.
+    expect(eyeColorFor(FINISHES.glacier, '#5CE1E6', 'dial')).not.toBe('#5CE1E6');
+    expect(eyeColorFor(FINISHES.plum, '#5CE1E6', 'dial')).toBe('#5CE1E6');
+  });
+
   it('migrates settings safely', () => {
     const m = migrateAlef({ settings: { eyes: 'red', voice: 'loud', pitch: 9, brain: 'openai', configs: { openai: { model: 'gpt-5.4-mini' }, nope: { model: 'x' } }, consent: { openai: 5 } } });
-    expect(m.settings.eyes).toBe('#5CE1E6');
+    expect(m.settings.eyes).toBe('dial');
+    expect(m.settings.screen).toBe('dial');
     expect(m.settings.voice).toBe('chirps');
     expect(m.settings.pitch).toBe(1.3);
     expect(m.settings.configs).toEqual({ openai: { model: 'gpt-5.4-mini' } });

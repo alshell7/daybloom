@@ -20,6 +20,9 @@ import type { Call } from '../../assistant/tools';
 import { behaviorForEvent, idleBehavior, impulse, moodTarget, settle, type Affect, type AffectEvent } from './affect';
 import { BEHAVIORS, BEHAVIOR_IDS, lengthOf, type BehaviorId } from './behaviors';
 import { chirp } from './chirps';
+import { moodGlow, moodLed } from './face';
+import { screenPalette, type ScreenPalette, type ScreenStyle } from './palette';
+import type { Finish } from '../../presets';
 import { lateLine, lineFor, type Chattiness } from './lines';
 import type { LlmConfig, ProviderId } from './llm';
 import { moments, NOTHING_SEEN, signalsOf, type Seen, type Snapshot } from './signals';
@@ -28,8 +31,10 @@ import { hush, speak, type SpeechSynth, type VoiceMode } from './voice';
 export type Brain = 'local' | ProviderId;
 
 export interface AlefSettings {
-  /** The OLED eyes' colour. */
+  /** The eyes' colour: 'dial' follows the dial's finish, or one colour. */
   eyes: string;
+  /** The screen: in the dial's colours, or classic OLED black. */
+  screen: ScreenStyle;
   /** The mood light: 'feeling' follows Alef's feelings, or one fixed colour. */
   led: string;
   voice: VoiceMode;
@@ -60,6 +65,7 @@ export interface AlefFile {
 }
 
 export const EYE_COLORS = [
+  { id: 'dial', name: 'The dial’s colour' },
   { id: '#5CE1E6', name: 'Cyan' },
   { id: '#7CF29A', name: 'Mint' },
   { id: '#7AB8FF', name: 'Sky' },
@@ -70,7 +76,8 @@ export const EYE_COLORS = [
 ];
 
 export const DEFAULT_ALEF: AlefSettings = {
-  eyes: '#5CE1E6',
+  eyes: 'dial',
+  screen: 'dial',
   led: 'feeling',
   voice: 'chirps',
   pitch: 1,
@@ -110,7 +117,8 @@ export function migrateAlef(raw: any): AlefFile {
     version: 1,
     met: typeof raw?.met === 'string' ? raw.met : null,
     settings: {
-      eyes: hex(s.eyes, DEFAULT_ALEF.eyes),
+      eyes: s.eyes === 'dial' ? 'dial' : hex(s.eyes, DEFAULT_ALEF.eyes),
+      screen: s.screen === 'oled' ? 'oled' : 'dial',
       led: s.led === 'feeling' ? 'feeling' : hex(s.led, 'feeling'),
       voice: VOICES.includes(s.voice) ? s.voice : DEFAULT_ALEF.voice,
       pitch: num(s.pitch, 1, 0.8, 1.3),
@@ -180,6 +188,20 @@ class Alef {
 
   get settings() {
     return alefFile.value.settings;
+  }
+
+  /** The mood light's colour now: the feeling's while one plays, the mood's otherwise (or a fixed one). */
+  get led(): string {
+    const s = this.settings.led;
+    return s === 'feeling' ? moodLed(this.affect, this.performing ? this.perf.id : null) : s;
+  }
+  get glow(): number {
+    return moodGlow(this.affect, this.performing ? this.perf.id : null);
+  }
+
+  /** The screen and eyes in this dial's colours. */
+  screenFor(finish: Finish): ScreenPalette {
+    return screenPalette(finish, this.settings.screen, this.settings.eyes);
   }
 
   #seq = 0;

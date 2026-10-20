@@ -32,7 +32,7 @@
 </script>
 
 {#if open}
-  <Panel title="Alef" onclose={() => (view.sheet = null)} accent={s.eyes} wide>
+  <Panel title="Alef" onclose={() => (view.sheet = null)} accent={alef.screenFor(view.finish).eye} wide>
     <div class="hero">
       <div class="me">
         <AlefFace
@@ -40,7 +40,7 @@
           performing={alef.performing}
           affect={alef.affect}
           talk={alef.talk}
-          eyes={s.eyes}
+          screen={alef.screenFor(view.finish)}
           led={s.led}
           reduced={view.reducedMotion}
           posture
@@ -92,12 +92,12 @@
     display: flex;
     align-items: center;
     gap: var(--s-4);
-    padding: var(--s-2) 0 var(--s-4);
+    padding: var(--s-1, 4px) 0 var(--s-4);
   }
   .me {
-    width: 132px;
+    width: 112px;
     flex: none;
-    padding-top: 6px;
+    padding: 10px 6px 6px;
   }
   .who {
     min-width: 0;

@@ -11,13 +11,16 @@ const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x
 export const STICKY: BehaviorId[] = ['sleeping'];
 
 export function restPose(a: Affect): { l: Eye; r: Eye } {
-  const smile = a.v > 0.25 ? clamp((a.v - 0.25) * 0.45, 0, 0.22) : 0;
+  // At rest the eyes stay round: a good mood lifts and opens them a touch instead of cutting
+  // a smile (that's for real joy, in a performance).
+  const up = a.v > 0.25 ? clamp((a.v - 0.25) * 0.08, 0, 0.05) : 0;
+  const smile = 0;
   const tired = a.a < -0.3 ? clamp((-a.a - 0.3) * 0.75, 0, 0.5) : 0;
   const low = a.v < -0.3 ? clamp((-a.v - 0.3) * 0.5, 0, 0.25) : 0;
   const wide = a.a > 0.45 ? clamp((a.a - 0.45) * 0.25, 0, 0.08) : 0;
   const lid = clamp(tired + low * 0.6, 0, 0.55);
   const slant = low ? -10 * (low / 0.25) : 0;
-  const base = { ...E, smile, lid, sx: 1 + wide, sy: 1 + wide, y: tired * 6 };
+  const base = { ...E, smile, lid, sx: 1 + wide, sy: 1 + wide + up, y: tired * 6 - up * 40 };
   return { l: { ...base, slant }, r: { ...base, slant: -slant } };
 }
 

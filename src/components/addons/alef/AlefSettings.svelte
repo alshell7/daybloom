@@ -11,6 +11,7 @@
   import { platform } from '../../../lib/platform';
   import { session } from '../../../lib/assistant/session.svelte';
   import { settings } from '../../../lib/stores/settings.svelte';
+  import { view } from '../../../lib/stores/view.svelte';
   import EngineBadge from '../../assistant/EngineBadge.svelte';
   import Segmented from '../../Segmented.svelte';
 
@@ -153,13 +154,34 @@
   <section>
     <h4>Look</h4>
     <div class="line">
+      <span class="lbl">Screen</span>
+      <Segmented
+        label="Screen"
+        value={s.screen}
+        onchange={(v) => set({ screen: v })}
+        options={[
+          { value: 'dial', label: 'Dial colours' },
+          { value: 'oled', label: 'OLED black' },
+        ]}
+      />
+    </div>
+    <div class="line">
       <span class="lbl">Eyes</span>
       <div class="swatches" role="radiogroup" aria-label="Eye colour">
         {#each EYE_COLORS as c (c.id)}
-          <button role="radio" aria-checked={s.eyes.toLowerCase() === c.id.toLowerCase()} class="sw" style:--c={c.id} title={c.name} aria-label={c.name} onclick={() => set({ eyes: c.id })}></button>
+          <button
+            role="radio"
+            aria-checked={s.eyes.toLowerCase() === c.id.toLowerCase()}
+            class="sw"
+            class:dial={c.id === 'dial'}
+            style:--c={c.id === 'dial' ? alef.screenFor({ ...view.finish }).eye : c.id}
+            title={c.name}
+            aria-label={c.name}
+            onclick={() => set({ eyes: c.id })}
+          ></button>
         {/each}
-        <label class="sw custom" title="Your own colour" style:--c={s.eyes}>
-          <input type="color" value={s.eyes} oninput={(e) => set({ eyes: e.currentTarget.value })} aria-label="Your own eye colour" />
+        <label class="sw custom" title="Your own colour" style:--c={s.eyes === 'dial' ? '#888888' : s.eyes}>
+          <input type="color" value={s.eyes === 'dial' ? '#5ce1e6' : s.eyes} oninput={(e) => set({ eyes: e.currentTarget.value })} aria-label="Your own eye colour" />
           <Icon name="palette" size={13} />
         </label>
       </div>
@@ -170,7 +192,7 @@
         <Segmented
           label="Mood light"
           value={s.led === 'feeling' ? 'feeling' : 'fixed'}
-          onchange={(v) => set({ led: v === 'feeling' ? 'feeling' : s.eyes })}
+          onchange={(v) => set({ led: v === 'feeling' ? 'feeling' : alef.screenFor(view.finish).eye })}
           options={[
             { value: 'feeling', label: 'Follows feelings' },
             { value: 'fixed', label: 'One colour' },
@@ -434,6 +456,10 @@
   }
   .sw:hover {
     transform: scale(1.08);
+  }
+  /* "The dial's colour": a ring of the finish around its eye colour. */
+  .sw.dial {
+    background: radial-gradient(circle, var(--c) 0 45%, var(--line-strong) 47% 52%, var(--raised) 54%);
   }
   .sw.custom {
     display: grid;

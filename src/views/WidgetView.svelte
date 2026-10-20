@@ -115,7 +115,7 @@
 </script>
 
 {#snippet alefFace(info: { big: string; tone: string })}
-  <AlefFace perf={alef.perf} performing={alef.performing} affect={alef.affect} talk={alef.talk} eyes={alefFile.value.settings.eyes} led={alefFile.value.settings.led} line={info.big} reduced={view.reducedMotion} compact interactive={false} gaze={false} />
+  <AlefFace framed={false} perf={alef.perf} performing={alef.performing} affect={alef.affect} talk={alef.talk} screen={alef.screenFor(finish)} led={alefFile.value.settings.led} reduced={view.reducedMotion} compact interactive={false} gaze={false} />
 {/snippet}
 
 <div
@@ -151,6 +151,7 @@
       prayerBloom={waqt.bloom}
       label="Daybloom widget"
       lift={alefOn && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
+      screen={alefOn ? { led: alef.led, glow: alef.glow, palette: alef.screenFor(finish) } : null}
     >
       <Readout
         state={nowState}

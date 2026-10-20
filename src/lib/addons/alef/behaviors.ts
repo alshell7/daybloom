@@ -174,7 +174,8 @@ export const BEHAVIORS: Record<BehaviorId, Behavior> = {
   sleepy: B({ id: 'sleepy', core: 'inactive', label: 'Sleepy', led: LED.dim, glow: 0.3, lift: -4, chirp: 'yawn', overlay: 'zzz', posture: { tilt: -5, y: 6, scale: 0.98 },
     poses: [both({ lid: 0.65, y: 4 }, 800, 900), both({ lid: 0.85, y: 6 }, 900, 700), both({ lid: 0.5, y: 3 }, 300, 400), both({ lid: 0.6, y: 4 }, 700, 300)] }),
   sleeping: B({ id: 'sleeping', core: 'inactive', label: 'Sleeping', led: LED.dim, glow: 0.18, lift: -6, chirp: 'snore', overlay: 'zzz', posture: { tilt: -6, y: 8, scale: 0.97 },
-    poses: [both({ lid: 0.94, smile: 0.1, y: 8, sy: 0.9 }, 1200, 2000)] }),
+    // Closed: two thin, dim lines, low and still.
+    poses: [both({ lid: 0.3, sy: 0.24, y: 10 }, 900, 400), both({ sy: 0.1, y: 12, sx: 1.04 }, 1100, 2000)] }),
   // ── Pleasant ──
   delighted: B({ id: 'delighted', core: 'pleasant', label: 'Delighted', led: LED.joy, glow: 0.85, lift: 6, chirp: 'delight', overlay: 'spark', posture: { tilt: 0, y: -4, scale: 1.02, bounce: true },
     poses: [both({ smile: 0.6, sy: 0.9 }, 180, 900), both({ smile: 0.45 }, 260, 300)] }),

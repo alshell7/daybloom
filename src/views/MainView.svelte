@@ -253,14 +253,14 @@
 
 {#snippet alefFace(info: { big: string; tone: string })}
   <AlefFace
+    framed={false}
     perf={alef.perf}
     performing={alef.performing}
     affect={alef.affect}
     talk={alef.talk}
-    eyes={alefFile.value.settings.eyes}
+    screen={alef.screenFor(view.finish)}
     led={alefFile.value.settings.led}
-    line={info.big}
-    reduced={view.reducedMotion}
+        reduced={view.reducedMotion}
     bubble={alef.bubble}
     onpoke={() => alef.poke()}
     onopen={() => (view.sheet = { kind: 'alef', tab: 'talk' })}
@@ -317,6 +317,7 @@
           prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
           prayerBloom={waqt.bloom}
           lift={alefOnDial && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
+          screen={alefOnDial ? { led: alef.led, glow: alef.glow, palette: alef.screenFor(view.finish) } : null}
         >
           <Readout
             state={view.now}

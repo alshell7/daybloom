@@ -2,7 +2,7 @@
   // The dial as Alef's body: while a feeling plays, it leans, lifts or shrinks a little, and
   // can hop or shiver once. Transform only, one-shot; at rest it's just the dial.
   import type { Snippet } from 'svelte';
-  import { alef } from '../../../lib/addons/alef/alef.svelte';
+  import { alef, alefFile } from '../../../lib/addons/alef/alef.svelte';
   import { BEHAVIORS } from '../../../lib/addons/alef/behaviors';
 
   let { on, reduced = false, compact = false, children }: { on: boolean; reduced?: boolean; compact?: boolean; children: Snippet } = $props();
@@ -15,7 +15,7 @@
   const animation = $derived(p?.shake ? `shake-${k} 560ms ease-in-out 1` : p?.bounce ? `hop-${k} 760ms cubic-bezier(0.3, 1.4, 0.5, 1) 1` : null);
 </script>
 
-<div class="posture" style:transform>
+<div class="posture" style:transform style:--alef-eye={alefFile.value.settings.eyes}>
   <div class="move" style:animation>
     {@render children()}
   </div>

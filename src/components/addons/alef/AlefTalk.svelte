@@ -17,7 +17,7 @@
 
   let { input = false }: { input?: boolean } = $props();
 
-  const eyes = $derived(alefFile.value.settings.eyes);
+  const pal = $derived(alef.screenFor(view.finish));
   const rm = $derived(view.reducedMotion);
 
   // Things to ask that fit the time of day.
@@ -117,7 +117,7 @@
         <div class="me" in:fly={{ y: 6, duration: rm ? 0 : 220, easing: cubicOut }}>{m.text}</div>
       {:else}
         <div class="it" in:fly={{ y: 6, duration: rm ? 0 : 260, easing: cubicOut }}>
-          <AlefMini feeling={m.feeling ?? 'pleased'} {eyes} size={34} />
+          <AlefMini feeling={m.feeling ?? 'pleased'} screen={pal} size={34} />
           <div class="body">
             {#if m.pending}
               <p class="dots" aria-label="Alef is thinking"><i></i><i></i><i></i></p>

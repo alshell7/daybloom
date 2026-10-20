@@ -1,58 +1,76 @@
-// Alef's voice without words: little electronic chirps and vocalisations, synthesised with
-// WebAudio (no files). Each syllable is a gliding tone with a touch of FM shimmer and vibrato
-// through a soft formant filter; feelings shape the melody (happy rises, sad falls, a question
-// lifts at the end). `babble` turns a sentence into chirps with its rhythm, for "speaking".
+// Alef's voice without words: a tiny creature's vocal sounds, synthesised with WebAudio (no
+// files). Each syllable is a soft, warm "glottal" tone shaped by three vowel formants (oo, ee,
+// ah, a closed-mouth hum…) that glide as it sounds, with a little scoop at the start, a gentle
+// vibrato and a breath of air — closer to a baby animal than a beep. Feelings are short
+// utterances ("wee-hee!", "ooh!", "aww…", a cute "grr"); `babble` speaks a sentence in Alef's
+// gibberish, following its vowels and its tune (a question lifts, a statement settles).
 
 import { audioOut } from '../../sound';
 import type { ChirpId } from './behaviors';
 
+export type Vowel = 'a' | 'e' | 'i' | 'o' | 'u' | 'm';
+
+/** Formants (F1, F2, F3 in Hz) for a small voice, and how strong each is. */
+const FORMANTS: Record<Vowel, { f: [number, number, number]; g: [number, number, number] }> = {
+  a: { f: [980, 1620, 3200], g: [1, 0.62, 0.22] },
+  e: { f: [620, 2350, 3300], g: [1, 0.55, 0.22] },
+  i: { f: [400, 2900, 3800], g: [1, 0.5, 0.25] },
+  o: { f: [640, 1100, 3000], g: [1, 0.45, 0.14] },
+  u: { f: [430, 960, 2900], g: [1, 0.32, 0.1] },
+  m: { f: [330, 1300, 2700], g: [1, 0.1, 0.03] },
+};
+
 export interface Syl {
-  /** Start and end pitch (Hz, before the voice's pitch is applied). */
-  f0: number;
-  f1: number;
+  /** Vowel at the start and the end (it glides between them). */
+  v0: Vowel;
+  v1?: Vowel;
+  /** Pitch contour (Hz, before the voice's pitch), spread evenly over the syllable. */
+  p: number[];
   dur: number;
   /** Pause after it (s). */
   gap: number;
-  type?: OscillatorType;
-  /** Vibrato depth (0..0.08 of the pitch). */
-  vib?: number;
   gain?: number;
-  /** A breath of noise (sigh, yawn, snore). */
-  noise?: number;
+  /** Vibrato depth (fraction of pitch) and rate. */
+  vib?: number;
+  vibHz?: number;
+  /** Air in the voice (0..1): sighs, yawns, whispers. */
+  breath?: number;
+  /** A cute growl (amplitude flutter). */
+  growl?: number;
 }
 
-const s = (f0: number, f1: number, dur: number, gap = 0.04, o: Partial<Syl> = {}): Syl => ({ f0, f1, dur, gap, ...o });
+const S = (v0: Vowel, v1: Vowel | undefined, p: number[], dur: number, gap = 0.05, o: Partial<Syl> = {}): Syl => ({ v0, v1, p, dur, gap, ...o });
 
 export const PATTERNS: Record<ChirpId, Syl[]> = {
-  happy: [s(620, 820, 0.09), s(760, 980, 0.09), s(900, 1240, 0.13, 0)],
-  excited: [s(600, 760, 0.06, 0.02), s(720, 900, 0.06, 0.02), s(860, 1080, 0.06, 0.02), s(1000, 1300, 0.07, 0.02), s(1250, 1500, 0.12, 0, { vib: 0.05 })],
-  fanfare: [s(660, 660, 0.1, 0.03), s(830, 830, 0.1, 0.03), s(990, 990, 0.1, 0.03), s(1320, 1500, 0.32, 0, { vib: 0.06 })],
-  proud: [s(500, 640, 0.12, 0.05), s(700, 860, 0.2, 0, { vib: 0.03 })],
-  amazed: [s(500, 1300, 0.22, 0.06, { vib: 0.02 }), s(1200, 1100, 0.12, 0)],
-  afraid: [s(900, 820, 0.06, 0.03, { vib: 0.07 }), s(860, 760, 0.06, 0.03, { vib: 0.07 }), s(800, 640, 0.12, 0, { vib: 0.08 })],
-  angry: [s(230, 190, 0.1, 0.04, { type: 'square', gain: 0.5 }), s(240, 180, 0.1, 0.04, { type: 'square', gain: 0.5 }), s(260, 170, 0.16, 0, { type: 'square', gain: 0.55 })],
-  disgust: [s(420, 300, 0.22, 0, { type: 'sawtooth', gain: 0.35, noise: 0.25 })],
-  startle: [s(900, 1700, 0.07, 0)],
-  hurry: [s(700, 740, 0.04, 0.02), s(720, 760, 0.04, 0.02), s(740, 780, 0.04, 0.02), s(760, 800, 0.04, 0.02), s(780, 860, 0.06, 0)],
-  whirr: [s(500, 560, 0.08, 0.02, { vib: 0.04, gain: 0.5 }), s(560, 500, 0.08, 0.02, { vib: 0.04, gain: 0.5 }), s(500, 600, 0.1, 0, { vib: 0.04, gain: 0.5 })],
-  hmm: [s(380, 420, 0.24, 0, { vib: 0.02, gain: 0.6 })],
-  curious: [s(560, 600, 0.08, 0.05), s(620, 980, 0.16, 0)],
-  content: [s(520, 600, 0.18, 0.06, { vib: 0.02, gain: 0.55 }), s(560, 520, 0.16, 0, { gain: 0.5 })],
-  glad: [s(600, 760, 0.1, 0.04), s(740, 820, 0.14, 0)],
-  sigh: [s(520, 360, 0.42, 0, { noise: 0.4, gain: 0.45 })],
-  grumble: [s(300, 270, 0.12, 0.03, { type: 'sawtooth', gain: 0.3 }), s(290, 250, 0.16, 0, { type: 'sawtooth', gain: 0.3 })],
-  sad: [s(640, 480, 0.3, 0.1, { vib: 0.04 }), s(500, 340, 0.4, 0, { vib: 0.05 })],
+  happy: [S('u', 'i', [560, 700, 760], 0.13, 0.04), S('e', 'i', [720, 920, 980, 940], 0.2, 0)],
+  excited: [S('a', 'e', [600, 700], 0.08, 0.03), S('a', 'e', [680, 800], 0.08, 0.03), S('a', 'i', [760, 980, 1080, 1040], 0.24, 0, { vib: 0.02 })],
+  fanfare: [S('a', 'a', [620, 640], 0.1, 0.035), S('a', 'a', [780, 800], 0.1, 0.035), S('a', 'a', [930, 950], 0.1, 0.035), S('a', 'o', [1180, 1260, 1240, 1180], 0.42, 0, { vib: 0.025 })],
+  proud: [S('m', 'm', [470, 520], 0.12, 0.05), S('m', 'o', [520, 680, 640], 0.26, 0, { vib: 0.015 })],
+  amazed: [S('o', 'u', [480, 760, 1020, 980, 820], 0.55, 0, { vib: 0.02 })],
+  afraid: [S('i', 'i', [920, 980, 900], 0.14, 0.05, { vib: 0.05, vibHz: 9 }), S('i', 'e', [960, 1020, 860], 0.2, 0, { vib: 0.06, vibHz: 9 })],
+  angry: [S('a', 'o', [260, 300, 250], 0.2, 0.04, { growl: 0.6, gain: 0.85 }), S('o', 'u', [280, 320, 240], 0.28, 0, { growl: 0.7, gain: 0.85 })],
+  disgust: [S('e', 'a', [520, 470, 360], 0.34, 0, { breath: 0.35 })],
+  startle: [S('i', 'i', [820, 1380, 1300], 0.12, 0)],
+  hurry: [S('a', 'e', [640, 680], 0.06, 0.025), S('e', 'a', [680, 700], 0.06, 0.025), S('a', 'e', [700, 740], 0.06, 0.025), S('e', 'a', [740, 800], 0.08, 0)],
+  whirr: [S('m', 'm', [470, 520, 480], 0.2, 0.04), S('m', 'u', [480, 560, 520], 0.24, 0)],
+  hmm: [S('m', 'm', [420, 410, 470], 0.32, 0, { vib: 0.012 })],
+  curious: [S('o', 'u', [560, 540], 0.1, 0.06), S('u', 'i', [600, 760, 900], 0.2, 0)],
+  content: [S('m', 'o', [520, 560, 500, 470], 0.36, 0, { vib: 0.012, gain: 0.8 })],
+  glad: [S('a', 'a', [560, 620], 0.12, 0.05), S('a', 'e', [680, 760, 720], 0.18, 0)],
+  sigh: [S('a', 'm', [560, 500, 380, 340], 0.6, 0, { breath: 0.6, gain: 0.7 })],
+  grumble: [S('m', 'm', [330, 300], 0.14, 0.04, { growl: 0.3, gain: 0.75 }), S('m', 'm', [320, 280, 260], 0.2, 0, { growl: 0.3, gain: 0.75 })],
+  sad: [S('a', 'u', [640, 600, 500, 430], 0.5, 0, { vib: 0.025, vibHz: 5 })],
   blink: [],
-  peek: [s(700, 760, 0.05, 0, { gain: 0.35 })],
-  yawn: [s(560, 300, 0.7, 0, { noise: 0.35, vib: 0.02, gain: 0.5 })],
-  snore: [s(160, 200, 0.6, 0.3, { noise: 0.5, gain: 0.25 }), s(200, 150, 0.6, 0, { noise: 0.5, gain: 0.2 })],
-  delight: [s(700, 1100, 0.1, 0.03), s(1000, 1400, 0.16, 0, { vib: 0.04 })],
-  pleased: [s(640, 780, 0.1, 0.03, { gain: 0.6 }), s(760, 820, 0.08, 0, { gain: 0.55 })],
-  love: [s(520, 660, 0.18, 0.08, { vib: 0.05 }), s(600, 760, 0.26, 0, { vib: 0.05 })],
-  confused: [s(600, 760, 0.1, 0.04), s(740, 620, 0.1, 0.04), s(640, 920, 0.16, 0)],
-  aww: [s(620, 420, 0.4, 0, { vib: 0.03 })],
-  frustrated: [s(420, 520, 0.08, 0.02, { type: 'sawtooth', gain: 0.3 }), s(520, 420, 0.08, 0.02, { type: 'sawtooth', gain: 0.3 }), s(460, 380, 0.14, 0, { type: 'sawtooth', gain: 0.3 })],
-  whimper: [s(720, 560, 0.18, 0.08, { vib: 0.07 }), s(640, 460, 0.26, 0, { vib: 0.08 })],
+  peek: [S('o', 'u', [600, 700], 0.1, 0, { gain: 0.6 })],
+  yawn: [S('a', 'o', [620, 520, 420], 0.55, 0.02, { breath: 0.45, gain: 0.75 }), S('o', 'm', [420, 360, 330], 0.4, 0, { breath: 0.3, gain: 0.6 })],
+  snore: [S('m', 'm', [180, 200, 190], 0.5, 0.35, { breath: 0.7, gain: 0.45 }), S('m', 'u', [200, 170], 0.5, 0, { breath: 0.7, gain: 0.4 })],
+  delight: [S('o', 'u', [600, 820, 1000, 960], 0.3, 0, { vib: 0.018 })],
+  pleased: [S('m', 'm', [520, 560], 0.1, 0.04, { gain: 0.8 }), S('m', 'e', [620, 700, 680], 0.16, 0, { gain: 0.8 })],
+  love: [S('a', 'u', [560, 640, 700, 640], 0.48, 0, { vib: 0.03, vibHz: 5.5 })],
+  confused: [S('e', 'e', [560, 600, 700], 0.16, 0.08), S('u', 'e', [620, 560, 760], 0.22, 0, { vib: 0.02 })],
+  aww: [S('a', 'u', [700, 640, 520, 470], 0.5, 0, { vib: 0.02 })],
+  frustrated: [S('m', 'a', [380, 460, 520], 0.22, 0.03, { growl: 0.4 }), S('a', 'm', [500, 420], 0.18, 0, { growl: 0.3 })],
+  whimper: [S('m', 'i', [720, 800, 700], 0.22, 0.08, { vib: 0.05, vibHz: 7 }), S('i', 'u', [700, 560, 480], 0.32, 0, { vib: 0.05, vibHz: 7 })],
   none: [],
 };
 
@@ -61,86 +79,166 @@ export interface VoiceOpts {
   pitch?: number;
   /** 0..1 (on top of the app's volume). */
   volume?: number;
+  /** Where to play (tests render offline); the app's sound output otherwise. */
+  out?: { ctx: BaseAudioContext; master: AudioNode } | null;
+}
+
+let glottal: PeriodicWave | null = null;
+let glottalCtx: BaseAudioContext | null = null;
+/** A soft, warm buzz: harmonics falling off gently, like a small voice box. */
+function glottalWave(ctx: BaseAudioContext): PeriodicWave {
+  if (glottal && glottalCtx === ctx) return glottal;
+  const n = 40;
+  const re = new Float32Array(n);
+  const im = new Float32Array(n);
+  for (let k = 1; k < n; k++) im[k] = 1 / Math.pow(k, 1.35);
+  glottal = ctx.createPeriodicWave(re, im);
+  glottalCtx = ctx;
+  return glottal;
+}
+
+let noiseBuf: AudioBuffer | null = null;
+function noise(ctx: BaseAudioContext): AudioBuffer {
+  if (noiseBuf && noiseBuf.sampleRate === ctx.sampleRate) return noiseBuf;
+  const len = Math.floor(ctx.sampleRate * 1.2);
+  noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const ch = noiseBuf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+  return noiseBuf;
+}
+
+/** A pitch contour, smoothed into a curve WebAudio can follow (with a small scoop up at the start). */
+export function contour(p: number[], pitch: number, steps = 24): Float32Array {
+  const pts = p.length === 1 ? [p[0], p[0]] : p;
+  const out = new Float32Array(steps);
+  for (let i = 0; i < steps; i++) {
+    const t = (i / (steps - 1)) * (pts.length - 1);
+    const a = Math.floor(t);
+    const b = Math.min(pts.length - 1, a + 1);
+    const f = t - a;
+    const e = f * f * (3 - 2 * f);
+    let hz = (pts[a] + (pts[b] - pts[a]) * e) * pitch;
+    if (i < 3) hz *= 0.9 + i * 0.035;
+    out[i] = Math.max(60, hz);
+  }
+  return out;
 }
 
 /** Play syllables; returns when each one starts (s, from now) and the total length (s). */
 export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total: number } {
-  const out = audioOut();
+  const out = o.out ?? audioOut();
   if (!out || !syls.length) return { starts: [], total: 0 };
   const { ctx, master } = out;
   const pitch = Math.max(0.6, Math.min(1.6, o.pitch ?? 1));
-  const vol = Math.max(0, Math.min(1, o.volume ?? 0.8)) * 0.16;
   const bus = ctx.createGain();
-  bus.gain.value = vol;
-  // A soft formant: a cute, rounded "oo-ee" colour rather than a raw beep.
-  const formant = ctx.createBiquadFilter();
-  formant.type = 'peaking';
-  formant.frequency.value = 1800 * pitch;
-  formant.Q.value = 1.1;
-  formant.gain.value = 6;
-  const lp = ctx.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.value = 5200;
-  bus.connect(formant).connect(lp).connect(master);
+  bus.gain.value = Math.max(0, Math.min(1, o.volume ?? 0.8)) * 0.55;
+  // A soft top and a touch of warmth (a very short, quiet echo, like a small room).
+  const tone = ctx.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.value = 6500;
+  tone.Q.value = 0.5;
+  const room = ctx.createDelay(0.1);
+  room.delayTime.value = 0.027;
+  const roomGain = ctx.createGain();
+  roomGain.gain.value = 0.16;
+  // Even loudness whichever vowel lands on a harmonic: a gentle compressor.
+  const even = ctx.createDynamicsCompressor();
+  even.threshold.value = -22;
+  even.knee.value = 14;
+  even.ratio.value = 5;
+  even.attack.value = 0.004;
+  even.release.value = 0.12;
+  const makeup = ctx.createGain();
+  makeup.gain.value = 1.5;
+  bus.connect(tone).connect(even).connect(makeup).connect(master);
+  makeup.connect(room).connect(roomGain).connect(master);
 
   let t = ctx.currentTime + 0.02;
   const t0 = t;
   const starts: number[] = [];
+  const formantScale = 0.94 + (pitch - 1) * 0.5;
   for (const y of syls) {
     starts.push(t - t0);
-    const f0 = y.f0 * pitch;
-    const f1 = y.f1 * pitch;
-    const g = ctx.createGain();
-    const peak = y.gain ?? 0.8;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(peak, t + Math.min(0.012, y.dur / 4));
-    g.gain.setValueAtTime(peak, t + y.dur * 0.6);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + y.dur);
-    g.connect(bus);
-    const o1 = ctx.createOscillator();
-    o1.type = y.type ?? 'triangle';
-    o1.frequency.setValueAtTime(f0, t);
-    o1.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + y.dur);
-    // FM shimmer: a sine an octave up wobbles the pitch a little — the "electronic" part.
-    const mod = ctx.createOscillator();
-    const modGain = ctx.createGain();
-    mod.frequency.setValueAtTime(f0 * 2.01, t);
-    mod.frequency.exponentialRampToValueAtTime(Math.max(40, f1 * 2.01), t + y.dur);
-    modGain.gain.value = f0 * 0.18;
-    mod.connect(modGain).connect(o1.frequency);
-    if (y.vib) {
+    const end = t + y.dur;
+    // Source: a soft buzz following the pitch contour, with vibrato after the onset.
+    const osc = ctx.createOscillator();
+    osc.setPeriodicWave(glottalWave(ctx));
+    osc.frequency.setValueCurveAtTime(contour(y.p, pitch), t, y.dur);
+    const vib = y.vib ?? 0.012;
+    if (vib > 0 && y.dur > 0.12) {
       const lfo = ctx.createOscillator();
       const lg = ctx.createGain();
-      lfo.frequency.value = 22;
-      lg.gain.value = f0 * y.vib;
-      lfo.connect(lg).connect(o1.frequency);
+      lfo.frequency.value = y.vibHz ?? 6;
+      lg.gain.setValueAtTime(0, t);
+      lg.gain.linearRampToValueAtTime(vib * y.p[0] * pitch, t + Math.min(0.12, y.dur / 2));
+      lfo.connect(lg).connect(osc.frequency);
       lfo.start(t);
-      lfo.stop(t + y.dur + 0.02);
+      lfo.stop(end + 0.05);
     }
-    o1.connect(g);
-    o1.start(t);
-    mod.start(t);
-    o1.stop(t + y.dur + 0.02);
-    mod.stop(t + y.dur + 0.02);
-    if (y.noise) {
-      const len = Math.max(1, Math.floor(ctx.sampleRate * y.dur));
-      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const ch = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
-      const n = ctx.createBufferSource();
-      n.buffer = buf;
+    // The envelope: a soft start, a little swell, a gentle fall.
+    const env = ctx.createGain();
+    const peak = (y.gain ?? 1) * 0.9;
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.03, y.dur / 3));
+    env.gain.setValueAtTime(peak, t + y.dur * 0.55);
+    env.gain.exponentialRampToValueAtTime(0.0001, end + 0.05);
+    if (y.growl) {
+      const fl = ctx.createOscillator();
+      const fg = ctx.createGain();
+      fl.frequency.value = 27;
+      fg.gain.value = peak * y.growl * 0.5;
+      fl.connect(fg).connect(env.gain);
+      fl.start(t);
+      fl.stop(end + 0.05);
+    }
+    // Three formants, gliding from one vowel to the next.
+    const v0 = FORMANTS[y.v0];
+    const v1 = FORMANTS[y.v1 ?? y.v0];
+    for (let k = 0; k < 3; k++) {
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.value = 1400;
-      bp.Q.value = 0.7;
-      const ng = ctx.createGain();
-      ng.gain.value = y.noise * 0.5;
-      n.connect(bp).connect(ng).connect(bus);
-      n.start(t);
+      bp.frequency.setValueAtTime(v0.f[k] * formantScale, t);
+      bp.frequency.linearRampToValueAtTime(v1.f[k] * formantScale, end);
+      bp.Q.value = [4.2, 7, 9][k];
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(v0.g[k] * [3, 3.8, 4.2][k], t);
+      g.gain.linearRampToValueAtTime(v1.g[k] * [3, 3.8, 4.2][k], end);
+      osc.connect(bp).connect(g).connect(env);
     }
-    t += y.dur + y.gap;
+    // A little body under the formants.
+    const body = ctx.createBiquadFilter();
+    body.type = 'lowpass';
+    body.frequency.value = 900;
+    const bodyG = ctx.createGain();
+    bodyG.gain.value = 0.18;
+    osc.connect(body).connect(bodyG).connect(env);
+    env.connect(bus);
+    osc.start(t);
+    osc.stop(end + 0.08);
+    // Air: breathy sounds get more of it; every syllable gets a whisper.
+    const air = y.breath ?? 0.06;
+    if (air > 0) {
+      const n = ctx.createBufferSource();
+      n.buffer = noise(ctx);
+      const nf = ctx.createBiquadFilter();
+      nf.type = 'bandpass';
+      nf.frequency.value = 2600 * formantScale;
+      nf.Q.value = 0.8;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.0001, t);
+      ng.gain.exponentialRampToValueAtTime(air * 0.5, t + 0.04);
+      ng.gain.exponentialRampToValueAtTime(0.0001, end + 0.04);
+      n.connect(nf).connect(ng).connect(bus);
+      n.start(t, Math.random() * 0.5);
+      n.stop(end + 0.06);
+    }
+    t = end + y.gap;
   }
-  setTimeout(() => bus.disconnect(), (t - ctx.currentTime + 0.5) * 1000);
+  if (!o.out)
+    setTimeout(() => {
+      bus.disconnect();
+      roomGain.disconnect();
+    }, (t - ctx.currentTime + 0.6) * 1000);
   return { starts, total: t - t0 };
 }
 
@@ -148,32 +246,42 @@ export function chirp(id: ChirpId, o: VoiceOpts = {}) {
   return play(PATTERNS[id] ?? [], o);
 }
 
+const VOWEL_OF: Record<string, Vowel> = { a: 'a', e: 'e', i: 'i', o: 'o', u: 'u', y: 'i' };
+
 /**
- * A sentence as chirps: one to three syllables a word, in its rhythm. A question rises at
- * the end, an exclamation lifts, a statement settles. Pure (returns syllables to play).
+ * A sentence in Alef's gibberish: one syllable per vowel group of each word, sung on the
+ * sentence's tune — it drifts down as a statement goes on, a question lifts at the end, an
+ * exclamation sits higher and lands. Pure (returns syllables to play).
  */
 export function babbleSyllables(text: string, seed = 1): Syl[] {
   let r = seed || 1;
   const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
-  const words = text.replace(/https?:\/\/\S+/g, 'link').split(/\s+/).filter(Boolean).slice(0, 28);
+  const words = text.replace(/https?:\/\/\S+/g, 'link').split(/\s+/).filter(Boolean).slice(0, 26);
   const end = /\?\s*$/.test(text) ? 'ask' : /!\s*$/.test(text) ? 'lift' : 'settle';
-  const out: Syl[] = [];
-  words.forEach((w, wi) => {
-    const n = Math.max(1, Math.min(3, Math.round(w.replace(/[^a-z0-9]/gi, '').length / 3.2)));
+  const lift = end === 'lift' ? 1.12 : 1;
+  const sylls: { v: Vowel; next: Vowel; wordEnd: boolean; pause: number }[] = [];
+  for (const w of words) {
+    const groups = w.toLowerCase().match(/[aeiouy]+/g) ?? ['m'];
+    const n = Math.min(3, groups.length);
     for (let k = 0; k < n; k++) {
-      const last = wi === words.length - 1 && k === n - 1;
-      let f0 = 520 + rnd() * 260;
-      let f1 = f0 * (0.92 + rnd() * 0.22);
-      if (last && end === 'ask') f1 = f0 * 1.45;
-      if (last && end === 'lift') f1 = f0 * 1.3;
-      if (last && end === 'settle') f1 = f0 * 0.72;
-      const dur = 0.06 + rnd() * 0.05 + (last ? 0.06 : 0);
-      out.push(s(f0, f1, dur, k === n - 1 ? 0.07 + rnd() * 0.04 : 0.025, { gain: 0.55 + rnd() * 0.2 }));
+      const g = groups[k];
+      const v = g === 'm' ? 'm' : (VOWEL_OF[g[0]] ?? 'a');
+      const next = g.length > 1 ? (VOWEL_OF[g[g.length - 1]] ?? v) : v;
+      sylls.push({ v, next, wordEnd: k === n - 1, pause: k === n - 1 && /[,.;:]$/.test(w) ? 0.16 : 0 });
     }
-    // A breath at commas and full stops.
-    if (/[,.;:]$/.test(w) && out.length) out[out.length - 1].gap += 0.12;
+  }
+  const N = sylls.length;
+  return sylls.map((s, i) => {
+    const pos = N > 1 ? i / (N - 1) : 0;
+    const base = 560 * lift * (1.06 - pos * 0.16) * (0.92 + rnd() * 0.16);
+    const last = i === N - 1;
+    let p = [base, base * (1.02 + rnd() * 0.06), base * (0.96 + rnd() * 0.06)];
+    if (last && end === 'ask') p = [base * 0.95, base * 1.1, base * 1.42];
+    if (last && end === 'lift') p = [base * 1.05, base * 1.18, base * 0.92];
+    if (last && end === 'settle') p = [base, base * 0.9, base * 0.76];
+    const dur = 0.085 + rnd() * 0.05 + (last ? 0.09 : 0);
+    return S(s.v, s.next, p, dur, (s.wordEnd ? 0.06 + rnd() * 0.03 : 0.02) + s.pause, { gain: 0.72 + rnd() * 0.18, vib: last ? 0.018 : 0.006 });
   });
-  return out;
 }
 
 export function babble(text: string, o: VoiceOpts = {}) {

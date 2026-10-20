@@ -2,7 +2,7 @@
   // All of Alef's feelings: 32 little performances in 8 groups (pleasant or not, active or
   // not). Tap one to see it on the stage, or play them all.
   import { onDestroy } from 'svelte';
-  import { alefFile } from '../../../lib/addons/alef/alef.svelte';
+  import { alef, alefFile } from '../../../lib/addons/alef/alef.svelte';
   import { BEHAVIORS, BY_CORE, CORE_LABEL, lengthOf, type BehaviorId, type CoreState } from '../../../lib/addons/alef/behaviors';
   import { chirp } from '../../../lib/addons/alef/chirps';
   import Icon from '../../../lib/Icon.svelte';
@@ -13,6 +13,7 @@
 
   const ORDER: CoreState[] = ['pleasant-active', 'pleasant', 'pleasant-inactive', 'active', 'inactive', 'unpleasant-active', 'unpleasant', 'unpleasant-inactive'];
   const s = $derived(alefFile.value.settings);
+  const pal = $derived(alef.screenFor(view.finish));
 
   let perf = $state<{ id: BehaviorId; seq: number }>({ id: 'happy', seq: 0 });
   let performing = $state(false);
@@ -57,7 +58,7 @@
 
 <div class="stage-wrap"><div class="stage">
   <div class="face">
-    <AlefFace {perf} {performing} {affect} eyes={s.eyes} led={s.led} reduced={view.reducedMotion} posture interactive={false} gaze={false} label={`Alef, ${BEHAVIORS[perf.id].label}`} />
+    <AlefFace {perf} {performing} {affect} screen={pal} led={s.led} reduced={view.reducedMotion} posture interactive={false} gaze={false} label={`Alef, ${BEHAVIORS[perf.id].label}`} />
   </div>
   <div class="now">
     <span class="core">{CORE_LABEL[BEHAVIORS[perf.id].core]}</span>
@@ -73,7 +74,7 @@
       <div class="tiles">
         {#each BY_CORE[core] as id (id)}
           <button class="tile" class:on={perf.id === id} onclick={() => (stopTour(), show(id))} aria-label={`Show ${BEHAVIORS[id].label}`}>
-            <AlefMini feeling={id} eyes={s.eyes} size={52} />
+            <AlefMini feeling={id} screen={pal} size={52} />
             <span>{BEHAVIORS[id].label.replace(' (cute)', '')}</span>
           </button>
         {/each}
@@ -100,9 +101,9 @@
     background: color-mix(in srgb, var(--ink) 4%, var(--raised));
   }
   .face {
-    width: 180px;
+    width: 150px;
     flex: none;
-    padding-top: 8px;
+    padding: 8px;
   }
   .now {
     display: grid;
