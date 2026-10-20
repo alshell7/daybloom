@@ -17,6 +17,7 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ### Addons
 
+- **Soft landings** — after meetings, energy dips. Daybloom keeps a few minutes free to land, marks back-to-back hand-offs in the timeline with “Make room”, and when a meeting ends offers three small stepping stones: a reset, a little spark, and a two-minute first step into what’s next.
 - **Waqt: your salah** — mark each prayer on time, in jamaat or made up late, and qasr while travelling. See a week or a month: how the prayers went, each prayer's streak, and kind notes on what's going well.
 
 ### Fixes

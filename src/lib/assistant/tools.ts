@@ -41,6 +41,7 @@ import { settings } from '../stores/settings.svelte';
 import { taskFile, tasks, uid } from '../stores/tasks.svelte';
 import { timer, timerFile } from '../stores/timer.svelte';
 import { view } from '../stores/view.svelte';
+import { landingPad } from '../addons/landings/pad.svelte';
 import { THEME_BY_ID, THEMES, type ThemeId } from '../themes';
 import { decide, hits, rank, type Candidate, type Embedder } from './match';
 import type { ToolSchema } from './types';
@@ -230,7 +231,7 @@ export function firstFree(date: ISODate, minutes: number, now: number): number {
   const wakeMs = atMinutes(date, settings.value.wake);
   const from = Math.max(wakeMs, date === isoOf(now) ? ceil5(now) : wakeMs);
   const end = startOfDayMs(addDays(date, 1));
-  const busy = blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), end, dark());
+  const busy = landingPad(blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), end, dark()));
   const gap = freeGaps(busy, from, end, minutes * MINUTE).find((g) => g.endMs - g.startMs >= minutes * MINUTE);
   return Math.min(1435, round5(minutesOfDay(gap ? gap.startMs : from)));
 }

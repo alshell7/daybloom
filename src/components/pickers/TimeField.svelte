@@ -13,6 +13,7 @@
   import { taskFile } from '../../lib/stores/tasks.svelte';
   import { view } from '../../lib/stores/view.svelte';
   import Popover from './Popover.svelte';
+  import { landingPad } from '../../lib/addons/landings/pad.svelte';
   import TimeDial from './TimeDial.svelte';
 
   let {
@@ -105,7 +106,7 @@
     if (!date) return null;
     const need = Math.max(step, length || 30) * MINUTE;
     const from = Math.max(atMinutes(date, settings.value.wake), date === today ? Math.ceil(clock.now / (5 * MINUTE)) * 5 * MINUTE : 0);
-    const gap = freeGaps(dayBusy, from, startOfDayMs(addDays(date, 1)), need)[0];
+    const gap = freeGaps(landingPad(dayBusy), from, startOfDayMs(addDays(date, 1)), need)[0];
     return gap ? Math.round(minutesOfDay(gap.startMs)) : null;
   });
   const chips = $derived.by(() => {

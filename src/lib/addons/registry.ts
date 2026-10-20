@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings';
 
 export interface AddonMeta {
   id: AddonId;
@@ -17,7 +17,7 @@ export interface AddonMeta {
   accent: string;
   features: { icon: string; text: string }[];
   /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
-  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp';
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings';
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
@@ -107,6 +107,20 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'globe', text: 'Your mosque’s times or calculated ones, the Hijri date, the Qibla' },
     ],
     sheet: 'waqt',
+  },
+  {
+    id: 'landings',
+    name: 'Soft landings',
+    tagline: 'A gentle way back after meetings',
+    description: 'After meetings or a long stretch, the next task can feel hard to pick up. Daybloom keeps a few minutes free to land, and when a meeting ends it offers three small stepping stones: a reset for your body, a little spark, and a two-minute first step into what’s next.',
+    icon: 'leaf',
+    accent: '#8670E6',
+    features: [
+      { icon: 'clock', text: 'Keeps a few minutes free after meetings in your plans and suggestions' },
+      { icon: 'wind', text: 'When a meeting ends: breathe, stretch, a song, or a two-minute first step' },
+      { icon: 'shuffle', text: 'Back-to-back blocks show in the timeline, with “Make room” one tap away' },
+    ],
+    sheet: 'landings',
   },
   {
     id: 'mcp',

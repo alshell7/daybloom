@@ -29,9 +29,10 @@ export type Sheet =
   | { kind: 'reality' }
   | { kind: 'waqt' }
   | { kind: 'mcp' }
-  | { kind: 'whatsnew'; version?: string };
+  | { kind: 'whatsnew'; version?: string }
+  | { kind: 'landings' };
 
-const DOCK_ORDER = ['crumb', 'waqt'];
+const DOCK_ORDER = ['crumb', 'waqt', 'landing'];
 
 export interface Spark {
   id: number;

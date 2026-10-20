@@ -16,6 +16,7 @@ import { clock } from './stores/clock.svelte';
 import { settings } from './stores/settings.svelte';
 import { taskFile, tasks } from './stores/tasks.svelte';
 import { view } from './stores/view.svelte';
+import { landingPad } from './addons/landings/pad.svelte';
 
 export type Level = 1 | 2 | 3;
 export type ListId = BacklogList | 'done';
@@ -646,7 +647,8 @@ export function windowFor(date: ISODate = view.today, nowMs = clock.now) {
 
 /** Every timed block (tasks + calendar) that could collide with a plan for `date`. */
 export function busyFor(date: ISODate = view.today): Span[] {
-  return blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), startOfDayMs(addDays(date, 2)), view.finish.dark);
+  // Soft landings: meetings count as busy a few minutes longer, so plans leave room to land.
+  return landingPad(blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), startOfDayMs(addDays(date, 2)), view.finish.dark));
 }
 
 export const backlog = {

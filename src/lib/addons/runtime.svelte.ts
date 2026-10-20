@@ -8,6 +8,8 @@ import { crumbsFile, startCrumbs } from './crumbs/crumbs.svelte';
 import { realityFile, startReality } from './reality/reality.svelte';
 import { startWaqt, startWaqtView, waqtFile } from './waqt/waqt.svelte';
 import { mcpFile, startMcp } from './mcp/mcp.svelte';
+import { startLandings } from './landings/landings.svelte';
+import { landingsFile } from './landings/pad.svelte';
 import { view } from '../stores/view.svelte';
 
 /**
@@ -49,7 +51,19 @@ export function startAddons(): () => void {
   let stopReality: (() => void) | null = null;
   let stopWaqt: (() => void) | null = null;
   let stopMcp: (() => void) | null = null;
+  let stopLandings: (() => void) | null = null;
   const root = $effect.root(() => {
+    $effect(() => {
+      const on = isOn('landings');
+      if (on && !stopLandings) {
+        void loaded(landingsFile).then(() => {
+          if (isOn('landings') && !stopLandings) stopLandings = startLandings();
+        });
+      } else if (!on && stopLandings) {
+        stopLandings();
+        stopLandings = null;
+      }
+    });
     $effect(() => {
       if (isOn('work') && !work.ready) void work.load();
     });
@@ -120,6 +134,7 @@ export function startAddons(): () => void {
     stopReality?.();
     stopWaqt?.();
     stopMcp?.();
+    stopLandings?.();
     stopTracker?.();
     stopFocus?.();
     disconnect();

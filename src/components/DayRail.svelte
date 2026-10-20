@@ -19,11 +19,20 @@
   import { dueNow } from '../lib/backlog';
   import { dragWidth, layout, RAIL_MIN, railDrag, railMax, shows } from '../lib/stores/layout.svelte';
   import RailFilter from './RailFilter.svelte';
+  import { isOn } from '../lib/addons/registry';
+  import { drainOf, handoffs, type Handoff } from '../lib/addons/landings/landings';
+  import { landings } from '../lib/addons/landings/landings.svelte';
+  import { landingsFile } from '../lib/addons/landings/pad.svelte';
 
   type Row =
     | { kind: 'block'; key: string; block: Block }
-    | { kind: 'gap'; key: string; startMs: number; endMs: number }
+    | { kind: 'gap'; key: string; startMs: number; endMs: number; landing: boolean }
+    | { kind: 'land'; key: string; h: Handoff }
     | { kind: 'now'; key: string };
+
+  // Soft landings: back-to-back hand-offs after meetings, and gaps that are time to land.
+  const landOn = $derived(isOn('landings') && landingsFile.value.settings.buffer > 0);
+  const hands = $derived(landOn ? handoffs(view.dayBlocks, landingsFile.value.settings.buffer) : []);
 
   const dayStart = $derived(startOfDayMs(view.date));
 
@@ -33,17 +42,22 @@
     const now = clock.minute;
     let cursor = blocks.length ? Math.min(blocks[0].startMs, view.isToday ? now : Infinity) : dayStart;
     let nowPlaced = !view.isToday;
+    let prev: Block | null = null;
+    const lands = (b: Block | null) => landOn && !!b && drainOf(b) !== null;
     for (const b of blocks) {
       if (!nowPlaced && now < b.startMs) {
         if (b.startMs - cursor >= 15 * MINUTE && now > cursor) {
-          out.push({ kind: 'gap', key: `gap:${cursor}`, startMs: cursor, endMs: now });
+          out.push({ kind: 'gap', key: `gap:${cursor}`, startMs: cursor, endMs: now, landing: lands(prev) && prev!.endMs === cursor });
           cursor = now;
         }
         out.push({ kind: 'now', key: 'now' });
         nowPlaced = true;
       }
-      if (b.startMs - cursor >= 15 * MINUTE) out.push({ kind: 'gap', key: `gap:${cursor}`, startMs: cursor, endMs: b.startMs });
+      if (b.startMs - cursor >= 15 * MINUTE) out.push({ kind: 'gap', key: `gap:${cursor}`, startMs: cursor, endMs: b.startMs, landing: lands(prev) && prev!.endMs === cursor });
       out.push({ kind: 'block', key: b.key, block: b });
+      const h = hands.find((x) => x.from.key === b.key);
+      if (h) out.push({ kind: 'land', key: `land:${b.key}`, h });
+      prev = b;
       if (!nowPlaced && now >= b.startMs && now < b.endMs) nowPlaced = true; // the block itself shows progress
       cursor = Math.max(cursor, b.endMs);
     }
@@ -300,7 +314,7 @@
             <div class="gap" class:gone={row.endMs <= clock.minute} style:--gh={`${ghost(len)}px`}>
               <span class="gap-time tnum">{formatTime(row.startMs, view.hour12)}</span>
               <span class="ghost" aria-hidden="true"></span>
-              <span class="gap-label">{formatDuration(len)} free</span>
+              <span class="gap-label">{#if row.landing}<Icon name="leaf" size={11} /> {formatDuration(len)} to land{:else}{formatDuration(len)} free{/if}</span>
               <button
                 class="gap-add"
                 aria-label={`Add a block at ${formatTime(row.startMs, view.hour12)}`}
@@ -312,6 +326,15 @@
               >
                 <Icon name="plus" size={14} stroke={2.2} />
               </button>
+            </div>
+          {:else if row.kind === 'land'}
+            <div class="land">
+              <span></span>
+              <span class="land-mark" aria-hidden="true"><Icon name="leaf" size={11} stroke={2.2} /></span>
+              <span class="land-label">{row.h.run > 1 ? `${row.h.run} meetings, then` : 'Then'} {row.h.gapMin ? `${row.h.gapMin}m` : 'no time'} to land</span>
+              {#if row.h.to.kind === 'task' && !row.h.to.readOnly}
+                <button class="land-room" onclick={() => landings.makeRoom(row.h)}>Make {row.h.needMin}m room</button>
+              {/if}
             </div>
           {:else}
             <div class="now-line" aria-label={`Now, ${formatTime(clock.now, view.hour12)}`}>
@@ -682,7 +705,53 @@
     opacity: 0.6;
   }
   .gap-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     padding-left: var(--s-2);
+  }
+  .gap-label :global(svg) {
+    color: #8670e6;
+  }
+  /* Back-to-back after a meeting: a small lavender strip on the track. */
+  .land {
+    display: grid;
+    grid-template-columns: 52px 44px 1fr auto;
+    align-items: center;
+    min-height: 28px;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .land-mark {
+    justify-self: center;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: #8670e6;
+    background: color-mix(in srgb, #8670e6 16%, var(--surface));
+    box-shadow: 0 0 0 3px var(--surface);
+    position: relative;
+    z-index: 1;
+  }
+  .land-label {
+    padding-left: var(--s-2);
+  }
+  .land-room {
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-xs);
+    font-weight: 500;
+    color: #6a55c9;
+    background: color-mix(in srgb, #8670e6 12%, transparent);
+    transition: background var(--dur-1) var(--ease-out);
+  }
+  :global([data-theme='dark']) .land-room {
+    color: #c8bbff;
+  }
+  .land-room:hover {
+    background: color-mix(in srgb, #8670e6 22%, transparent);
   }
   .gap-add {
     width: 26px;
@@ -933,7 +1002,8 @@
     .tl {
       --track-x: 62px;
     }
-    .gap {
+    .gap,
+    .land {
       grid-template-columns: 44px 38px 1fr auto;
     }
     .now-line {
