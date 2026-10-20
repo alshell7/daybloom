@@ -52,6 +52,7 @@
   import { voice, type VoiceSurface } from '../lib/voice/voice.svelte';
   import { breath } from '../lib/breath.svelte';
   import TopBar from '../components/TopBar.svelte';
+  import { closeTopSheet } from '../lib/sheets';
 
   const presetId = $derived(settings.value.preset);
 
@@ -162,7 +163,9 @@
     }
     if (e.key === 'Escape') {
       if (view.focus) leaveFocus();
-      else if (view.sheet) view.sheet = null;
+      else if (view.sheet) {
+        if (!closeTopSheet()) view.sheet = null;
+      }
       else view.selected = null;
       return;
     }

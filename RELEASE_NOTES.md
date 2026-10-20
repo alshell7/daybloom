@@ -24,7 +24,9 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 ### Fixes
 
 - **Timeline colours** — icons and capsules follow the app's light or dark look (not the dial's finish), and every icon has enough contrast on its background.
-- **Backlog** — opens out of the button you pressed and pours back into it on close, like the macOS genie; a click outside closes it (and does only that).
+- **Backlog** — opens out of the button you pressed and pours back into it on close, like the macOS genie.
+- **Closing panels** — every panel (a block, a backlog task, a calendar event, salah, settings, addons) closes with ✕, Esc or a click outside; clicking another block on the dial opens that block instead. A new block that never got a name goes away quietly however you close it.
+- **New block layout** — the block editor fits its panel at any window size: day and time sit side by side, and Delete is a small bin (with “skip just this day” for repeating blocks) so Close always fits. Long titles in “Close the day” wrap instead of running off the edge.
 - **Menu bar** — the countdown and the next block stay current while the planner is closed. The menu shows what's now and what's next.
 - **Widget** — shows the same dial face, colours, salah times and day as the planner.
 - **Screen cues** — the edge glow ends when a session ends or pauses. Leaving focus mode tells you the session keeps running, with a way to end it.

@@ -6,6 +6,9 @@
   import Icon from '../lib/Icon.svelte';
   import { genie, lamp } from '../lib/genie';
   import { view } from '../lib/stores/view.svelte';
+  import { pushCloser } from '../lib/sheets';
+
+  const CONTROLS = 'button, a[href], input, select, textarea, label, summary, [role="button"], [role="slider"], [role="tab"], [role="menuitem"], [role="option"], [contenteditable="true"]';
 
   let {
     title,
@@ -15,7 +18,7 @@
     accent = undefined,
     wide = false,
     genieFrom = undefined,
-    dismissOutside = false,
+    dismissOutside = true,
   }: {
     title: string;
     onclose: () => void;
@@ -25,7 +28,7 @@
     wide?: boolean;
     /** Opens out of (and closes into) the button marked `data-genie="<name>"`. */
     genieFrom?: string;
-    /** A click outside the panel closes it. */
+    /** A click outside the panel closes it (on by default). */
     dismissOutside?: boolean;
   } = $props();
 
@@ -40,13 +43,19 @@
     return fly(node, { x: 30, duration: view.reducedMotion ? 0 : 200, easing: cubicOut, opacity: 0 });
   }
 
-  // Outside: anywhere but the panel, its pop-up cards, messages (Undo), and what opens it.
+  // Esc closes the open panel through its own `onclose` (so a sheet can tidy up first).
+  onMount(() => pushCloser(() => onclose()));
+
+  // A press outside closes it: anywhere but the panel, its pop-up cards, messages (Undo) and
+  // what opens it. Controls outside keep their own meaning (another block opens in this
+  // sheet, a top-bar button opens its own), so only a press on open ground closes it.
   onMount(() => {
     if (!dismissOutside) return;
     const onDown = (e: PointerEvent) => {
       const t = e.target as HTMLElement | null;
-      if (!t || !panel || panel.contains(t)) return;
+      if (!t || !panel || panel.contains(t) || e.button > 0) return;
       if (t.closest('.pop, [data-keep-sheet], [role="dialog"], [data-genie]')) return;
+      if (t.closest(CONTROLS)) return;
       // That press only closes the panel (it doesn't also sweep a block on the dial).
       e.preventDefault();
       e.stopPropagation();
@@ -91,11 +100,15 @@
     width: min(400px, calc(100vw - 24px));
     display: grid;
     grid-template-rows: auto 1fr auto;
+    /* Never wider than its frame: a long row wraps or shrinks instead of widening the panel. */
+    grid-template-columns: minmax(0, 1fr);
     background: var(--raised);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
     box-shadow: var(--shadow-3);
+    /* clip, not hidden: a focused field can't scroll the whole panel sideways. */
     overflow: hidden;
+    overflow: clip;
   }
   .panel.wide {
     width: min(540px, calc(100vw - 24px));
@@ -122,11 +135,14 @@
     color: var(--ink-3);
   }
   .content {
+    min-width: 0;
+    overflow-x: hidden;
     overflow-y: auto;
     padding: 0 var(--s-5) var(--s-5);
   }
   footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--s-2);
     padding: var(--s-3) var(--s-4);

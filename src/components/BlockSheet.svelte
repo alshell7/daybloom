@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { slide } from 'svelte/transition';
   import { celebrateBadges, removeBlock, suggest, toBacklog, toggleDone } from '../lib/actions';
   import { blockKey, parseBlockKey } from '../lib/engine/blocks';
@@ -16,6 +16,7 @@
   import DateField from './pickers/DateField.svelte';
   import EventDetails from './calendars/EventDetails.svelte';
   import TimeField from './pickers/TimeField.svelte';
+  import Popover from './pickers/Popover.svelte';
   import AddonBlockFields from './addons/AddonBlockFields.svelte';
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
   import CrumbFields from './addons/crumbs/CrumbFields.svelte';
@@ -53,15 +54,31 @@
   const hint = $derived(isOn('reality') && task && !done && task.title.trim() && usedHint !== task.id ? realityHint({ title: task.title, category: task.category, minutes: duration }) : null);
 
   let iconOpen = $state(false);
+  let delOpen = $state(false);
+  let trashEl = $state<HTMLButtonElement>();
   let iconTouched = $state(false);
   let scope = $state<'all' | 'one'>('all');
   let titleEl: HTMLInputElement | undefined = $state();
   let lastKey: string | null = null;
 
+  // A sweep that never got a name was a doodle: when its sheet goes (Close, Esc, a click
+  // outside, another sheet), let it go quietly.
+  const isDoodle = (t: Task | null | undefined): t is Task => !!t && !t.title.trim() && !t.notes.trim() && t.subtasks.length === 0;
+  function taskOfKey(k: string): Task | null {
+    if (k.startsWith('later:')) return tasks.get(k.slice(6)) ?? null;
+    const p = parseBlockKey(k);
+    return p ? (tasks.get(p.taskId) ?? null) : null;
+  }
+
   // New (untitled) blocks open with the cursor in the title.
   $effect(() => {
     if (sheetKey !== lastKey) {
+      const prev = lastKey;
       lastKey = sheetKey;
+      if (prev) {
+        const t = untrack(() => taskOfKey(prev));
+        if (isDoodle(t) && t.id !== untrack(() => task?.id)) tasks.remove(t.id);
+      }
       iconOpen = false;
       scope = 'all';
       iconTouched = !!task?.title;
@@ -70,8 +87,7 @@
   });
 
   function close() {
-    // A sweep that never got a name was a doodle — let it go quietly.
-    if (task && !task.title.trim() && !task.notes.trim() && task.subtasks.length === 0) tasks.remove(task.id);
+    if (isDoodle(task)) tasks.remove(task.id);
     const fromBacklog = sheetKey?.startsWith('later:') && task?.date === null;
     view.sheet = fromBacklog ? { kind: 'backlog' } : null;
     view.selected = null;
@@ -389,36 +405,55 @@
 
     {#snippet footer()}
       {#if occDate && sheetKey && !sheetKey.startsWith('later:')}
-        <button class="btn btn-quiet" class:is-done={done} onclick={() => sheetKey && toggleDone(sheetKey)}>
+        <button class="btn btn-quiet slim" class:is-done={done} onclick={() => sheetKey && toggleDone(sheetKey)}>
           <Icon name="check" size={16} stroke={2.2} /> {done ? 'Done' : 'Mark done'}
         </button>
       {/if}
       {#if occDate && sheetKey && !sheetKey.startsWith('later:') && !done}
-        <button class="btn btn-quiet" onclick={() => sheetKey && toBacklog(sheetKey)} title="Take it off the day and keep it in the backlog">
+        <button class="btn btn-quiet slim" onclick={() => sheetKey && toBacklog(sheetKey)} title="Take it off the day and keep it in the backlog">
           <Icon name="inbox" size={16} /> To backlog
         </button>
       {/if}
       <span class="spacer"></span>
       {#if task.recurrence && sheetKey && !sheetKey.startsWith('later:')}
-        <button class="btn btn-danger" onclick={() => sheetKey && removeBlock(sheetKey)}>Skip today</button>
-        <button class="btn btn-danger" onclick={() => sheetKey && removeBlock(sheetKey, true)}>Delete all</button>
+        <button class="icon-btn trash" class:open={delOpen} bind:this={trashEl} onclick={() => (delOpen = !delOpen)} title="Skip or delete" aria-label="Skip or delete" aria-expanded={delOpen}>
+          <Icon name="trash-ui" size={17} />
+        </button>
+        {#if delOpen && trashEl}
+          <Popover anchor={trashEl} onclose={() => (delOpen = false)} label="Skip or delete" width={232}>
+            <div class="del-menu">
+              <button onclick={() => ((delOpen = false), sheetKey && removeBlock(sheetKey))}><Icon name="skip" size={15} /> Skip just this day</button>
+              <button class="danger" onclick={() => ((delOpen = false), sheetKey && removeBlock(sheetKey, true))}><Icon name="trash-ui" size={15} /> Delete every time</button>
+            </div>
+          </Popover>
+        {/if}
       {:else}
-        <button class="btn btn-danger" onclick={() => { if (sheetKey?.startsWith('later:')) { tasks.remove(task.id); view.sheet = null; } else if (sheetKey) removeBlock(sheetKey); }}>Delete</button>
+        <button class="icon-btn trash" onclick={() => { if (sheetKey?.startsWith('later:')) { tasks.remove(task.id); view.sheet = null; } else if (sheetKey) removeBlock(sheetKey); }} title="Delete" aria-label="Delete">
+          <Icon name="trash-ui" size={17} />
+        </button>
       {/if}
       <button class="btn btn-primary" onclick={close}>Close</button>
     {/snippet}
   </Panel>
 {:else if event}
   {#if event.event?.provider === 'salah'}
-    <Panel title="Salah" onclose={() => (view.sheet = null)} accent={event.color}>
+    <Panel title="Salah" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color}>
       <p class="event-title">{event.title}</p>
       <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)}{event.event.calendarName && event.event.calendarName !== 'Salah' ? ` · ${event.event.calendarName}` : ''}</p>
       <p class="note">Time kept free for salah. Times, jamaat and how much time to keep are set in Waqt.</p>
-      <button class="btn btn-soft" onclick={() => (view.sheet = { kind: 'waqt' })}><Icon name="moon" size={14} /> Open Waqt</button>
+      {#snippet footer()}
+        <button class="btn btn-soft" onclick={() => (view.sheet = { kind: 'waqt' })}><Icon name="moon" size={14} /> Open Waqt</button>
+        <span class="spacer"></span>
+        <button class="btn btn-primary" onclick={() => ((view.sheet = null), (view.selected = null))}>Close</button>
+      {/snippet}
     </Panel>
   {:else}
-    <Panel title="From your calendar" onclose={() => (view.sheet = null)} accent={event.color}>
+    <Panel title="From your calendar" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color}>
       <EventDetails block={event} />
+      {#snippet footer()}
+        <span class="spacer"></span>
+        <button class="btn btn-primary" onclick={() => ((view.sheet = null), (view.selected = null))}>Close</button>
+      {/snippet}
     </Panel>
   {/if}
 {/if}
@@ -466,6 +501,7 @@
   .title-input {
     flex: 1;
     min-width: 0;
+    text-overflow: ellipsis;
     border: 0;
     background: transparent;
     font-family: var(--font-read);
@@ -575,7 +611,7 @@
   }
   .when {
     display: grid;
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) auto;
     gap: var(--s-2);
     align-items: end;
   }
@@ -791,6 +827,44 @@
   }
   .spacer {
     flex: 1;
+  }
+  .btn.slim {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+  .trash {
+    flex: none;
+    color: var(--ink-3);
+  }
+  .trash:hover,
+  .trash.open {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
+  }
+  .del-menu {
+    display: grid;
+    gap: 2px;
+    margin: -6px;
+  }
+  .del-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: var(--r-md);
+    font-size: var(--t-sm);
+    color: var(--ink);
+    text-align: left;
+  }
+  .del-menu button:hover {
+    background: var(--hover, color-mix(in srgb, var(--ink) 6%, transparent));
+  }
+  .del-menu .danger {
+    color: var(--danger);
+  }
+  .del-menu .danger:hover {
+    background: color-mix(in srgb, var(--danger) 10%, transparent);
   }
   .btn.is-done {
     color: var(--lume);

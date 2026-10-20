@@ -147,6 +147,7 @@
     margin: 0;
     padding: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 4px;
   }
   .done li,
@@ -174,6 +175,19 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Rows with choices: the title may take two lines, so it reads before it's cut. */
+  .open .t {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .open li {
+    padding-block: 3px;
+  }
   .m {
     color: var(--ink-3);
     font-size: var(--t-xs);
@@ -189,6 +203,7 @@
     color: var(--c);
   }
   .acts {
+    flex: none;
     display: flex;
     gap: 4px;
   }
@@ -218,9 +233,14 @@
     font-size: var(--t-sm);
   }
   .first strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-weight: 500;
   }
   .first .tnum {
+    flex: none;
     color: var(--ink-3);
   }
   .spacer {

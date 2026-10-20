@@ -238,3 +238,5 @@ class View {
 }
 
 export const view = new View();
+
+if (import.meta.env.DEV) (globalThis as { __view?: View }).__view = view;
