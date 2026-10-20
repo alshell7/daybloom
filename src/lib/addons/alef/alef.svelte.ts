@@ -437,7 +437,8 @@ class Alef {
   }
 
   #send(m: Mirror) {
-    if (this.mirror) void platform.broadcast('alef', m).catch(() => {});
+    // Plain data: reactive proxies can't cross windows.
+    if (this.mirror) void platform.broadcast('alef', $state.snapshot(m)).catch(() => {});
   }
 
   /** The widget's copy follows the main window's. */
