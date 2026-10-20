@@ -460,6 +460,8 @@ class Alef {
 
 export const alef = new Alef();
 
+if (import.meta.env.DEV) (globalThis as { __alef?: Alef }).__alef = alef;
+
 /** Today's snapshot for signals and moments. */
 async function snapshot(now: number, idleMin: number): Promise<Snapshot> {
   const today = isoOf(now);

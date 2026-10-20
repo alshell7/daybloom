@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -212,6 +212,27 @@ The five salah times on your dial and in your plans, with adhan, jamaat and Jumu
 Claude, Codex and other AI apps can read your day, find free time and add or move blocks. Only on this computer, behind a key. Every change has an Undo.
 
 <img src="docs/media/mcp.png" alt="The MCP panel with Daybloom and an AI app joined by a thread, a ready-to-copy setup for Claude Code, and example questions.">
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### Alef: a small robot friend
+Alef lives in the middle of your dial. Its eyes show how it feels about your day. It keeps you company while you work, cheers when you finish, and helps you plan when you talk to it.
+
+<img src="docs/media/alef.png" alt="Alef's face in the middle of the dial with happy eyes and the line “Deep work, done. Nice!”, and the Alef panel answering “When am I free tomorrow?” with a list of free times.">
+
+</td>
+<td valign="top">
+
+### Soft landings
+After meetings, energy goes down. Daybloom keeps a few minutes free after them. When a meeting ends, it offers three small steps: a reset for your body, a little spark, and a two-minute first step into what is next.
+
+<br>
+
+### Retrospection
+Look back over a week or a month. See the story in a few lines, what went well, your days at a glance, and what could be easier. Each pattern comes with a gentle tip and a fix that takes one click.
 
 </td>
 </tr>
@@ -607,6 +628,57 @@ What an AI app can do:
 - **Safety:** Daybloom answers only on this computer (127.0.0.1), and only to apps that have the key. Web pages cannot connect. Click **Make a new key** to stop old setups.
 - **Daybloom must run.** The AI app talks to the open Daybloom app. Codex and Claude start a small relay (`daybloom --mcp`) that finds the key by itself.
 
+### Meet Alef
+
+1. Turn on **Alef** in the Addons gallery. Alef's face shows in the middle of the dial, in focus mode and on the desktop widget.
+2. Click the robot in the top bar, or double-click Alef's face, to open the Alef panel.
+
+Alef shows how it feels with its eyes, a soft light around its screen, small movements of the dial, and sounds. It reacts to your day: it is glad when you finish a block, it asks kindly when a block ends without a tick, and it gets sleepy late at night. It never blames you.
+
+**Touch Alef:**
+
+| Do this on Alef's face | Alef |
+|---|---|
+| Click | Says hello. Many clicks in a row make it grumpy, for a moment. |
+| Move the pointer slowly from side to side | Purrs, like a pet |
+| Move the pointer quickly from side to side | Giggles |
+| Press and hold | Squeezes its eyes shut, then jumps back |
+| Click when it sleeps | Wakes up |
+
+On the desktop widget, you can pet Alef and click it too.
+
+**On its own,** Alef says hello when you come back, asks you to stretch after a long time at the screen, cheers when a focus session is half done, and dances when every block of the day is done. Under **How much Alef talks**, select **Quiet**, **Now and then** or **Chatty**.
+
+**Talk to Alef:** in the **Talk** tab, type or click the microphone. Ask about your day, or ask it to plan: “When am I free tomorrow?”, “Move lunch to 2pm”, “I'm stuck”.
+
+- **On this device** (the default): Alef uses Daybloom's own assistant. Nothing leaves your computer.
+- **With an AI service:** under **Alef's brain**, select OpenAI, Anthropic, Gemini, OpenRouter, Cloudflare (with your account ID) or **Custom** (any address that works like OpenAI's). Enter your key; Daybloom keeps it in your system's keychain. Select a model, or click **All models** to see the models that you can use. Click **Try it** to test.
+- **Your consent:** Alef sends nothing to an AI service until you click **I agree**. Then it sends what you say, today's blocks and your settings. With **Alef may change my plans** on, it can add, move or finish blocks. Each change shows a message with **Undo**.
+- If the AI service does not answer, Alef answers on this device and tells you why.
+
+**Voice:** under **Voice**, select **Chirps** (small robot sounds), **Voice** (a small spoken voice), **System** (your computer's voice) or **Silent**. **Voice** needs a download of about 30 MB, one time. Daybloom checks the download with SHA-256, and the voice works on your computer. Alef uses the sound switch and volume from Settings.
+
+**Look:** under **Screen**, select **Dial colours** (Alef's screen uses the colours of your dial) or **OLED black**. Select the colour of the eyes and of the mood light. **Feelings** shows all 32 feelings and Alef's tricks.
+
+### Land softly after meetings
+
+1. Turn on **Soft landings** in the Addons gallery, then click the leaf in the top bar.
+2. Under **Keep time to land**, set how many minutes to keep free after meetings and long focus.
+3. Under **When to offer a landing**, select when the card shows: when a meeting ends, after 90 minutes or more of focus, or both.
+
+- **When a meeting ends:** a card offers three small steps. Click one to start a short timer, or click **Not now**.
+- **In the timeline:** when two meetings or long blocks are back to back, the timeline shows it. Click **Make room** to move the next block a few minutes later. You can undo it.
+- **When you plan:** Daybloom keeps the landing time free when it suggests a time.
+
+### Look back with Retrospection
+
+1. Turn on **Retrospection** in the Addons gallery, then click the rising line in the top bar.
+2. Select **This week**, **Last week** or **30 days**.
+
+- **Bright spots:** your best days, your focus time and your strongest hours.
+- **What could be easier:** patterns that make your days harder, each with a tip and a fix that takes one click.
+- **Keep, change, try:** write three short lines for the week. Daybloom saves them.
+
 ### Use the desktop widget
 
 1. Press <kbd>W</kbd>, or click the **Desktop widget** button in the top bar.
@@ -879,5 +951,5 @@ docs/                calendar notes and the media in this README
 <br>
 
 <div align="center">
-<sub>Made with care for calm, clear days. Icons by <a href="https://lucide.dev">Lucide</a> (ISC). Needle and Whistle models by <a href="https://cactuscompute.com">Cactus Compute</a> (Apache-2.0).</sub>
+<sub>Made with care for calm, clear days. Icons by <a href="https://lucide.dev">Lucide</a> (ISC). Needle and Whistle models by <a href="https://cactuscompute.com">Cactus Compute</a> (Apache-2.0). Alef's voice: <a href="https://github.com/tronghieuit/tiny-tts">tiny-tts</a> with the CMU Pronouncing Dictionary and the g2p_en model (Apache-2.0), on <a href="https://onnxruntime.ai">ONNX Runtime</a> (MIT).</sub>
 </div>
