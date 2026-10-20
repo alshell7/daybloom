@@ -8,6 +8,7 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ## Next
 
+## 0.1.12
 ### New
 
 - **Join meetings in one click** — Google Meet, Zoom and Teams events get a Join button in the timeline, lit from 10 minutes before. Open an event to see who's coming, their answers and the notes.
