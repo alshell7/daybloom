@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Icon from '../lib/Icon.svelte';
+  import { genie, lamp } from '../lib/genie';
   import { view } from '../lib/stores/view.svelte';
 
   let {
@@ -12,19 +14,61 @@
     footer,
     accent = undefined,
     wide = false,
-  }: { title: string; onclose: () => void; children: Snippet; footer?: Snippet; accent?: string; wide?: boolean } = $props();
+    genieFrom = undefined,
+    dismissOutside = false,
+  }: {
+    title: string;
+    onclose: () => void;
+    children: Snippet;
+    footer?: Snippet;
+    accent?: string;
+    wide?: boolean;
+    /** Opens out of (and closes into) the button marked `data-genie="<name>"`. */
+    genieFrom?: string;
+    /** A click outside the panel closes it. */
+    dismissOutside?: boolean;
+  } = $props();
+
+  let panel = $state<HTMLDivElement>();
+
+  function enter(node: HTMLElement) {
+    if (genieFrom) return genie(node, { from: () => lamp(genieFrom!), reduced: view.reducedMotion });
+    return fly(node, { x: 40, duration: view.reducedMotion ? 0 : 340, easing: cubicOut, opacity: 0 });
+  }
+  function leave(node: HTMLElement) {
+    if (genieFrom) return genie(node, { from: () => lamp(genieFrom!), reduced: view.reducedMotion, duration: 480 });
+    return fly(node, { x: 30, duration: view.reducedMotion ? 0 : 200, easing: cubicOut, opacity: 0 });
+  }
+
+  // Outside: anywhere but the panel, its pop-up cards, messages (Undo), and what opens it.
+  onMount(() => {
+    if (!dismissOutside) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t || !panel || panel.contains(t)) return;
+      if (t.closest('.pop, [data-keep-sheet], [role="dialog"], [data-genie]')) return;
+      // That press only closes the panel (it doesn't also sweep a block on the dial).
+      e.preventDefault();
+      e.stopPropagation();
+      const swallow = (ev: Event) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+      };
+      addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(() => removeEventListener('click', swallow, true), 400);
+      onclose();
+    };
+    // After the press that opened it has finished.
+    const id = setTimeout(() => addEventListener('pointerdown', onDown, true), 0);
+    return () => {
+      clearTimeout(id);
+      removeEventListener('pointerdown', onDown, true);
+    };
+  });
 </script>
 
 <!-- An inspector, not a modal: the dial stays live beside it. -->
-<div
-  class="panel"
-  class:wide
-  role="dialog"
-  aria-label={title}
-  style:--accent={accent}
-  in:fly={{ x: 40, duration: view.reducedMotion ? 0 : 340, easing: cubicOut, opacity: 0 }}
-  out:fly={{ x: 30, duration: view.reducedMotion ? 0 : 200, easing: cubicOut, opacity: 0 }}
->
+<div class="panel" class:wide role="dialog" aria-label={title} style:--accent={accent} bind:this={panel} in:enter out:leave>
   <header>
     <h2>{title}</h2>
     <button class="icon-btn" onclick={onclose} aria-label="Close"><Icon name="x" size={18} /></button>

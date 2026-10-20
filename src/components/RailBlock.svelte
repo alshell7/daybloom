@@ -1,6 +1,6 @@
 <script lang="ts">
   import { adjust, duplicateBlock, moveToNextGap, moveToTomorrow, removeBlock, toBacklog, toggleDone } from '../lib/actions';
-  import { mix, onColor } from '../lib/engine/categories';
+  import { categoryColor, inkOn, mix, onColor } from '../lib/engine/categories';
   import { formatDuration, formatTime, MINUTE } from '../lib/engine/time';
   import type { Block } from '../lib/engine/types';
   import Icon from '../lib/Icon.svelte';
@@ -94,7 +94,15 @@
   const subs = $derived(task?.subtasks ?? []);
   const subsDone = $derived(subs.filter((s) => s.done).length);
   const selected = $derived(view.selected === block.key);
-  const fg = $derived(onColor(block.color));
+  // Colours for the timeline's own light or dark theme (the dial follows its finish), with an
+  // ink for each background the icon sits on: the soft glass, the washed fill, the full fill.
+  const dark = $derived(view.dark);
+  const color = $derived(block.kind === 'task' ? categoryColor(block.category, dark) : block.event?.category ? categoryColor(block.event.category, dark) : block.color);
+  const soft = $derived(mix(color, dark ? '#131a27' : '#ffffff', 0.8));
+  const fg = $derived(onColor(color));
+  const inkSoft = $derived(inkOn(soft, color));
+  const inkWashed = $derived(inkOn(mix(color, soft, 0.66), color));
+  const inkEvent = $derived(inkOn(mix(color, soft, 0.72), color));
   const acked = $derived(!!task?.acks?.includes(block.date));
   const overlaps = $derived(
     view.dayBlocks.filter((o) => o.key !== block.key && !o.floating && o.startMs < block.endMs && o.endMs > block.startMs),
@@ -160,9 +168,12 @@
   style:--from={pourFrom}
   class:event={block.kind === 'event'}
   class:prayer={block.event?.provider === 'salah'}
-  style:--c={block.color}
-  style:--c-soft={mix(block.color, view.finish.dark ? '#131a27' : '#ffffff', 0.8)}
+  style:--c={color}
+  style:--c-soft={soft}
   style:--fg={fg}
+  style:--ink-soft={inkSoft}
+  style:--ink-washed={inkWashed}
+  style:--ink-event={inkEvent}
   style:--h={`${height}px`}
   style:--p={progress}
   style:transform={drag?.moved && drag.mode === 'move' ? `translateY(${drag.dy}px)` : undefined}
@@ -323,7 +334,7 @@
     /* Ahead of you: an empty glass in the block's colour. It fills while the block runs and
        stays full once its time has passed, like stops on a train line. */
     background: var(--c-soft);
-    color: color-mix(in srgb, var(--c) 80%, var(--ink));
+    color: var(--ink-soft);
     box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, transparent);
     overflow: hidden;
     display: grid;
@@ -358,7 +369,7 @@
   /* Live block: the capsule is a glass of liquid that fills as the time is spent. */
   .live .capsule {
     background: var(--c-soft);
-    color: color-mix(in srgb, var(--c) 75%, var(--ink));
+    color: var(--ink-soft);
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 45%, transparent);
   }
   .liquid {
@@ -380,7 +391,7 @@
     color: var(--fg);
   }
   .live .cap-icon {
-    color: color-mix(in srgb, var(--c) 70%, var(--ink));
+    color: var(--ink-soft);
   }
   /* Two scalloped strips in the block colour roll in opposite directions (gradients,
      no masks, so the compositor just slides a texture). */
@@ -454,14 +465,14 @@
     background:
       repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 42%, transparent) 0 3px, transparent 3px 8px),
       var(--c-soft);
-    color: color-mix(in srgb, var(--c) 72%, var(--ink));
+    color: var(--ink-event);
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 72%, transparent);
   }
   .event .liquid {
     background: color-mix(in srgb, var(--c) 38%, transparent);
   }
   .event.full .cap-icon {
-    color: color-mix(in srgb, var(--c) 72%, var(--ink));
+    color: var(--ink-event);
   }
   .event .title .t {
     font-weight: 400;
@@ -495,7 +506,7 @@
     background: color-mix(in srgb, var(--c) 34%, var(--c-soft));
   }
   .missed .cap-icon {
-    color: color-mix(in srgb, var(--c) 75%, var(--ink));
+    color: var(--ink-washed);
   }
   /* Behind you: the words step back a little. */
   .past:not(.selected):not(:hover) .title {
@@ -601,7 +612,7 @@
     padding: 0 7px 0 6px;
     border-radius: var(--r-pill);
     background: color-mix(in srgb, var(--c) 12%, transparent);
-    color: color-mix(in srgb, var(--c) 62%, var(--ink));
+    color: var(--ink-soft);
   }
   .src span {
     overflow: hidden;
@@ -782,7 +793,7 @@
     border-radius: var(--r-pill);
     font-size: var(--t-xs);
     font-weight: 500;
-    color: color-mix(in srgb, var(--c) 70%, var(--ink));
+    color: var(--ink-soft);
     background: color-mix(in srgb, var(--c) 14%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent);
     transition:

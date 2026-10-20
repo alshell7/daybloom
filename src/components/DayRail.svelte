@@ -368,7 +368,7 @@
     </button>
 
     <section class="later" class:drop={view.backlogDrop} aria-label="Backlog" data-drop="backlog">
-      <button class="later-head" onclick={() => (view.sheet = { kind: 'backlog' })}>
+      <button class="later-head" data-genie="backlog" onclick={() => (view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' })}>
         <Icon name="inbox" size={16} />
         <span>Backlog</span>
         <span class="count tnum">{view.later.length || ''}</span>

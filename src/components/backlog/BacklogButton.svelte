@@ -34,7 +34,7 @@
   }
 </script>
 
-<div class="wrap" data-drop="backlog">
+<div class="wrap" data-drop="backlog" data-genie="backlog">
   <button
     class="icon-btn"
     class:on={open}

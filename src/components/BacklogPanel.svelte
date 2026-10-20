@@ -313,7 +313,7 @@
 <svelte:window onkeydown={onWindowKey} />
 
 {#if view.sheet?.kind === 'backlog'}
-  <Panel title="Backlog" onclose={() => (view.sheet = null)} wide>
+  <Panel title="Backlog" onclose={() => (view.sheet = null)} wide genieFrom="backlog" dismissOutside>
     <div class="backlog">
       {#if mode === 'plan' && plan}
         <div class="mode" in:fly={{ x: 16, duration: rm ? 0 : 300, easing: cubicOut }}>

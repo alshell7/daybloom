@@ -23,6 +23,8 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ### Fixes
 
+- **Timeline colours** — icons and capsules follow the app's light or dark look (not the dial's finish), and every icon has enough contrast on its background.
+- **Backlog** — opens out of the button you pressed and pours back into it on close, like the macOS genie; a click outside closes it (and does only that).
 - **Menu bar** — the countdown and the next block stay current while the planner is closed. The menu shows what's now and what's next.
 - **Widget** — shows the same dial face, colours, salah times and day as the planner.
 - **Screen cues** — the edge glow ends when a session ends or pauses. Leaving focus mode tells you the session keeps running, with a way to end it.

@@ -49,6 +49,24 @@ export function onColor(hex: string): string {
   return contrastWhite >= contrastInk * 0.62 ? '#FFFFFF' : '#141B29';
 }
 
+/** WCAG contrast ratio of two hex colours (1..21). */
+export function contrast(a: string, b: string): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * An ink in the hue of `tint` that reads on `bg`: the least-mixed deep or light shade that
+ * reaches 4.5:1 (so it keeps as much colour as it can), else the one with the most contrast.
+ */
+export function inkOn(bg: string, tint: string): string {
+  const shades: string[] = [];
+  for (const t of [0.35, 0.5, 0.62, 0.74, 0.86]) shades.push(mix(tint, '#0b0f17', t), mix(tint, '#ffffff', t));
+  const ok = shades.find((c) => contrast(c, bg) >= 4.5);
+  return ok ?? shades.reduce((a, c) => (contrast(c, bg) > contrast(a, bg) ? c : a));
+}
+
 /** Mix a hex colour toward another (0..1). */
 export function mix(a: string, b: string, t: number): string {
   const pa = parseInt(a.slice(1, 7), 16);

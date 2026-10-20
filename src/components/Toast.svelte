@@ -4,7 +4,7 @@
   import { view } from '../lib/stores/view.svelte';
 </script>
 
-<div class="dock" class:beside={!!view.sheet} class:wide={view.sheet?.kind === 'backlog' || view.sheet?.kind === 'insights'} style:--lift={`${view.dockLift}px`} aria-live="polite">
+<div class="dock" data-keep-sheet class:beside={!!view.sheet} class:wide={view.sheet?.kind === 'backlog' || view.sheet?.kind === 'insights'} style:--lift={`${view.dockLift}px`} aria-live="polite">
   {#if view.toast}
     {#key view.toast.id}
       <div class="toast" in:fly={{ y: 16, duration: view.reducedMotion ? 0 : 280, easing: cubicOut }} out:fly={{ y: 8, duration: 160 }}>
