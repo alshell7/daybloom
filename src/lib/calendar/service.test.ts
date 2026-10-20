@@ -279,7 +279,7 @@ describe('calendar service: sync scheduling', () => {
     expect(g.provider.fetchEvents).toHaveBeenCalledTimes(12);
   });
 
-  it('auto-syncs on an interval, pausing while the document is hidden', async () => {
+  it('auto-syncs on an interval, also while the planner is hidden (the widget and menu bar show events)', async () => {
     vi.useFakeTimers();
     const listeners: Record<string, () => void> = {};
     const doc = {
@@ -297,19 +297,22 @@ describe('calendar service: sync scheduling', () => {
     const syncs = () => vi.mocked(g.provider.listCalendars).mock.calls.length;
 
     const stop = service.startAutoSync(60_000);
-    await vi.advanceTimersByTimeAsync(180_000);
-    expect(syncs()).toBe(0);
-
-    doc.hidden = false;
-    listeners.visibilitychange();
     await vi.advanceTimersByTimeAsync(0);
     expect(syncs()).toBe(1);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(syncs()).toBe(2);
 
+    // Coming back into view checks, but a sync from moments ago is fresh enough.
+    doc.hidden = false;
+    listeners.visibilitychange();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(syncs()).toBe(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(syncs()).toBe(3);
+
     stop();
     await vi.advanceTimersByTimeAsync(300_000);
-    expect(syncs()).toBe(2);
+    expect(syncs()).toBe(3);
     expect(doc.removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
   });
 });

@@ -6,22 +6,47 @@ let master: GainNode | null = null;
 let enabled = true;
 let volume = 0.5;
 
+/** The volume slider, gently curved so the middle is clearly audible and the top not loud. */
+const gainFor = (v: number) => Math.min(1, Math.max(0, v)) ** 1.15 * 0.95;
+
 function audio() {
   if (!enabled || typeof AudioContext === 'undefined') return null;
+  // A closed context never plays again: start a fresh one.
+  if (ctx && ctx.state === 'closed') {
+    ctx = null;
+    master = null;
+  }
   if (!ctx) {
     ctx = new AudioContext();
     master = ctx.createGain();
-    master.gain.value = volume * 0.6;
+    master.gain.value = gainFor(volume);
     master.connect(ctx.destination);
   }
-  if (ctx.state === 'suspended') ctx.resume();
+  // 'suspended', or WebKit's 'interrupted' (after sleep, an output change or the microphone).
+  if (ctx.state !== 'running') {
+    const c = ctx;
+    c.resume().catch(() => {
+      if (ctx === c) {
+        void c.close().catch(() => {});
+        ctx = null;
+        master = null;
+      }
+    });
+  }
   return ctx;
+}
+
+// Wake the context when the window comes back, so the next sound plays on time.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && ctx && ctx.state !== 'running' && ctx.state !== 'closed') void ctx.resume().catch(() => {});
+  });
 }
 
 export function configureSound(on: boolean, vol: number) {
   enabled = on;
   volume = vol;
-  if (master) master.gain.value = vol * 0.6;
+  if (master) master.gain.value = gainFor(vol);
 }
 
 /** A bell-like tone: fundamental plus an inharmonic partial that fades first. */

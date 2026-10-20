@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { adjust, duplicateBlock, moveToNextGap, moveToTomorrow, removeBlock, toggleDone } from '../lib/actions';
+  import { adjust, duplicateBlock, moveToNextGap, moveToTomorrow, removeBlock, toBacklog, toggleDone } from '../lib/actions';
   import { mix, onColor } from '../lib/engine/categories';
   import { formatDuration, formatTime, MINUTE } from '../lib/engine/time';
   import type { Block } from '../lib/engine/types';
@@ -11,6 +11,8 @@
   import { accountLabel } from '../lib/calendarBridge.svelte';
   import { isOn } from '../lib/addons/registry';
   import { crumbs } from '../lib/addons/crumbs/crumbs.svelte';
+  import { meetingOf } from '../lib/calendar/meeting';
+  import { platform } from '../lib/platform';
 
   let { block }: { block: Block } = $props();
 
@@ -32,11 +34,21 @@
     lastSlot = 0;
   }
 
+  /** Over the Backlog section (or the top bar's backlog button) while moving: drop to park it. */
+  let overBacklog = $state(false);
+  const backlogAt = (x: number, y: number) => document.elementsFromPoint(x, y).some((el) => (el as HTMLElement).closest?.('[data-drop="backlog"]'));
+
   function move(e: PointerEvent) {
     if (!drag) return;
     drag.dy = e.clientY - drag.y0;
     if (!drag.moved && Math.abs(drag.dy) > 5) drag.moved = true;
     if (!drag.moved) return;
+    const over = drag.mode === 'move' && block.kind === 'task' && backlogAt(e.clientX, e.clientY);
+    if (over !== overBacklog) {
+      overBacklog = over;
+      view.backlogDrop = over;
+      if (over) detent();
+    }
     const steps = Math.round(drag.dy / PX_PER_MIN / STEP);
     if (steps !== lastSlot) {
       lastSlot = steps;
@@ -58,6 +70,12 @@
     const d = drag;
     drag = null;
     view.railPreview = null;
+    if (overBacklog) {
+      overBacklog = false;
+      view.backlogDrop = false;
+      toBacklog(block.key);
+      return;
+    }
     if (d.moved) {
       if (d.startMs !== block.startMs || d.endMs !== block.endMs) adjust(block.key, d.startMs, d.endMs);
     } else if (d.mode === 'move') open();
@@ -108,7 +126,16 @@
 
   function open() {
     view.selected = block.key;
-    if (block.kind === 'task') view.sheet = { kind: 'edit', key: block.key };
+    // Tasks open their editor; calendar events their details (salah too, for Waqt).
+    view.sheet = { kind: 'edit', key: block.key };
+  }
+
+  // A video meeting: a Join button, lit from 10 minutes before until it ends.
+  const meet = $derived(block.event ? meetingOf(block.event) : null);
+  const joinSoon = $derived(!!meet && clock.now < block.endMs && block.startMs - clock.now <= 10 * MINUTE);
+  function join(e: MouseEvent) {
+    e.stopPropagation();
+    if (meet) void platform.openExternal(meet.url);
   }
 
   function check(e: MouseEvent) {
@@ -214,7 +241,7 @@
   </button>
 
   {#if drag?.moved}
-    <span class="drag-pill tnum">{formatTime(shown.startMs, view.hour12)} → {formatTime(shown.endMs, view.hour12)} · {formatDuration(len)}</span>
+    <span class="drag-pill tnum">{#if overBacklog}<Icon name="inbox" size={12} /> To the backlog{:else}{formatTime(shown.startMs, view.hour12)} → {formatTime(shown.endMs, view.hour12)} · {formatDuration(len)}{/if}</span>
   {/if}
 
   <div class="side">
@@ -224,12 +251,18 @@
         {#if !missed}
           <button class="icon-btn" onclick={() => moveToTomorrow(block.key)} title="Move to tomorrow" aria-label="Move to tomorrow"><Icon name="arrow-right" size={15} /></button>
         {/if}
+        <button class="icon-btn" onclick={() => toBacklog(block.key)} title="Move to the backlog (or drag it there)" aria-label="Move to the backlog"><Icon name="inbox" size={15} /></button>
         <button class="icon-btn" onclick={() => duplicateBlock(block.key)} title="Duplicate" aria-label="Duplicate"><Icon name="plus" size={15} /></button>
         <button class="icon-btn" onclick={() => removeBlock(block.key)} title="Remove" aria-label="Remove"><Icon name="trash-ui" size={15} /></button>
       </div>
       {#if missed}
         <button class="icon-btn slide" onclick={() => moveToNextGap(block.key)} title="Slide into the next free gap" aria-label="Move to the next free gap"><Icon name="move-later" size={15} /></button>
       {/if}
+    {/if}
+    {#if meet}
+      <button class="join" class:hot={joinSoon} onclick={join} title={`Join ${meet.label}`} aria-label={`Join ${meet.label}`}>
+        <Icon name="video" size={14} stroke={2.2} />{#if joinSoon}<span>Join</span>{/if}
+      </button>
     {/if}
     {#if block.kind === 'task'}
       <button class="check" onclick={check} aria-pressed={block.done} aria-label={block.done ? `Mark ${block.title} not done` : `Mark ${block.title} done`}>
@@ -714,6 +747,9 @@
   .tools .icon-btn:nth-child(3) {
     transition-delay: 60ms;
   }
+  .tools .icon-btn:nth-child(4) {
+    transition-delay: 90ms;
+  }
   .row:hover .tools .icon-btn,
   .tools .icon-btn:focus-visible {
     opacity: 1;
@@ -735,6 +771,36 @@
     .body {
       padding-inline: var(--s-2);
     }
+  }
+  .join {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    min-width: 28px;
+    padding: 0 7px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-xs);
+    font-weight: 500;
+    color: color-mix(in srgb, var(--c) 70%, var(--ink));
+    background: color-mix(in srgb, var(--c) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent);
+    transition:
+      background var(--dur-2) var(--ease-out),
+      transform var(--dur-1) var(--ease-out);
+  }
+  .join:hover {
+    background: color-mix(in srgb, var(--c) 24%, transparent);
+  }
+  .join:active {
+    transform: scale(0.95);
+  }
+  /* Starting soon or on now: the button steps forward. */
+  .join.hot {
+    padding: 0 11px;
+    color: var(--ink-inverse);
+    background: color-mix(in srgb, var(--lume) 80%, var(--ink));
+    box-shadow: 0 4px 14px -6px var(--lume);
   }
   .check {
     position: relative;

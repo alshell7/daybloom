@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { adjust, createFromRange, createNext, removeBlock, toggleDone } from '../lib/actions';
+  import { adjust, createFromRange, createNext, leaveFocus, removeBlock, toggleDone } from '../lib/actions';
   import Dial from '../lib/dial/Dial.svelte';
   import Readout from '../lib/dial/Readout.svelte';
   import { cubicOut } from 'svelte/easing';
@@ -42,6 +42,7 @@
   import WaqtPanel from '../components/addons/waqt/WaqtPanel.svelte';
   import WaqtMoment from '../components/addons/waqt/WaqtMoment.svelte';
   import McpPanel from '../components/addons/mcp/McpPanel.svelte';
+  import WhatsNew from '../components/WhatsNew.svelte';
   import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
   import TrackerPrompts from '../components/addons/tracker/TrackerPrompts.svelte';
   import { isOn } from '../lib/addons/registry';
@@ -157,7 +158,7 @@
       }
     }
     if (e.key === 'Escape') {
-      if (view.focus) view.focus = false;
+      if (view.focus) leaveFocus();
       else if (view.sheet) view.sheet = null;
       else view.selected = null;
       return;
@@ -208,7 +209,7 @@
 
   /** F: a running session toggles the focus view; otherwise the launcher opens. */
   function openFocus() {
-    if (view.focus) view.focus = false;
+    if (view.focus) leaveFocus();
     else if (timer.active) view.focus = true;
     else view.sheet = view.sheet?.kind === 'focus' ? null : { kind: 'focus' };
   }
@@ -323,6 +324,7 @@
   {#if isOn('reality')}<RealityPanel />{/if}
   {#if isOn('waqt')}<WaqtPanel /><WaqtMoment />{/if}
   {#if isOn('mcp')}<McpPanel />{/if}
+  <WhatsNew />
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />

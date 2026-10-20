@@ -344,7 +344,7 @@
       <kbd>N</kbd>
     </button>
 
-    <section class="later" aria-label="Backlog">
+    <section class="later" class:drop={view.backlogDrop} aria-label="Backlog" data-drop="backlog">
       <button class="later-head" onclick={() => (view.sheet = { kind: 'backlog' })}>
         <Icon name="inbox" size={16} />
         <span>Backlog</span>
@@ -875,6 +875,17 @@
     margin-top: var(--s-5);
     border-top: 1px solid var(--line);
     padding-top: var(--s-3);
+    border-radius: var(--r-md);
+    transition:
+      background var(--dur-2) var(--ease-out),
+      box-shadow var(--dur-2) var(--ease-out);
+  }
+  /* A block dragged over it: the backlog opens its arms. */
+  .later.drop {
+    background: color-mix(in srgb, var(--lume) 10%, var(--surface));
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--lume) 55%, transparent),
+      0 8px 24px -10px color-mix(in srgb, var(--lume) 60%, transparent);
   }
   .later-head {
     display: flex;

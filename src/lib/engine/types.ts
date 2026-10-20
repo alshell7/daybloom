@@ -88,6 +88,16 @@ export interface Task {
 
 export type BacklogList = 'inbox' | 'next' | 'someday';
 
+/** Someone invited to a calendar event. */
+export interface Attendee {
+  name?: string;
+  email?: string;
+  status?: 'accepted' | 'declined' | 'tentative' | 'needsAction';
+  organizer?: boolean;
+  /** This is you. */
+  self?: boolean;
+}
+
 /** A read-only event pulled from an external calendar. */
 export interface CalendarEvent {
   /** Provider-unique id (stable across syncs). */
@@ -104,6 +114,14 @@ export interface CalendarEvent {
   color?: string;
   location?: string;
   htmlLink?: string;
+  /** A video meeting to join (Google Meet, Zoom, Teams…), when the calendar says so. */
+  meetUrl?: string;
+  /** "Google Meet", "Zoom"… */
+  meetLabel?: string;
+  /** The calendar's notes, as plain text. */
+  description?: string;
+  /** Who is invited (not sent for very large meetings). */
+  attendees?: Attendee[];
   /** The same event also appears in these other accounts (merged into this one). */
   alsoIn?: string[];
   /** Repeats of one event share this (ICS UID, Google recurringEventId); else the event's own id. */

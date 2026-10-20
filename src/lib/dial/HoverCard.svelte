@@ -7,6 +7,7 @@
   import { routineStreak } from '../streaks';
   import { view } from '../stores/view.svelte';
   import { accountLabel } from '../calendarBridge.svelte';
+  import { meetingOf, peopleLine } from '../calendar/meeting';
 
   // Everything about one block at a glance: when, how much is left, what's next inside it.
   let { block, now, hour12, compact = false }: { block: Block; now: number; hour12: boolean; compact?: boolean } = $props();
@@ -23,7 +24,12 @@
 
   const status = $derived.by(() => {
     if (block.event?.provider === 'salah') return { tone: 'quiet', icon: 'moon', text: block.event.calendarName ?? 'Salah' };
-    if (block.kind === 'event') return { tone: 'quiet', icon: 'calendar', text: 'From your calendar' };
+    if (block.kind === 'event') {
+      const meet = block.event ? meetingOf(block.event) : null;
+      const who = peopleLine(block.event?.attendees);
+      if (meet || who) return { tone: 'quiet', icon: meet ? 'video' : 'users', text: [meet?.label, who].filter(Boolean).join(' · ') };
+      return { tone: 'quiet', icon: 'calendar', text: 'From your calendar' };
+    }
     if (block.done) {
       const spent = Math.min(block.endMs, block.doneAt ?? block.endMs) - block.startMs;
       return { tone: 'done', icon: 'circle-check', text: spent > MINUTE ? `Done · ${formatDuration(spent)} well spent` : 'Done' };

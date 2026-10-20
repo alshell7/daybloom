@@ -11,6 +11,7 @@ import { streakFile } from './stores/streaks.svelte';
 import { milestoneFor, milestoneLine, rhythm } from './streaks';
 import { taskFile } from './stores/tasks.svelte';
 import { clock } from './stores/clock.svelte';
+import { timer } from './stores/timer.svelte';
 
 // Keyword → icon/category. Typing "lunch" turns the block into a green fork-and-knife.
 const HINTS: [RegExp, string, CategoryId][] = [
@@ -112,6 +113,15 @@ export function adjust(key: string, startMs: number, endMs: number) {
   // Recurring blocks stay on their own day; clamp a cross-midnight drag.
   const start = newDate === p.date ? Math.round(minutesOfDay(startMs)) : newDate > p.date ? 1435 : 0;
   tasks.editOccurrence(t.id, p.date, { start, duration });
+}
+
+/** Leave the focus view. A running session keeps going (the pill and the edges show it). */
+export function leaveFocus() {
+  view.focus = false;
+  const ts = timer.active ? timer.status(clock.now) : null;
+  if (!ts || ts.finished || ts.paused) return;
+  const cues = settings.value.screen.glow || settings.value.screen.bar || settings.value.screen.hud;
+  view.say(cues ? 'Your focus keeps running · the screen edges show it' : 'Your focus keeps running in the background', { label: 'End session', run: () => timer.stop() }, 6500);
 }
 
 /** Tick a block. Celebrates proportionally — a whole finished day gets the big sweep. */
@@ -286,11 +296,24 @@ export function toBacklog(key: string) {
   const b = view.blockByKey(key);
   if (!p || !t) return;
   const duration = b ? Math.round((b.endMs - b.startMs) / MINUTE) : t.duration;
+  const before: Task = JSON.parse(JSON.stringify(t));
+  let made: string | null = null;
   if (t.recurrence) {
     tasks.removeOccurrence(t.id, p.date);
-    tasks.create({ title: t.title, icon: t.icon, category: t.category, notes: t.notes, date: null, start: null, duration, list: 'next' });
+    made = tasks.create({ title: t.title, icon: t.icon, category: t.category, notes: t.notes, date: null, start: null, duration, list: 'next' }).id;
   } else {
     tasks.update(t.id, { date: null, start: null, duration, list: 'next', completions: [], completedAt: {} });
   }
-  view.say(`“${t.title}” is waiting in your backlog.`);
+  if (view.selected === key) view.selected = null;
+  if (view.sheet && 'key' in view.sheet && view.sheet.key === key) view.sheet = null;
+  view.say(`“${t.title || 'Block'}” is waiting in your backlog.`, {
+    label: 'Undo',
+    run: () => {
+      if (made) tasks.remove(made);
+      const list = taskFile.value.tasks;
+      const i = list.findIndex((x) => x.id === before.id);
+      if (i >= 0) list[i] = before;
+      else tasks.restore(before);
+    },
+  });
 }

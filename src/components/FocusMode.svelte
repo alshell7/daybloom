@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fade, fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { celebrateBadges, toggleDone } from '../lib/actions';
+  import { celebrateBadges, leaveFocus, toggleDone } from '../lib/actions';
   import { parseBlockKey } from '../lib/engine/blocks';
   import Dial from '../lib/dial/Dial.svelte';
   import Readout from '../lib/dial/Readout.svelte';
@@ -50,7 +50,7 @@
 </script>
 
 <div class="focus" role="dialog" aria-label="Focus" style:--c={wedge?.color ?? 'var(--ink-3)'} transition:fade={{ duration: view.reducedMotion ? 0 : 260 }}>
-  <button class="icon-btn close" onclick={() => (view.focus = false)} aria-label="Leave focus (Esc)"><Icon name="minimize" size={18} /></button>
+  <button class="icon-btn close" onclick={leaveFocus} aria-label="Leave focus (Esc)"><Icon name="minimize" size={18} /></button>
 
   <div class="center">
     <div class="dial" in:scale={{ start: 0.92, duration: view.reducedMotion ? 0 : 520, easing: cubicOut }}>

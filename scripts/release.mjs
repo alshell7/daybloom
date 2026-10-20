@@ -1,5 +1,7 @@
 // npm run release [patch|minor|major|x.y.z]
-// Bumps the version everywhere (Cargo.lock too), commits, tags vX.Y.Z and pushes — CI does the rest.
+// Bumps the version everywhere (Cargo.lock too), turns "## Next" in RELEASE_NOTES.md into this
+// version's notes, commits, tags vX.Y.Z and pushes — CI does the rest (the notes become the
+// GitHub release text and what the app's update card shows).
 import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -21,6 +23,9 @@ const next = /^\d+\.\d+\.\d+$/.test(bump)
       ? `${ma}.${mi + 1}.0`
       : `${ma}.${mi}.${pa + 1}`;
 
+// The notes first: a release always says what it brings.
+sh(`node scripts/release-notes.mjs --roll ${next}`);
+
 pkg.version = next;
 writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
 const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
@@ -38,7 +43,7 @@ if (bumped === cargoLock) {
 }
 writeFileSync('src-tauri/Cargo.lock', bumped);
 
-sh('git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock');
+sh('git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock RELEASE_NOTES.md');
 sh(`git commit -m "Release v${next}"`);
 sh(`git tag -a v${next} -m "Daybloom v${next}"`);
 sh('git push');

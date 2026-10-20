@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
-  import { celebrateBadges, removeBlock, suggest, toggleDone } from '../lib/actions';
+  import { celebrateBadges, removeBlock, suggest, toBacklog, toggleDone } from '../lib/actions';
   import { blockKey, parseBlockKey } from '../lib/engine/blocks';
   import { CATEGORIES, categoryColor } from '../lib/engine/categories';
   import { describeRecurrence } from '../lib/engine/recurrence';
@@ -14,6 +14,7 @@
   import { view } from '../lib/stores/view.svelte';
   import Panel from './Panel.svelte';
   import DateField from './pickers/DateField.svelte';
+  import EventDetails from './calendars/EventDetails.svelte';
   import TimeField from './pickers/TimeField.svelte';
   import AddonBlockFields from './addons/AddonBlockFields.svelte';
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
@@ -392,6 +393,11 @@
           <Icon name="check" size={16} stroke={2.2} /> {done ? 'Done' : 'Mark done'}
         </button>
       {/if}
+      {#if occDate && sheetKey && !sheetKey.startsWith('later:') && !done}
+        <button class="btn btn-quiet" onclick={() => sheetKey && toBacklog(sheetKey)} title="Take it off the day and keep it in the backlog">
+          <Icon name="inbox" size={16} /> To backlog
+        </button>
+      {/if}
       <span class="spacer"></span>
       {#if task.recurrence && sheetKey && !sheetKey.startsWith('later:')}
         <button class="btn btn-danger" onclick={() => sheetKey && removeBlock(sheetKey)}>Skip today</button>
@@ -412,10 +418,7 @@
     </Panel>
   {:else}
     <Panel title="From your calendar" onclose={() => (view.sheet = null)} accent={event.color}>
-      <p class="event-title">{event.title}</p>
-      <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)} · {formatDuration(event.endMs - event.startMs)}</p>
-      {#if event.event?.location}<p class="note">{event.event.location}</p>{/if}
-      <p class="note">Calendar events are read-only here. Edit them in their calendar.</p>
+      <EventDetails block={event} />
     </Panel>
   {/if}
 {/if}

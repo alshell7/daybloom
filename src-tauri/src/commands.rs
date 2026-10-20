@@ -141,11 +141,13 @@ pub fn main_show(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn set_tray_status(app: AppHandle, title: Option<String>, tooltip: String) -> Result<(), String> {
+pub fn set_tray_status(app: AppHandle, title: Option<String>, tooltip: String, now: Option<String>, next: Option<String>) -> Result<(), String> {
     let tray = app.tray_by_id(crate::tray::ID).ok_or("tray not ready")?;
     // Title is the text beside the macOS menu-bar icon; ignored on Windows.
     tray.set_title(title.filter(|t| !t.is_empty())).map_err(err)?;
-    tray.set_tooltip(Some(tooltip)).map_err(err)
+    tray.set_tooltip(Some(tooltip)).map_err(err)?;
+    crate::tray::set_status(&app, now.as_deref().unwrap_or(""), next.as_deref().unwrap_or(""));
+    Ok(())
 }
 
 // ---- Clock style --------------------------------------------------------------------

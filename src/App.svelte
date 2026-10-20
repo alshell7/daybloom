@@ -3,6 +3,7 @@
   import { activeTimeZone, atMinutes, formatTime, hourOf, setPrefers12h, setTimeZone, todayISO } from './lib/engine/time';
   import { platform, windowLabel } from './lib/platform';
   import { startScheduler } from './lib/scheduler.svelte';
+  import { configureSound } from './lib/sound';
   import { clock } from './lib/stores/clock.svelte';
   import { settings } from './lib/stores/settings.svelte';
   import { seedSampleDay, taskFile } from './lib/stores/tasks.svelte';
@@ -20,7 +21,7 @@
   import OverlayView from './views/OverlayView.svelte';
   import CaptureView from './views/CaptureView.svelte';
   import { cuePreview, startScreenCues } from './lib/screenCues.svelte';
-  import { startAddons } from './lib/addons/runtime.svelte';
+  import { startAddons, startAddonViews } from './lib/addons/runtime.svelte';
 
   const label = windowLabel();
   let ready = $state(false);
@@ -70,9 +71,11 @@
       }
       view.date = view.today;
       ready = true;
+      // The menu bar, sounds and reminders start at once; calendars catch up after.
+      if (label === 'main') stopScheduler = startScheduler();
       stopCalendars = await initCalendars(label === 'main');
+      if (label === 'widget') stopAddons = startAddonViews();
       if (label === 'main') {
-        stopScheduler = startScheduler();
         if (settings.value.widget.visible) {
           platform.showWidget(true).catch(() => {});
           platform.setWidgetLayer(settings.value.widget.layer).catch(() => {});
@@ -121,6 +124,9 @@
         : 'Nothing planned yet — sweep the ring to start.';
     setTimeout(() => view.say(`${hello}. ${left ? `${left} ${left === 1 ? 'block' : 'blocks'} ahead. ` : ''}${what}`, undefined, 7000), 900);
   }
+
+  // Sound on/off and volume, in every window (the capture card and widget play sounds too).
+  $effect(() => configureSound(settings.value.sound, settings.value.volume));
 
   // The whole app follows one time zone (the computer's unless the user picks another).
   $effect(() => {

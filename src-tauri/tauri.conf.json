@@ -23,6 +23,7 @@
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "visible": true,
+        "backgroundThrottling": "disabled",
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling"
       },
       {

@@ -18,6 +18,7 @@
   import TrackerPill from './addons/tracker/TrackerPill.svelte';
   import SessionPill from './focus/SessionPill.svelte';
   import BacklogButton from './backlog/BacklogButton.svelte';
+  import CalendarButton from './calendars/CalendarButton.svelte';
 
   let { mac = false, ontogglewidget }: { mac?: boolean; ontogglewidget: () => void } = $props();
 
@@ -143,6 +144,7 @@
         <Icon name="sparkles" size={18} />
       </button>
       <span class="fold-b wrap"><ThemeToggle /></span>
+      <CalendarButton />
       <BacklogButton />
       <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' })} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
         <Icon name="chart" size={18} />

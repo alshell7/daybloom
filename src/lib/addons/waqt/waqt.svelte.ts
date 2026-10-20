@@ -142,6 +142,24 @@ function chime() {
   sounds.adhan();
 }
 
+/** Other windows (the widget): the prayer blocks only; reminders stay with the planner. */
+export function startWaqtView(): () => void {
+  const root = $effect.root(() => {
+    $effect(() => {
+      const from = addDays(view.today, -1);
+      void JSON.stringify(waqt.settings);
+      void clock.zone;
+      const ev = untrack(() => prayerEvents(from, 17));
+      view.addonEvents = { ...view.addonEvents, salah: ev };
+    });
+  });
+  return () => {
+    root();
+    const { salah: _, ...rest } = view.addonEvents;
+    view.addonEvents = rest;
+  };
+}
+
 /** Main window, while the addon is on. */
 export function startWaqt(): () => void {
   const fired = new Set<string>();

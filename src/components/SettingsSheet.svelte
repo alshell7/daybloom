@@ -202,7 +202,7 @@
           </div>
           <p class="label">Finish</p>
           <div class="finishes">
-            <button class="finish auto" class:on={s.finish === 'auto'} onclick={() => (settings.value.finish = 'auto')} aria-label="Match the theme" title="Match the theme">
+            <button class="finish auto" class:on={s.finish === 'auto'} onclick={() => (settings.value.finish = 'auto')} aria-label="Same as the planner" title="Same as the planner">
               <span style:background={FINISHES[view.theme.finish].face}></span><span style:background={FINISHES[view.theme.finish].bezel}></span>
             </button>
             {#each Object.values(FINISHES) as f (f.id)}
@@ -419,8 +419,15 @@
           <div class="row">
             <span>Dial</span>
             <div class="segmented">
+              <button aria-pressed={!s.widget.own} onclick={() => (settings.value.widget.own = false)} title="The same dial as the planner">Same</button>
               {#each PRESET_ORDER as id (id)}
-                <button aria-pressed={s.widget.preset === id} onclick={() => (settings.value.widget.preset = id)}>{PRESETS[id].name}</button>
+                <button
+                  aria-pressed={s.widget.own && s.widget.preset === id}
+                  onclick={() => {
+                    settings.value.widget.preset = id;
+                    settings.value.widget.own = true;
+                  }}>{PRESETS[id].name}</button
+                >
               {/each}
             </div>
           </div>
@@ -579,7 +586,7 @@
               <span>Version {updates.version} is ready.</span>
               <button class="btn btn-primary" onclick={() => installUpdate()}>Update &amp; restart</button>
             </div>
-            {#if updates.notes}<p class="hint">{updates.notes}</p>{/if}
+
           {:else if updates.status === 'error'}
             <p class="hint">Couldn't reach the update feed. {updates.error}</p>
           {/if}
@@ -587,7 +594,7 @@
             <span>Check for updates automatically</span>
             <input type="checkbox" class="switch" bind:checked={settings.value.autoUpdate} />
           </label>
-          <p class="hint">Updates are signed; Daybloom refuses any download that doesn't match its key.</p>
+          <p class="hint">Updates are signed; Daybloom refuses any download that doesn't match its key. <button class="linkish" onclick={() => (view.sheet = { kind: 'whatsnew' })}>See what’s new</button></p>
         </section>
         {/if}
         {#if shows('data')}
@@ -888,6 +895,16 @@
   }
   .to {
     color: var(--ink-3);
+  }
+  .linkish {
+    padding: 0;
+    font: inherit;
+    color: var(--ink-2);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .linkish:hover {
+    color: var(--ink);
   }
   .hint {
     margin: var(--s-2) 0 0;

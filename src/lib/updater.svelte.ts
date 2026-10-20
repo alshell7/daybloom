@@ -3,7 +3,9 @@
 // tap — never a surprise restart in the middle of someone's day.
 
 import { platform } from './platform';
+import { countLine, notesFor } from './releaseNotes';
 import { settings } from './stores/settings.svelte';
+import { view } from './stores/view.svelte';
 
 type Status = 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'installing' | 'error';
 
@@ -79,10 +81,22 @@ export async function installUpdate() {
   }
 }
 
+/** Once after an update: a note with what this version brought, a tap from the full list. */
+export function offerWhatsNew(current: string) {
+  const seen = settings.value.seenVersion;
+  settings.value.seenVersion = current;
+  if (!seen || seen === current) return;
+  const groups = notesFor(current);
+  if (!groups.length) return;
+  setTimeout(() => view.say(`Updated to Daybloom ${current} · ${countLine(groups)}`, { label: 'See what’s new', run: () => (view.sheet = { kind: 'whatsnew', version: current }) }, 9000), 2500);
+}
+
 /** Background checks for the main window. Returns a stop function. */
 export function startUpdateChecks(): () => void {
   if (!platform.isNative) return () => {};
-  loadVersion().catch(() => {});
+  loadVersion()
+    .then(() => updates.current && offerWhatsNew(updates.current))
+    .catch(() => {});
   const run = () => settings.value.autoUpdate && checkForUpdates();
   const first = setTimeout(run, 8_000);
   const every = setInterval(run, 6 * 60 * 60_000);

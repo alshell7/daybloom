@@ -29,9 +29,7 @@ export function startScheduler() {
 
       // Heads-up window for the current block.
       const cur = s.current;
-      const headsUpMs = cfg.headsUp * MINUTE;
-      const inHeadsUp = !!cur && !cur.done && headsUpMs > 0 && s.remainingMs <= headsUpMs && cur.endMs - cur.startMs > headsUpMs * 1.5;
-      view.headsUpKey = inHeadsUp ? cur!.key : null;
+      const inHeadsUp = !!cur && view.headsUpKey === cur.key;
       if (inHeadsUp && !fired.has(`hu:${cur!.key}`)) {
         fired.add(`hu:${cur!.key}`);
         if (booted) sounds.headsUp();
@@ -151,27 +149,42 @@ export function startScheduler() {
       clock.minute;
       const s = view.now;
       const ts = timer.status(clock.now);
+      // The name gives way, never the countdown: "Deep work: draft the… · 25m".
+      const fit = (name: string, tail: string, room = 30) => {
+        const r = Math.max(6, room - tail.length);
+        return `${name.length > r ? `${name.slice(0, r - 1).trimEnd()}…` : name}${tail}`;
+      };
       let title: string | null = null;
       let tip = 'Daybloom';
+      let nowLine = 'Nothing planned right now';
+      let nextLine = '';
+      const at = (ms: number) => formatTime(ms, view.hour12);
       if (ts && !ts.finished) {
-        title = `${timer.active ? shownTitle(timer.active.label, timer.active.category) : 'Timer'} · ${formatDuration(ts.remainingMs)}`;
-        tip = title;
+        const name = timer.active ? shownTitle(timer.active.label, timer.active.category) : 'Timer';
+        title = fit(name, ` · ${formatDuration(ts.remainingMs)}`);
+        tip = `${name} · ${formatDuration(ts.remainingMs)}`;
+        nowLine = `Focus: ${name} · ${formatDuration(ts.remainingMs)} left`;
       } else if (s.current) {
-        title = `${shownTitle(s.current.title, s.current.category)} · ${formatDuration(s.remainingMs)}`;
-        tip = `${title} left${s.next ? ` — next: ${shownTitle(s.next.title, s.next.category)}` : ''}`;
+        const name = shownTitle(s.current.title, s.current.category);
+        title = fit(name, ` · ${formatDuration(s.remainingMs)}`);
+        tip = `${name} · ${formatDuration(s.remainingMs)} left${s.next ? ` — next: ${shownTitle(s.next.title, s.next.category)}` : ''}`;
+        nowLine = `Now: ${name} · ${formatDuration(s.remainingMs)} left`;
       } else if (s.next) {
-        title = `${formatDuration(s.remainingMs)} → ${shownTitle(s.next.title, s.next.category)}`;
-        tip = `Free for ${formatDuration(s.remainingMs)}, then ${shownTitle(s.next.title, s.next.category)}`;
+        const name = shownTitle(s.next.title, s.next.category);
+        title = fit(name, '', 22);
+        title = `${formatDuration(s.remainingMs)} → ${title}`;
+        tip = `Free for ${formatDuration(s.remainingMs)}, then ${name}`;
+        nowLine = `Free for ${formatDuration(s.remainingMs)}`;
       }
+      if (s.next) nextLine = `Next: ${shownTitle(s.next.title, s.next.category)} at ${at(s.next.startMs)}`;
       if (nudges.attention) tip = `${nudges.attention} to check in · ${tip}`;
       void settings.value.privacy.hideNames;
       void settings.value.privacy.on;
       if (!settings.value.menuBarTimer) title = null;
-      if (title && title.length > 28) title = `${title.slice(0, 26)}…`;
-      const key = `${title}|${tip}`;
+      const key = `${title}|${tip}|${nowLine}|${nextLine}`;
       if (key !== lastTray) {
         lastTray = key;
-        platform.setTrayStatus(title, tip).catch(() => {});
+        platform.setTrayStatus(title, tip, nowLine, nextLine).catch(() => {});
       }
     });
   });

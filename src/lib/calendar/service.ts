@@ -692,10 +692,11 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
       const win = typeof window !== 'undefined' ? window : null;
       // Each account syncs at its own cadence (`syncEveryMin`, else `intervalMs`); the check runs
       // at least once a minute so a short cadence is honoured.
+      // Hidden or not: the widget and the menu bar show these events too.
       const run = (force = false) => {
-        if (!doc?.hidden) void sync(undefined, { auto: true, force, everyMs: intervalMs }).catch((e) => console.warn('[calendar] sync failed', e));
+        void sync(undefined, { auto: true, force, everyMs: intervalMs }).catch((e) => console.warn('[calendar] sync failed', e));
       };
-      const onVisibility = () => run();
+      const onVisibility = () => !doc?.hidden && run();
       const onOnline = () => run(true);
       run();
       const timer = setInterval(() => run(), Math.min(intervalMs, 60_000));

@@ -74,6 +74,7 @@ export const SHARED_SETTINGS = [
   'focus',
   'privacy',
   'addons',
+  'widget.own',
   'widget.preset',
   'widget.finish',
 ] as const satisfies readonly SettingsPath[];
@@ -90,6 +91,7 @@ export const DEVICE_SETTINGS = [
   'google',
   'onboarded',
   'lastGreeted',
+  'seenVersion',
   'timeZone',
   'recentZones',
   'autoUpdate',

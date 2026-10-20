@@ -28,7 +28,8 @@ export type Sheet =
   | { kind: 'crumbs' }
   | { kind: 'reality' }
   | { kind: 'waqt' }
-  | { kind: 'mcp' };
+  | { kind: 'mcp' }
+  | { kind: 'whatsnew'; version?: string };
 
 const DOCK_ORDER = ['crumb', 'waqt'];
 
@@ -62,11 +63,19 @@ class View {
   sparks = $state<Spark[]>([]);
   toast = $state<null | { id: number; text: string; ms: number; action?: { label: string; run: () => void } }>(null);
   /** Key of the block currently in its heads-up window (drives the dial pulse). */
-  headsUpKey = $state<string | null>(null);
+  /** The block ending within the heads-up window (the dial pulses it), in every window. */
+  headsUpKey = $derived.by(() => {
+    const s = this.now;
+    const cur = s.current;
+    const ms = settings.value.headsUp * 60_000;
+    return cur && !cur.done && ms > 0 && s.remainingMs <= ms && cur.endMs - cur.startMs > ms * 1.5 ? cur.key : null;
+  });
   /** Bumped when the whole day completes — the dial plays its lume sweep. */
   dayCompleteAt = $state(0);
   /** A block being dragged in the rail: the dial previews it live. */
   railPreview = $state<null | { key: string; startMs: number; endMs: number }>(null);
+  /** A block is being dragged over a backlog drop zone (it lights up). */
+  backlogDrop = $state(false);
   /** Direction of the last day change (for the dial's turn animation). */
   dayDir = $state<1 | -1>(1);
   /** Cards at the foot of the rail (e.g. a breadcrumb prompt, the adhan's moment), by id, with

@@ -307,8 +307,9 @@ export const platform = {
     };
   },
 
-  async setTrayStatus(title: string | null, tooltip: string): Promise<void> {
-    if (isTauri) await invoke('set_tray_status', { title, tooltip });
+  /** The menu-bar text and tooltip, and the menu's Now / Next lines. */
+  async setTrayStatus(title: string | null, tooltip: string, now = '', next = ''): Promise<void> {
+    if (isTauri) await invoke('set_tray_status', { title, tooltip, now, next });
   },
 
   async setDockVisible(visible: boolean): Promise<void> {

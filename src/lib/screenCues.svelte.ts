@@ -36,6 +36,8 @@ export function cueSubject(now = clock.now): CueSubject | null {
   const dark = view.finish.dark;
   const a = timer.active;
   const ts = a ? timer.status(now) : null;
+  // Paused: nothing is running, so the edges go quiet (resume brings them back).
+  if (a && ts && !ts.finished && ts.paused) return null;
   if (a && ts && !ts.finished) {
     const brk = ts.segment.kind === 'break';
     const focusCount = a.segments.filter((s) => s.kind === 'focus').length;
@@ -98,14 +100,33 @@ export function anyCue(): boolean {
 /** Main window only: keep the cues window open exactly while it has something to show. */
 export function startScreenCues(): () => void {
   if (!platform.isNative) return () => {};
-  let shown = false;
   let pending: ReturnType<typeof setTimeout> | null = null;
   let previewTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // One request at a time, and the last wish wins: a "hide" that arrives while the window is
+  // still being built waits for it, then closes it (it used to be lost, leaving the glow on).
+  let desired = false;
+  let actual = false;
+  let busy = false;
+  const pump = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      for (let tries = 0; desired !== actual && tries < 4; tries++) {
+        try {
+          actual = await platform.showOverlay(desired);
+        } catch {
+          // Try again on the next change.
+          break;
+        }
+      }
+    } finally {
+      busy = false;
+    }
+  };
   const apply = (want: boolean) => {
-    if (want === shown) return;
-    shown = want;
-    platform.showOverlay(want).catch(() => (shown = !want));
+    desired = want;
+    void pump();
   };
 
   // Turning a cue on with nothing running shows a short preview, so you see what you chose.
@@ -124,6 +145,7 @@ export function startScreenCues(): () => void {
     $effect(() => {
       void clock.minute;
       void timer.active;
+      void timer.active?.pausedAt;
       void cuePreview.value.until;
       const want = anyCue() && cueSubject(untrack(() => clock.now)) !== null;
       if (pending) clearTimeout(pending);

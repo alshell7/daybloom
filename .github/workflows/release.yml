@@ -50,6 +50,19 @@ jobs:
           shared-key: ${{ matrix.platform == 'windows-latest' && 'windows-release' || '' }}
           save-if: false
       - run: npm ci --no-audit --no-fund
+      # What this release brings (RELEASE_NOTES.md): the release text, and the notes in
+      # latest.json that the app's update card shows.
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<NOTES_EOF'
+            node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" || true
+            echo
+            echo '_Signed builds for macOS (Apple silicon + Intel) and Windows. Installed apps update themselves._'
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,7 +73,7 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: Daybloom v__VERSION__
-          releaseBody: Signed builds for macOS (Apple silicon + Intel) and Windows. Installed apps update themselves.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true

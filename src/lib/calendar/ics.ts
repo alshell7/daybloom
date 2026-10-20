@@ -7,7 +7,8 @@
 // RECURRENCE-ID overrides. Rules using parts we don't understand (BYHOUR, BYWEEKNO,
 // HOURLY, …) fall back to the single DTSTART instance rather than guessing dates.
 
-import type { CalendarEvent } from '../engine/types';
+import type { Attendee, CalendarEvent } from '../engine/types';
+import { meetingLabel, plainText, rsvp } from './meeting';
 import { platform } from '../platform';
 import {
   CalendarError,
@@ -354,6 +355,9 @@ interface VEvent {
   title: string;
   location?: string;
   url?: string;
+  description?: string;
+  meetUrl?: string;
+  attendees?: Attendee[];
   cancelled: boolean;
   start: IcsTime;
   duration: Span;
@@ -386,11 +390,26 @@ function readEvent(props: Prop[], ctx: Ctx): VEvent | null {
   const summary = unescapeText(get('SUMMARY')?.value ?? '').trim();
   const location = unescapeText(get('LOCATION')?.value ?? '').trim();
   const url = get('URL')?.value.trim();
+  const description = plainText(unescapeText(get('DESCRIPTION')?.value ?? ''));
+  // Google and Outlook put the meeting link in their own fields.
+  const conf = (get('X-GOOGLE-CONFERENCE') ?? get('X-MICROSOFT-SKYPETEAMSMEETINGURL'))?.value.trim();
+  const who = (p: Prop): Attendee => {
+    const email = p.value.replace(/^mailto:/i, '').trim();
+    return { ...(p.params.CN ? { name: p.params.CN } : {}), ...(email.includes('@') ? { email } : {}), status: rsvp(p.params.PARTSTAT?.replace(/-/g, '')) };
+  };
+  const organizer = get('ORGANIZER');
+  const attendees = props.filter((p) => p.name === 'ATTENDEE' && p.params.CUTYPE?.toUpperCase() !== 'ROOM' && p.params.CUTYPE?.toUpperCase() !== 'RESOURCE').map(who);
+  const orgEmail = organizer?.value.replace(/^mailto:/i, '').trim().toLowerCase();
+  for (const a of attendees) if (orgEmail && a.email?.toLowerCase() === orgEmail) a.organizer = true;
+  if (organizer && !attendees.some((a) => a.organizer)) attendees.unshift({ ...who(organizer), status: 'accepted', organizer: true });
   return {
     uid: get('UID')?.value.trim() || `${summary}@${toMs(start)}`,
     title: summary || NO_TITLE,
     location: location || undefined,
     url: url && /^https?:\/\//i.test(url) ? url : undefined,
+    description: description || undefined,
+    meetUrl: conf && /^https:\/\//i.test(conf) ? conf : undefined,
+    attendees: attendees.length > 1 ? attendees.slice(0, 60) : undefined,
     cancelled: get('STATUS')?.value.trim().toUpperCase() === 'CANCELLED',
     start,
     duration,
@@ -590,6 +609,9 @@ export interface IcsOccurrence {
   allDay: boolean;
   location?: string;
   url?: string;
+  description?: string;
+  meetUrl?: string;
+  attendees?: Attendee[];
 }
 
 export interface IcsCalendar {
@@ -636,6 +658,9 @@ export function parseIcs(text: string, range: TimeRange): IcsCalendar {
       allDay: start.kind === 'date',
       ...(ev.location ? { location: ev.location } : {}),
       ...(ev.url ? { url: ev.url } : {}),
+      ...(ev.description ? { description: ev.description } : {}),
+      ...(ev.meetUrl ? { meetUrl: ev.meetUrl } : {}),
+      ...(ev.attendees ? { attendees: ev.attendees } : {}),
     });
   };
 
@@ -856,6 +881,9 @@ export function createIcsProvider(): CalendarProvider {
           series: o.uid,
           ...(o.location ? { location: o.location } : {}),
           ...(o.url ? { htmlLink: o.url } : {}),
+          ...(o.description ? { description: o.description } : {}),
+          ...(o.meetUrl ? { meetUrl: o.meetUrl, meetLabel: meetingLabel(o.meetUrl) } : {}),
+          ...(o.attendees ? { attendees: o.attendees } : {}),
         }),
       );
     },

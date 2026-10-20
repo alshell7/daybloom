@@ -3,6 +3,7 @@
 // the OS keychain under the account id and its access token only in memory.
 
 import type { CalendarEvent } from '../engine/types';
+import { meetingLabel, plainText, rsvp } from './meeting';
 import { platform } from '../platform';
 import {
   CalendarError,
@@ -82,7 +83,13 @@ export interface GoogleEvent {
   eventType?: string;
   start?: GoogleEventTime;
   end?: GoogleEventTime;
-  attendees?: { self?: boolean; responseStatus?: string }[];
+  attendees?: { self?: boolean; responseStatus?: string; email?: string; displayName?: string; organizer?: boolean; resource?: boolean }[];
+  description?: string;
+  hangoutLink?: string;
+  conferenceData?: {
+    conferenceSolution?: { name?: string };
+    entryPoints?: { entryPointType?: string; uri?: string; label?: string }[];
+  };
   /** Instances of a repeating event (singleEvents=true) name the series they belong to. */
   recurringEventId?: string;
 }
@@ -165,7 +172,33 @@ export function mapGoogleEvent(e: GoogleEvent, accountId: string, calendar: Cale
     series: e.recurringEventId ?? e.id,
     ...(e.location ? { location: e.location } : {}),
     ...(e.htmlLink ? { htmlLink: e.htmlLink } : {}),
+    ...meetingFields(e),
   };
+}
+
+/** Google Meet (or a Zoom / Teams add-on), the notes, and who's invited. */
+function meetingFields(e: GoogleEvent): Partial<CalendarEvent> {
+  const out: Partial<CalendarEvent> = {};
+  const video = e.conferenceData?.entryPoints?.find((p) => p.entryPointType === 'video' && p.uri);
+  const url = video?.uri ?? e.hangoutLink;
+  if (url && /^https:\/\//i.test(url)) {
+    out.meetUrl = url;
+    out.meetLabel = e.conferenceData?.conferenceSolution?.name || meetingLabel(url);
+  }
+  const notes = plainText(e.description);
+  if (notes) out.description = notes;
+  const people = (e.attendees ?? []).filter((a) => !a.resource && (a.email || a.displayName));
+  // A lone entry for yourself says nothing new.
+  if (people.length > 1 || (people.length === 1 && !people[0].self)) {
+    out.attendees = people.slice(0, 60).map((a) => ({
+      ...(a.displayName ? { name: a.displayName } : {}),
+      ...(a.email ? { email: a.email } : {}),
+      status: rsvp(a.responseStatus),
+      ...(a.organizer ? { organizer: true } : {}),
+      ...(a.self ? { self: true } : {}),
+    }));
+  }
+  return out;
 }
 
 export function mapCalendarListEntry(c: GoogleCalendarListEntry): CalendarInfo {
@@ -474,9 +507,9 @@ export function createGoogleProvider(): CalendarProvider {
           maxResults: '2500',
           showDeleted: 'false',
           // With more attendees than this, Google returns only the current user's entry.
-          maxAttendees: '1',
+          maxAttendees: '60',
           fields:
-            'nextPageToken,items(id,status,summary,location,htmlLink,colorId,eventType,start,end,attendees(self,responseStatus))',
+            'nextPageToken,items(id,status,summary,location,htmlLink,colorId,eventType,start,end,recurringEventId,description,hangoutLink,conferenceData(conferenceSolution(name),entryPoints(entryPointType,uri)),attendees(self,responseStatus,email,displayName,organizer,resource))',
         },
       );
       return items

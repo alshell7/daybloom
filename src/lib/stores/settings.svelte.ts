@@ -30,7 +30,10 @@ export interface Settings {
   widget: {
     visible: boolean;
     layer: WidgetLayer;
+    /** Its own dial face (`preset`); otherwise it shows the planner's. */
+    own: boolean;
     preset: PresetId;
+    /** 'auto' = the same finish as the planner. */
     finish: FinishId;
   };
   cycles: { focus: number; short: number; long: number; rounds: number };
@@ -38,6 +41,8 @@ export interface Settings {
   onboarded: boolean;
   /** Last day the morning hello was shown. */
   lastGreeted: string;
+  /** The version whose "what's new" was last offered (this computer). */
+  seenVersion: string;
   /** IANA zone the whole app follows; '' = this computer's zone. */
   timeZone: string;
   recentZones: string[];
@@ -119,11 +124,12 @@ export const DEFAULT_SETTINGS: Settings = {
   font: 'lexend',
   launchAtLogin: false,
   menuBarTimer: true,
-  widget: { visible: false, layer: 'top', preset: 'field12', finish: 'auto' },
+  widget: { visible: false, layer: 'top', own: false, preset: 'field12', finish: 'auto' },
   cycles: { focus: 25, short: 5, long: 15, rounds: 4 },
   google: { clientId: '', clientSecret: '' },
   onboarded: false,
   lastGreeted: '',
+  seenVersion: '',
   timeZone: '',
   recentZones: [],
   autoUpdate: true,
@@ -148,7 +154,12 @@ export const DEFAULT_SETTINGS: Settings = {
 export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) => ({
   ...DEFAULT_SETTINGS,
   ...raw,
-  widget: { ...DEFAULT_SETTINGS.widget, ...(raw?.widget ?? {}) },
+  widget: {
+    ...DEFAULT_SETTINGS.widget,
+    ...(raw?.widget ?? {}),
+    // Before `own`: a face picked apart from the planner's stays the widget's own.
+    own: typeof raw?.widget?.own === 'boolean' ? raw.widget.own : !!raw?.widget?.preset && raw.widget.preset !== (raw?.preset ?? DEFAULT_SETTINGS.preset),
+  },
   cycles: { ...DEFAULT_SETTINGS.cycles, ...(raw?.cycles ?? {}) },
   google: { ...DEFAULT_SETTINGS.google, ...(raw?.google ?? {}) },
   nudges: { ...DEFAULT_SETTINGS.nudges, ...(raw?.nudges ?? {}) },

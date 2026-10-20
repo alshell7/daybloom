@@ -34,10 +34,11 @@
   }
 </script>
 
-<div class="wrap">
+<div class="wrap" data-drop="backlog">
   <button
     class="icon-btn"
     class:on={open}
+    class:drop={view.backlogDrop}
     onclick={toggle}
     aria-pressed={view.sheet?.kind === 'backlog'}
     aria-expanded={open}
@@ -83,6 +84,12 @@
 </div>
 
 <style>
+  .icon-btn.drop {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--lume) 22%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--lume) 55%, transparent);
+    transform: scale(1.12);
+  }
   .wrap {
     position: relative;
   }

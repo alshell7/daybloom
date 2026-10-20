@@ -6,7 +6,7 @@ import { startFollowingFocus, startTracker, tracker, trackerFile } from './track
 import { work } from './work/work.svelte';
 import { crumbsFile, startCrumbs } from './crumbs/crumbs.svelte';
 import { realityFile, startReality } from './reality/reality.svelte';
-import { startWaqt, waqtFile } from './waqt/waqt.svelte';
+import { startWaqt, startWaqtView, waqtFile } from './waqt/waqt.svelte';
 import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { view } from '../stores/view.svelte';
 
@@ -15,6 +15,28 @@ import { view } from '../stores/view.svelte';
  * second read could land after a sync wrote to the store and put the older copy back.
  */
 export const loaded = (f: { ready: boolean; load(): Promise<void> }) => (f.ready ? Promise.resolve() : f.load());
+
+/** The widget: what addons add to the dial (salah blocks), without their reminders. */
+export function startAddonViews(): () => void {
+  let stop: (() => void) | null = null;
+  const root = $effect.root(() => {
+    $effect(() => {
+      const on = isOn('waqt');
+      if (on && !stop) {
+        void loaded(waqtFile).then(() => {
+          if (isOn('waqt') && !stop) stop = startWaqtView();
+        });
+      } else if (!on && stop) {
+        stop();
+        stop = null;
+      }
+    });
+  });
+  return () => {
+    root();
+    stop?.();
+  };
+}
 
 export function startAddons(): () => void {
   const disconnect = work.connect({

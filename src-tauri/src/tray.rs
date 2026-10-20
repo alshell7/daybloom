@@ -1,7 +1,7 @@
 //! Menu-bar (macOS) / notification-area (Windows) icon and menu.
 
 use serde_json::json;
-use tauri::menu::{CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuEvent, MenuItemBuilder};
+use tauri::menu::{CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, MenuEvent, MenuItem, MenuItemBuilder};
 use tauri::tray::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
@@ -15,6 +15,9 @@ pub struct TrayItems {
     on_top: CheckMenuItem<Wry>,
     on_desktop: CheckMenuItem<Wry>,
     privacy: CheckMenuItem<Wry>,
+    /// "Now: Deep work · 25m left" and "Next: Lunch at 12:30", kept current by the planner.
+    now: MenuItem<Wry>,
+    next: MenuItem<Wry>,
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -25,8 +28,13 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let on_desktop =
         CheckMenuItemBuilder::with_id("layer-desktop", "Widget Sits on Desktop").build(app)?;
     let privacy = CheckMenuItemBuilder::with_id("privacy", "Privacy Mode").build(app)?;
+    let now = MenuItemBuilder::with_id("status-now", "Daybloom").build(app)?;
+    let next = MenuItemBuilder::with_id("status-next", "").enabled(false).build(app)?;
 
     let menu = MenuBuilder::new(app)
+        .item(&now)
+        .item(&next)
+        .separator()
         .item(&MenuItemBuilder::with_id("open", "Open Daybloom").build(app)?)
         .item(&show_widget)
         .separator()
@@ -43,7 +51,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .item(&MenuItemBuilder::with_id("quit", "Quit Daybloom").build(app)?)
         .build()?;
 
-    app.manage(TrayItems { show_widget, on_top, on_desktop, privacy });
+    app.manage(TrayItems { show_widget, on_top, on_desktop, privacy, now, next });
 
     let builder = TrayIconBuilder::with_id(ID)
         .tooltip("Daybloom")
@@ -78,6 +86,16 @@ pub fn sync(app: &AppHandle, visible: bool, layer: Layer) {
     }
 }
 
+/// The menu's live lines. An empty "next" reads as a quiet dash.
+pub fn set_status(app: &AppHandle, now: &str, next: &str) {
+    if let Some(items) = app.try_state::<TrayItems>() {
+        if !now.is_empty() {
+            let _ = items.now.set_text(now);
+        }
+        let _ = items.next.set_text(if next.is_empty() { "Nothing else planned today" } else { next });
+    }
+}
+
 pub fn sync_privacy(app: &AppHandle, on: bool) {
     if let Some(items) = app.try_state::<TrayItems>() {
         let _ = items.privacy.set_checked(on);
@@ -86,7 +104,7 @@ pub fn sync_privacy(app: &AppHandle, on: bool) {
 
 fn on_menu(app: &AppHandle, event: MenuEvent) {
     match event.id().as_ref() {
-        "open" => crate::show_main(app),
+        "open" | "status-now" => crate::show_main(app),
         "show-widget" => {
             // Off the menu handler: creating the widget's webview there deadlocks WebView2 on Windows.
             let app = app.clone();

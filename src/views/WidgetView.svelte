@@ -11,16 +11,30 @@
   import { timer } from '../lib/stores/timer.svelte';
   import { view } from '../lib/stores/view.svelte';
   import { nudges } from '../lib/nudges.svelte';
+  import { blocksInRange } from '../lib/engine/blocks';
+  import { addDays, startOfDayMs } from '../lib/engine/time';
+  import { taskFile } from '../lib/stores/tasks.svelte';
+  import { isOn } from '../lib/addons/registry';
+  import { prayerMarks, waqt } from '../lib/addons/waqt/waqt.svelte';
 
   // The desktop object: a watch on your wallpaper. Drag to move, double-click to open
   // the planner, hover for a few quiet controls.
   const w = $derived(settings.value.widget);
-  const presetId = $derived(w.preset);
-  const finish = $derived(resolveFinish(w.finish as FinishId, view.theme));
+  // The planner's face and finish unless the widget has its own: the two dials agree.
+  const presetId = $derived(w.own ? w.preset : settings.value.preset);
+  const finish = $derived(w.finish === 'auto' ? view.finish : resolveFinish(w.finish as FinishId, view.theme));
   const timed = $derived(presetId === 'timer60' || presetId === 'chrono');
   const ts = $derived(timer.active ? timer.status(clock.now) : null);
 
-  const rawBlocks = $derived(timed && timer.active ? timer.blocks(clock.minute, finish.dark) : view.pool);
+  // Block colours for this dial's own light or dark finish.
+  const dayPool = $derived(
+    finish.dark === view.finish.dark ? view.pool : blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(addDays(view.today, -1)), startOfDayMs(addDays(view.today, 2)), finish.dark),
+  );
+  const rawBlocks = $derived(timed && timer.active ? timer.blocks(clock.minute, finish.dark) : dayPool);
+  // The widget always shows today, also after midnight.
+  $effect(() => {
+    if (view.date !== view.today) view.date = view.today;
+  });
   // Privacy mode can swap names for categories on this shared surface.
   const blocks = $derived(hidingNames() ? rawBlocks.map((b) => ({ ...b, title: shownTitle(b.title, b.category) })) : rawBlocks);
   const nowState = $derived.by(() => {
@@ -42,9 +56,11 @@
     return null;
   });
 
+  /** Its own face from here on (Settings › Screen › Widget can make it follow again). */
   function cyclePreset() {
     const i = PRESET_ORDER.indexOf(presetId);
     settings.value.widget.preset = PRESET_ORDER[(i + 1) % PRESET_ORDER.length];
+    settings.value.widget.own = true;
   }
 
   async function toggleLayer() {
@@ -119,6 +135,9 @@
       {wedge}
       hideKey={wedge?.key ?? null}
       dayCompleteAt={view.dayCompleteAt}
+      hour12={view.hour12}
+      prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
+      prayerBloom={waqt.bloom}
       label="Daybloom widget"
     >
       <Readout
