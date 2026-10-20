@@ -624,8 +624,10 @@ export function browserStore(
       try {
         const res = await fetchImpl(w.url, { signal: ac.signal, credentials: 'omit', cache: 'no-store' });
         if (!res.ok || !res.body) throw new Error(`download failed: HTTP ${res.status}`);
+        // A CDN may send it compressed (the length is then the compressed size, and the body
+        // arrives inflated), so only more than expected is wrong here; size and hash are checked below.
         const len = Number(res.headers.get('content-length') ?? NaN);
-        if (Number.isFinite(len) && len !== w.bytes) {
+        if (Number.isFinite(len) && len > w.bytes) {
           throw new Error(`download failed: expected ${w.bytes} bytes, the server offered ${len}`);
         }
         const buf = new Uint8Array(w.bytes);

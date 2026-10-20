@@ -3,7 +3,7 @@
 // voice goes through the app's sound switch and volume.
 
 import { audioOut } from '../../sound';
-import { babble } from './chirps';
+import { babble, speaker } from './chirps';
 
 export type VoiceMode = 'chirps' | 'speech' | 'system' | 'off';
 
@@ -58,31 +58,9 @@ export async function speak(text: string, mode: VoiceMode, o: { pitch: number; v
       const pcm = await o.tts.synth(words, { speed: 1 });
       const out = pcm && audioOut();
       if (pcm && out) {
-        const { ctx, master } = out;
-        const buf = ctx.createBuffer(1, pcm.samples.length, pcm.rate);
-        buf.copyToChannel(pcm.samples as Float32Array<ArrayBuffer>, 0);
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        // A little higher and brighter: a small robot, not a grown-up.
-        const rate = 1.08 + (o.pitch - 1) * 0.6;
-        src.playbackRate.value = rate;
-        const g = ctx.createGain();
-        g.gain.value = Math.max(0, Math.min(1, o.volume)) * 0.9;
-        const shelf = ctx.createBiquadFilter();
-        shelf.type = 'highshelf';
-        shelf.frequency.value = 3200;
-        shelf.gain.value = 3;
-        src.connect(shelf).connect(g).connect(master);
-        src.start();
-        const total = buf.duration / rate;
-        stopCurrent = () => {
-          try {
-            src.stop();
-          } catch {
-            /* ended */
-          }
-        };
-        src.onended = () => g.disconnect();
+        const r = playPcm(pcm, out, o);
+        stopCurrent = r.stop;
+        const total = r.total;
         return { starts: paced(words, total), total };
       }
     } catch (e) {
@@ -91,6 +69,39 @@ export async function speak(text: string, mode: VoiceMode, o: { pitch: number; v
     // Not ready or failed: the system voice says it instead.
   }
   return systemVoice(words, o);
+}
+
+/**
+ * Play the spoken voice like Alef's own: a little higher and quicker (a small robot, not a
+ * grown-up), through the same small speaker as its chirps.
+ */
+export function playPcm(pcm: { samples: Float32Array; rate: number }, out: { ctx: BaseAudioContext; master: AudioNode }, o: { pitch: number; volume: number }): { total: number; stop: () => void } {
+  const { ctx, master } = out;
+  const buf = ctx.createBuffer(1, pcm.samples.length, pcm.rate);
+  buf.copyToChannel(pcm.samples as Float32Array<ArrayBuffer>, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const rate = 1.14 + (o.pitch - 1) * 0.6;
+  src.playbackRate.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = Math.max(0, Math.min(1, o.volume)) * 0.48;
+  const { input, release } = speaker(ctx, master, { grit: 0.1 });
+  src.connect(g).connect(input);
+  src.start();
+  src.onended = () => {
+    g.disconnect();
+    release();
+  };
+  return {
+    total: buf.duration / rate,
+    stop: () => {
+      try {
+        src.stop();
+      } catch {
+        /* ended */
+      }
+    },
+  };
 }
 
 let voices: SpeechSynthesisVoice[] = [];

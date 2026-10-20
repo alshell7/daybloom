@@ -481,7 +481,12 @@ async function snapshot(now: number, idleMin: number): Promise<Snapshot> {
 export function startAlef(): () => void {
   alef.mirror = true;
   void alef.refreshKey();
-  void import('./tts/tts.svelte').then((m) => (alef.tts = m.tinyTts)).catch(() => {});
+  void import('./tts/tts.svelte')
+    .then((m) => {
+      alef.tts = m.tinyTts;
+      void m.tinyTts.check();
+    })
+    .catch(() => {});
   let seen: Seen = NOTHING_SEEN;
   let idleMin = 0;
   let lastTick = Date.now();

@@ -155,6 +155,56 @@ function gritCurve(): Float32Array<ArrayBuffer> {
   return c;
 }
 
+/**
+ * A small robot's speaker, shared by the chirps and the spoken voice: no deep bass, a tinny
+ * presence, a soft top, a touch of digital grit, a gentle compressor for even loudness and a
+ * very short, quiet echo, like a small room.
+ */
+export function speaker(ctx: BaseAudioContext, master: AudioNode, o: { grit?: number } = {}): { input: AudioNode; release: () => void } {
+  const low = ctx.createBiquadFilter();
+  low.type = 'highpass';
+  low.frequency.value = 170;
+  const presence = ctx.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = 2500;
+  presence.Q.value = 1.1;
+  presence.gain.value = 5;
+  const tone = ctx.createBiquadFilter();
+  tone.type = 'lowpass';
+  tone.frequency.value = 6800;
+  tone.Q.value = 0.5;
+  const grit = ctx.createWaveShaper();
+  grit.curve = gritCurve();
+  const gritGain = ctx.createGain();
+  gritGain.gain.value = o.grit ?? 0.16;
+  const clean = ctx.createGain();
+  clean.gain.value = 0.9;
+  const even = ctx.createDynamicsCompressor();
+  even.threshold.value = -22;
+  even.knee.value = 14;
+  even.ratio.value = 5;
+  even.attack.value = 0.004;
+  even.release.value = 0.12;
+  const makeup = ctx.createGain();
+  makeup.gain.value = 1.5;
+  const room = ctx.createDelay(0.1);
+  room.delayTime.value = 0.027;
+  const roomGain = ctx.createGain();
+  roomGain.gain.value = 0.16;
+  low.connect(presence);
+  presence.connect(clean).connect(tone);
+  presence.connect(grit).connect(gritGain).connect(tone);
+  tone.connect(even).connect(makeup).connect(master);
+  makeup.connect(room).connect(roomGain).connect(master);
+  return {
+    input: low,
+    release: () => {
+      makeup.disconnect();
+      roomGain.disconnect();
+    },
+  };
+}
+
 /** A take: the same utterance, never quite the same twice (pitch, timing and colour vary a little). */
 export function vary(syls: Syl[], rnd: () => number = Math.random): Syl[] {
   const shift = 0.94 + rnd() * 0.12;
@@ -177,44 +227,8 @@ export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total:
   const pitch = Math.max(0.6, Math.min(1.6, o.pitch ?? 1)) * VOICE_BASE;
   const bus = ctx.createGain();
   bus.gain.value = Math.max(0, Math.min(1, o.volume ?? 0.8)) * 0.55;
-  // A small robot's speaker: no deep bass, a tinny presence, a soft top, a touch of digital
-  // grit mixed in, and a very short, quiet echo, like a small room.
-  const low = ctx.createBiquadFilter();
-  low.type = 'highpass';
-  low.frequency.value = 170;
-  const presence = ctx.createBiquadFilter();
-  presence.type = 'peaking';
-  presence.frequency.value = 2500;
-  presence.Q.value = 1.1;
-  presence.gain.value = 5;
-  const tone = ctx.createBiquadFilter();
-  tone.type = 'lowpass';
-  tone.frequency.value = 6800;
-  tone.Q.value = 0.5;
-  const grit = ctx.createWaveShaper();
-  grit.curve = gritCurve();
-  const gritGain = ctx.createGain();
-  gritGain.gain.value = 0.16;
-  const clean = ctx.createGain();
-  clean.gain.value = 0.9;
-  bus.connect(low).connect(presence);
-  presence.connect(clean).connect(tone);
-  presence.connect(grit).connect(gritGain).connect(tone);
-  const room = ctx.createDelay(0.1);
-  room.delayTime.value = 0.027;
-  const roomGain = ctx.createGain();
-  roomGain.gain.value = 0.16;
-  // Even loudness whichever vowel lands on a harmonic: a gentle compressor.
-  const even = ctx.createDynamicsCompressor();
-  even.threshold.value = -22;
-  even.knee.value = 14;
-  even.ratio.value = 5;
-  even.attack.value = 0.004;
-  even.release.value = 0.12;
-  const makeup = ctx.createGain();
-  makeup.gain.value = 1.5;
-  tone.connect(even).connect(makeup).connect(master);
-  makeup.connect(room).connect(roomGain).connect(master);
+  const { input, release } = speaker(ctx, master);
+  bus.connect(input);
 
   let t = ctx.currentTime + 0.02;
   const t0 = t;
@@ -309,7 +323,7 @@ export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total:
   if (!o.out)
     setTimeout(() => {
       bus.disconnect();
-      roomGain.disconnect();
+      release();
     }, (t - ctx.currentTime + 0.6) * 1000);
   return { starts, total: t - t0 };
 }

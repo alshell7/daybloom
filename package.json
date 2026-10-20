@@ -24,7 +24,8 @@
     "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-updater": "^2.14.0",
     "@tauri-apps/plugin-window-state": "^2.5.0",
-    "adhan": "^4.4.6"
+    "adhan": "^4.4.6",
+    "onnxruntime-web": "1.29.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

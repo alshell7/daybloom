@@ -5,7 +5,7 @@
   import { onMount } from 'svelte';
   import { alef, alefFile, EYE_COLORS, keyAccount, type Brain } from '../../../lib/addons/alef/alef.svelte';
   import { chatOnce, LlmError, listModels, PROVIDERS, providerOf, type ProviderId } from '../../../lib/addons/alef/llm';
-  import { tinyTts } from '../../../lib/addons/alef/tts/tts.svelte';
+  import { tinyTts, VOICE_BYTES } from '../../../lib/addons/alef/tts/tts.svelte';
   import type { VoiceMode } from '../../../lib/addons/alef/voice';
   import Icon from '../../../lib/Icon.svelte';
   import { platform } from '../../../lib/platform';
@@ -21,6 +21,7 @@
   onMount(() => {
     session.open();
     void alef.refreshKey();
+    void tinyTts.check();
   });
 
   // ── Voice ──
@@ -231,7 +232,7 @@
           <span class="muted">{tinyTts.status === 'loading' ? 'Waking up…' : `Downloading… ${Math.round(tinyTts.progress * 100)}%`}</span>
         {:else}
           <button class="btn btn-soft" onclick={() => void tinyTts.download()}><Icon name="download" size={14} /> Get Alef's voice</button>
-          <span class="muted">{tinyTts.error ?? 'About 25 MB, once. It speaks on this device; until then the system voice speaks.'}</span>
+          <span class="muted">{tinyTts.error ?? `About ${Math.round(VOICE_BYTES / 1e6)} MB, once, checked and kept on this device. Until then, your computer's voice speaks.`}</span>
         {/if}
       </div>
     {/if}

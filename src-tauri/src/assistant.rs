@@ -1,5 +1,7 @@
 //! On-device weights store for the assistant models by Cactus Compute (Apache-2.0): Needle
-//! (`needle3.cact`, tool calling) and Whistle (`whistle.cact`, speech to text).
+//! (`needle3.cact`, tool calling) and Whistle (`whistle.cact`, speech to text); and Alef's
+//! voice: the tiny-tts model and its word lists (Apache-2.0) and the ONNX Runtime it runs on
+//! (MIT). Each file may only come from its own pinned source (`source_of`).
 //!
 //! The weights are not bundled. They download once, only when the user asks, from a pinned
 //! Hugging Face revision into `app_data_dir()/models/`, and are SHA-256 verified before they
@@ -28,10 +30,26 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The model files this store may hold. The first one is the default.
-const MODELS: [&str; 2] = ["needle3.cact", "whistle.cact"];
+const MODELS: [&str; 6] = [
+    "needle3.cact",
+    "whistle.cact",
+    "tinytts.onnx",
+    "tinytts-cmudict.json",
+    "tinytts-g2p.json",
+    "ort-wasm-simd-threaded.wasm",
+];
 const PROGRESS_EVENT: &str = "daybloom://needle-progress";
-/// The only place a model may come from (the redirect target is checked separately).
-const SOURCE_PREFIX: &str = "/Cactus-Compute/";
+
+/// Where each file may come from: the host and the path it must start with (redirects are
+/// checked separately). Hugging Face for the models, pinned npm paths on jsDelivr for the rest.
+fn source_of(name: &str) -> (&'static str, &'static str) {
+    match name {
+        "tinytts.onnx" => ("huggingface.co", "/backtracking/tiny-tts/resolve/"),
+        "tinytts-cmudict.json" | "tinytts-g2p.json" => ("cdn.jsdelivr.net", "/npm/tiny-tts@5.0.1/"),
+        "ort-wasm-simd-threaded.wasm" => ("cdn.jsdelivr.net", "/npm/onnxruntime-web@1.29.0/dist/"),
+        _ => ("huggingface.co", "/Cactus-Compute/"),
+    }
+}
 /// Sanity ceiling; the pinned model is ~35 MB.
 const MAX_BYTES: u64 = 512 * 1024 * 1024;
 const NOT_DOWNLOADED: &str = "weights not downloaded";
@@ -116,19 +134,28 @@ fn stored_hash(p: &Paths) -> Option<String> {
     fs::read_to_string(&p.hash).ok().and_then(|s| check_hash(&s).ok())
 }
 
-/// Starting URL: https://huggingface.co/Cactus-Compute/… and nothing else.
-fn check_source(url: &str) -> Result<Url, String> {
+/// Starting URL: the file's own pinned source (`source_of`) and nothing else.
+fn check_source(name: &str, url: &str) -> Result<Url, String> {
+    let (host, prefix) = source_of(name);
     let u = Url::parse(url).map_err(|_| "invalid model URL".to_string())?;
     let ok = u.scheme() == "https"
-        && u.host_str() == Some("huggingface.co")
+        && u.host_str() == Some(host)
         && u.port().is_none()
         && u.username().is_empty()
         && u.password().is_none()
-        && u.path().starts_with(SOURCE_PREFIX);
+        && u.path().starts_with(prefix);
     if ok {
         Ok(u)
     } else {
-        Err(format!("refusing to download a model from {url}: only https://huggingface.co{SOURCE_PREFIX} is allowed"))
+        Err(format!("refusing to download {name} from {url}: only https://{host}{prefix} is allowed"))
+    }
+}
+
+/// Where a download may be redirected: Hugging Face's own CDN for its files; jsDelivr stays put.
+fn redirect_ok(name: &str, u: &Url) -> bool {
+    match source_of(name).0 {
+        "cdn.jsdelivr.net" => u.scheme() == "https" && u.username().is_empty() && u.password().is_none() && u.host_str() == Some("cdn.jsdelivr.net"),
+        _ => is_hf_host(u),
     }
 }
 
@@ -195,7 +222,7 @@ pub async fn assistant_weights_download(
     bytes: u64,
 ) -> Result<(), String> {
     let name = model(name.as_deref())?;
-    let url = check_source(&url)?;
+    let url = check_source(name, &url)?;
     let sha256 = check_hash(&sha256)?;
     if bytes == 0 || bytes > MAX_BYTES {
         return Err("unexpected model size".into());
@@ -230,7 +257,7 @@ async fn download(
         .redirect(Policy::custom(|attempt| {
             if attempt.previous().len() >= 10 {
                 attempt.error("too many redirects")
-            } else if is_hf_host(attempt.url()) {
+            } else if redirect_ok(name, attempt.url()) {
                 attempt.follow()
             } else {
                 let host = attempt.url().host_str().unwrap_or("?").to_string();
@@ -248,7 +275,7 @@ async fn download(
     if !resp.status().is_success() {
         return Err(format!("download failed: HTTP {}", resp.status().as_u16()));
     }
-    if !is_hf_host(resp.url()) {
+    if !redirect_ok(name, resp.url()) {
         return Err("download failed: unexpected host".into());
     }
     if let Some(len) = resp.content_length() {
@@ -367,13 +394,31 @@ mod tests {
 
     #[test]
     fn only_the_pinned_org_is_a_source() {
-        assert!(check_source("https://huggingface.co/Cactus-Compute/needle3/resolve/abc/needle3.cact").is_ok());
-        assert!(check_source("http://huggingface.co/Cactus-Compute/x").is_err());
-        assert!(check_source("https://huggingface.co/someone/x").is_err());
-        assert!(check_source("https://huggingface.co/Cactus-Compute/../evil/x").is_err());
-        assert!(check_source("https://huggingface.co.evil.com/Cactus-Compute/x").is_err());
-        assert!(check_source("https://user@huggingface.co/Cactus-Compute/x").is_err());
-        assert!(check_source("https://huggingface.co:8443/Cactus-Compute/x").is_err());
+        let n = MODELS[0];
+        assert!(check_source(n, "https://huggingface.co/Cactus-Compute/needle3/resolve/abc/needle3.cact").is_ok());
+        assert!(check_source(n, "http://huggingface.co/Cactus-Compute/x").is_err());
+        assert!(check_source(n, "https://huggingface.co/someone/x").is_err());
+        assert!(check_source(n, "https://huggingface.co/Cactus-Compute/../evil/x").is_err());
+        assert!(check_source(n, "https://huggingface.co.evil.com/Cactus-Compute/x").is_err());
+        assert!(check_source(n, "https://user@huggingface.co/Cactus-Compute/x").is_err());
+        assert!(check_source(n, "https://huggingface.co:8443/Cactus-Compute/x").is_err());
+    }
+
+    #[test]
+    fn each_voice_file_comes_only_from_its_pinned_place() {
+        assert!(check_source("tinytts.onnx", "https://huggingface.co/backtracking/tiny-tts/resolve/6d0cc902621451fcd47462b50ee0aabc6a852e25/tinytts.onnx").is_ok());
+        assert!(check_source("tinytts.onnx", "https://huggingface.co/Cactus-Compute/needle3/resolve/x/needle3.cact").is_err());
+        assert!(check_source("tinytts-cmudict.json", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/cmudict.json").is_ok());
+        assert!(check_source("tinytts-cmudict.json", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.2/cmudict.json").is_err());
+        assert!(check_source("tinytts-g2p.json", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/../evil/x").is_err());
+        assert!(check_source("ort-wasm-simd-threaded.wasm", "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.29.0/dist/ort-wasm-simd-threaded.wasm").is_ok());
+        assert!(check_source("ort-wasm-simd-threaded.wasm", "https://cdn.jsdelivr.net/gh/someone/x").is_err());
+        assert!(check_source("needle3.cact", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/cmudict.json").is_err());
+        let to = |s: &str| Url::parse(s).unwrap();
+        assert!(redirect_ok("tinytts.onnx", &to("https://us.aws.cdn.hf.co/x")));
+        assert!(!redirect_ok("tinytts-g2p.json", &to("https://us.aws.cdn.hf.co/x")));
+        assert!(redirect_ok("tinytts-g2p.json", &to("https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/g2p_model.json")));
+        assert!(!redirect_ok("tinytts-g2p.json", &to("https://evil.example/x")));
     }
 
     #[test]
@@ -403,13 +448,13 @@ mod tests {
         let state = Weights::default();
         let block_on = tauri::async_runtime::block_on;
         let started = Instant::now();
-        block_on(download(&emit, &state, MODELS[0], &p, check_source(URL).unwrap(), SHA, BYTES)).unwrap();
+        block_on(download(&emit, &state, MODELS[0], &p, check_source(MODELS[0], URL).unwrap(), SHA, BYTES)).unwrap();
         eprintln!("downloaded + verified in {:?}, {} progress events", started.elapsed(), ticks.load(std::sync::atomic::Ordering::Relaxed));
         assert_eq!(fs::metadata(&p.file).unwrap().len(), BYTES);
         assert_eq!(fs::read_to_string(&p.hash).unwrap(), SHA);
         assert!(!p.part.exists());
         // A wrong pin fails verification and leaves nothing behind.
-        let bad = block_on(download(&emit, &state, MODELS[0], &p, check_source(URL).unwrap(), &"0".repeat(64), BYTES));
+        let bad = block_on(download(&emit, &state, MODELS[0], &p, check_source(MODELS[0], URL).unwrap(), &"0".repeat(64), BYTES));
         assert!(bad.unwrap_err().starts_with("hash mismatch"));
         let _ = fs::remove_dir_all(&dir);
     }
@@ -424,10 +469,26 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("daybloom-whistle-test-{}", std::process::id()));
         let p = paths_in(&dir, MODELS[1]);
         let state = Weights::default();
-        tauri::async_runtime::block_on(download(&|_| {}, &state, MODELS[1], &p, check_source(URL).unwrap(), SHA, BYTES)).unwrap();
+        tauri::async_runtime::block_on(download(&|_| {}, &state, MODELS[1], &p, check_source(MODELS[1], URL).unwrap(), SHA, BYTES)).unwrap();
         assert_eq!(fs::metadata(&p.file).unwrap().len(), BYTES);
         assert_eq!(fs::read_to_string(&p.hash).unwrap(), SHA);
         assert!(state.verified.lock().unwrap().contains_key(MODELS[1]));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Real download of a voice file from jsDelivr (4.5 MB): `cargo test --lib assistant -- --ignored`.
+    #[test]
+    #[ignore]
+    fn downloads_and_verifies_a_voice_file() {
+        const NAME: &str = "tinytts-g2p.json";
+        const URL: &str = "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/g2p_model.json";
+        const SHA: &str = "b9bf424ae0d6fea011960032cee6615097db23ab71c5770576c9c44103f1b49f";
+        const BYTES: u64 = 4_486_462;
+        let dir = std::env::temp_dir().join(format!("daybloom-voice-test-{}", std::process::id()));
+        let p = paths_in(&dir, NAME);
+        let state = Weights::default();
+        tauri::async_runtime::block_on(download(&|_| {}, &state, NAME, &p, check_source(NAME, URL).unwrap(), SHA, BYTES)).unwrap();
+        assert_eq!(fs::metadata(&p.file).unwrap().len(), BYTES);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -437,6 +498,7 @@ mod tests {
         assert_eq!(model(Some("whistle.cact")).unwrap(), "whistle.cact");
         assert!(model(Some("../secrets")).is_err());
         assert!(model(Some("needle3.cact.part")).is_err());
+        assert_eq!(model(Some("tinytts.onnx")).unwrap(), "tinytts.onnx");
         assert!(model(Some("")).is_err());
     }
 
