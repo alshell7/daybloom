@@ -105,3 +105,5 @@ export function startUpdateChecks(): () => void {
     clearInterval(every);
   };
 }
+
+if (import.meta.env.DEV) (globalThis as { __updates?: typeof updates }).__updates = updates;

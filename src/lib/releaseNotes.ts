@@ -26,21 +26,25 @@ function plain(s: string): string {
     .trim();
 }
 
-/** Groups and items from a version's notes. Lines outside a `###` group are ignored. */
+/**
+ * Groups and items from a version's notes: Markdown (`### New`, `- **Name** — text`) or the
+ * plain form the update feed carries (`New`, `• Name — text`). Other lines are ignored.
+ */
 export function parseNotes(md: string): NoteGroup[] {
   const out: NoteGroup[] = [];
   let cur: NoteGroup | null = null;
   for (const raw of md.split('\n')) {
     const line = raw.trim();
-    const h = /^###\s+(.+)$/.exec(line);
+    const h = /^###\s+(.+)$/.exec(line) ?? /^(New|Addons|Fixes)$/i.exec(line);
     if (h) {
       cur = { title: plain(h[1]), icon: ICONS[plain(h[1]).toLowerCase()] ?? 'sparkles', items: [] };
       out.push(cur);
       continue;
     }
-    const li = /^[-*]\s+(.+)$/.exec(line);
+    const li = /^[-*•]\s+(.+)$/.exec(line);
     if (li && cur) {
-      const m = /^\*\*(.+?)\*\*\s*(?:[—–:-]\s*)?(.*)$/.exec(li[1]);
+      // A name only when a dash or colon follows it ("**Name** — text", "Name — text").
+      const m = /^\*\*(.+?)\*\*\s*[—–:-]\s*(.*)$/.exec(li[1]) ?? /^([^—–*]{1,60}?)\s+[—–]\s+(.*)$/.exec(li[1]);
       cur.items.push(m ? { name: plain(m[1]), text: plain(m[2]) } : { name: '', text: plain(li[1]) });
     }
   }

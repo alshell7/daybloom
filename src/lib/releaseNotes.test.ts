@@ -50,3 +50,22 @@ describe('release notes', () => {
     expect(versions().length).toBeGreaterThan(0);
   });
 });
+
+describe('release notes in the update feed', () => {
+  it('reads the plain feed form exactly as the Markdown, for every release', async () => {
+    // @ts-expect-error a plain .mjs script
+    const { plain } = await import('../../scripts/release-notes.mjs');
+    const { readFileSync } = await import('node:fs');
+    const file = readFileSync('RELEASE_NOTES.md', 'utf8');
+    for (const v of versions(file)) {
+      const lines = file.split('\n');
+      const start = lines.findIndex((l) => l.trim() === `## ${v}`);
+      const end = lines.findIndex((l, i) => i > start && /^## /.test(l));
+      const md = lines.slice(start + 1, end < 0 ? undefined : end).join('\n');
+      const flat = plain(md);
+      expect(flat).not.toMatch(/\*\*|^#|^- /m);
+      expect(parseNotes(flat)).toEqual(parseNotes(md));
+    }
+    expect(plain('### Fixes\n\n- **Sounds** — play `reliably`.\n\n_Signed builds._')).toBe('Fixes\n\n• Sounds — play reliably.\n\nSigned builds.');
+  });
+});

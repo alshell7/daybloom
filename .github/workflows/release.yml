@@ -97,6 +97,15 @@ jobs:
     needs: [bundle, check]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Plain-text notes in the update feed (apps before 0.1.12 show them as-is)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --pattern latest.json -D feed
+          node scripts/release-notes.mjs --plain-json feed/latest.json
+          head -c 400 feed/latest.json
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" feed/latest.json --clobber
       - name: Publish the release (installed copies update from it from now on)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
