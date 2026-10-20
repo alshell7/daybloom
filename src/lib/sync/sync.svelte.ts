@@ -7,9 +7,13 @@
 //   <folder>/streaks.json      last celebrated rhythm milestone
 //   <folder>/work.json         the Work addon (see ./addons.ts)
 //   <folder>/tracker.json      the Time Tracker addon
+//   <folder>/crumbs.json       the Breadcrumbs addon
+//   <folder>/reality.json      the Reality check addon
+//   <folder>/waqt.json         the Waqt addon (settings and prayed marks)
 //   <folder>/device-<id>.json  a heartbeat per computer (name, last sync)
 //
-// An addon file is only written once some computer has used that addon.
+// An addon file is only written once some computer has used that addon. The MCP addon
+// never syncs: its key and activity list belong to one computer.
 //
 // Each sync lists the folder once, fetches only files whose sha moved, three-way merges
 // them against the snapshot from the last sync (`sync-base-<file>`), writes back only
@@ -22,12 +26,34 @@ import { progressFile } from '../stores/progress.svelte';
 import { settings } from '../stores/settings.svelte';
 import { streakFile } from '../stores/streaks.svelte';
 import { taskFile } from '../stores/tasks.svelte';
+import { crumbsFile } from '../addons/crumbs/crumbs.svelte';
+import type { CrumbsFile } from '../addons/crumbs/migrate';
+import type { RealityFile } from '../addons/reality/reality';
+import { realityFile } from '../addons/reality/reality.svelte';
 import { trackerFile } from '../addons/tracker/tracker.svelte';
 import type { TrackerFile } from '../addons/tracker/types';
+import type { WaqtFile } from '../addons/waqt/types';
+import { waqtFile } from '../addons/waqt/waqt.svelte';
 import type { WorkData } from '../addons/work/types';
 import { loadWork, workFile } from '../addons/work/work.svelte';
 import type { Task } from '../engine/types';
-import { mergeTrackerFiles, mergeWorkFiles, parseTrackerFile, parseWorkFile, trackerUnused, workUnused } from './addons';
+import {
+  crumbsUnused,
+  mergeCrumbsFiles,
+  mergeRealityFiles,
+  mergeTrackerFiles,
+  mergeWaqtFiles,
+  mergeWorkFiles,
+  parseCrumbsFile,
+  parseRealityFile,
+  parseTrackerFile,
+  parseWaqtFile,
+  parseWorkFile,
+  realityUnused,
+  trackerUnused,
+  waqtUnused,
+  workUnused,
+} from './addons';
 import { createGitHubClient, GitHubError, parseRepo, type DirEntry, type FetchLike, type GitHubClient, type RepoInfo } from './github';
 import {
   applySharedSettings,
@@ -64,8 +90,8 @@ const HEARTBEAT_ON_WRITE_MS = 15 * 60_000;
 /** Back-off before each attempt at writing one file (sha conflicts). */
 const ATTEMPT_DELAYS = [0, 400, 1500];
 
-const DATA_FILES = ['tasks.json', 'settings.json', 'progress.json', 'streaks.json', 'work.json', 'tracker.json'];
-const BASE_KEYS = ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker'] as const;
+const DATA_FILES = ['tasks.json', 'settings.json', 'progress.json', 'streaks.json', 'work.json', 'tracker.json', 'crumbs.json', 'reality.json', 'waqt.json'];
+const BASE_KEYS = ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker', 'crumbs', 'reality', 'waqt'] as const;
 type BaseKey = (typeof BASE_KEYS)[number];
 
 export interface DeviceInfo {
@@ -124,6 +150,12 @@ export interface SyncStores {
   work: Binding<WorkData>;
   /** The Time Tracker addon's whole file ('addon-tracker'). */
   tracker: Binding<TrackerFile>;
+  /** The Breadcrumbs addon's whole file ('addon-crumbs'). */
+  crumbs: Binding<CrumbsFile>;
+  /** The Reality check addon's whole file ('addon-reality'). */
+  reality: Binding<RealityFile>;
+  /** The Waqt addon's whole file ('addon-waqt'). */
+  waqt: Binding<WaqtFile>;
   /**
    * Calls back after any change to the synced stores, but only while `active()` is true
    * (so nothing is watched for people who never turn sync on). Returns a stop function.
@@ -221,7 +253,37 @@ function codecs(s: SyncStores): Codec<any>[] {
     parse: parseTrackerFile,
     merge: mergeTrackerFiles,
   };
-  return [tasks, shared, progress, streaks, work, tracker];
+  const crumbs: Codec<CrumbsFile> = {
+    key: 'crumbs',
+    file: 'crumbs.json',
+    replaceOnJoin: true,
+    unused: crumbsUnused,
+    read: () => parseCrumbsFile(s.crumbs.read()),
+    write: (v) => s.crumbs.write(v),
+    parse: parseCrumbsFile,
+    merge: mergeCrumbsFiles,
+  };
+  const reality: Codec<RealityFile> = {
+    key: 'reality',
+    file: 'reality.json',
+    replaceOnJoin: true,
+    unused: realityUnused,
+    read: () => parseRealityFile(s.reality.read()),
+    write: (v) => s.reality.write(v),
+    parse: parseRealityFile,
+    merge: mergeRealityFiles,
+  };
+  const waqt: Codec<WaqtFile> = {
+    key: 'waqt',
+    file: 'waqt.json',
+    replaceOnJoin: true,
+    unused: waqtUnused,
+    read: () => parseWaqtFile(s.waqt.read()),
+    write: (v) => s.waqt.write(v),
+    parse: parseWaqtFile,
+    merge: mergeWaqtFiles,
+  };
+  return [tasks, shared, progress, streaks, work, tracker, crumbs, reality, waqt];
 }
 
 export function normalizeFolder(input: string): string {
@@ -781,7 +843,7 @@ function bindApp(): Promise<SyncStores> {
     // data that's sitting on disk. The Work store starts its load on import; `loadWork`
     // shares that one rather than reading the file twice.
     await Promise.all([
-      ...[taskFile, settings, progressFile, streakFile, trackerFile].filter((s) => !s.ready).map((s) => s.load()),
+      ...[taskFile, settings, progressFile, streakFile, trackerFile, crumbsFile, realityFile, waqtFile].filter((s) => !s.ready).map((s) => s.load()),
       workFile.ready ? null : loadWork(),
     ]);
     const bind = <T>(s: { value: T }): Binding<T> => ({
@@ -797,6 +859,9 @@ function bindApp(): Promise<SyncStores> {
       streaks: bind(streakFile),
       work: bind(workFile),
       tracker: bind(trackerFile),
+      crumbs: bind(crumbsFile),
+      reality: bind(realityFile),
+      waqt: bind(waqtFile),
       watch(onChange, active) {
         return $effect.root(() => {
           $effect(() => {
@@ -807,6 +872,9 @@ function bindApp(): Promise<SyncStores> {
             JSON.stringify(streakFile.value);
             JSON.stringify(workFile.value);
             JSON.stringify(trackerFile.value);
+            JSON.stringify(crumbsFile.value);
+            JSON.stringify(realityFile.value);
+            JSON.stringify(waqtFile.value);
             untrack(onChange);
           });
         });

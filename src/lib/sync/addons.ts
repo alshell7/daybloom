@@ -2,6 +2,11 @@
 //
 //   <folder>/work.json      the Work addon (clients, projects, assignments, invoices, …)
 //   <folder>/tracker.json   the Time Tracker addon (entries and its settings)
+//   <folder>/crumbs.json    Breadcrumbs (notes left on tasks, parked thoughts, its settings)
+//   <folder>/reality.json   Reality check (how long finished blocks really took)
+//   <folder>/waqt.json      Waqt (its settings and the prayers you marked)
+//
+// The MCP addon never syncs: its key and its activity list belong to one computer.
 //
 // Same contract as merge.ts: `base` is the snapshot both sides agreed on at the last
 // sync, `local` is this device and `remote` the repo. With no base (a first sync, so
@@ -11,10 +16,14 @@
 // result is normalised, through the addon's own migrate, so a garbled or future file
 // is repaired and never reaches a store as it is.
 
+import { migrateCrumbs, trim, type CrumbsFile } from '../addons/crumbs/migrate';
+import { MAX_SAMPLES, migrateReality, type RealityFile, type Sample, type SampleSource } from '../addons/reality/reality';
 import { migrateTrackerFile } from '../addons/tracker/migrate';
 import type { AppTime, Entry, TrackerFile } from '../addons/tracker/types';
 import { nextInvoiceNumber, parseInvoiceNumber, yearOf } from '../addons/work/invoices';
 import { migrateWork, reconcileInvoicedKeys } from '../addons/work/migrate';
+import { migrateWaqt } from '../addons/waqt/defaults';
+import { PRAYERS, type Marked, type PrayerId, type WaqtFile } from '../addons/waqt/types';
 import type { Invoice, WorkData } from '../addons/work/types';
 import { byId, clone, deepEqual, pick, unionKeys } from './merge';
 
@@ -215,5 +224,147 @@ export function mergeWorkFiles(base: WorkData | null, local: WorkData, remote: W
     invoicedKeys: reconcileInvoicedKeys(invoices, {}),
     settings: mergeFields(b.settings, local.settings, remote.settings),
     profile,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Breadcrumbs
+
+const byTime = <T extends { id: string; at: number }>(a: T, z: T) => a.at - z.at || compareIds(a.id, z.id);
+const newer = <T extends { at: number }>(l: T, r: T) => (r.at > l.at ? r : l);
+
+/** Anything (a repo file, a store snapshot) → a valid Breadcrumbs file, both lists in time order. */
+export function parseCrumbsFile(raw: unknown): CrumbsFile {
+  const f = migrateCrumbs(raw);
+  return { ...f, crumbs: trim(f.crumbs.sort(byTime)), parked: f.parked.sort(byTime) };
+}
+
+/** True when this device holds nothing worth a file (the addon was never used here). */
+export function crumbsUnused(file: CrumbsFile): boolean {
+  return deepEqual(file, parseCrumbsFile(null));
+}
+
+/**
+ * Notes and parked thoughts by id (see `mergeById`; both changed → the newer `at`, a tie
+ * keeps local), so a thought let go or sent to the backlog on one computer goes on the
+ * other too. Both lists in time order; notes then keep the addon's limits (the newest 20 a
+ * task, 600 in all). Settings merge per field.
+ */
+export function mergeCrumbsFiles(base: CrumbsFile | null, local: CrumbsFile, remote: CrumbsFile): CrumbsFile {
+  const b = base ?? parseCrumbsFile(null);
+  return parseCrumbsFile({
+    version: 1,
+    crumbs: mergeById(b.crumbs, local.crumbs, remote.crumbs, (_b, l, r) => newer(l, r)),
+    parked: mergeById(b.parked, local.parked, remote.parked, (_b, l, r) => newer(l, r)),
+    settings: mergeFields(b.settings, local.settings, remote.settings),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reality check
+
+/** Anything (a repo file, a store snapshot) → a valid Reality check file, samples in time order. */
+export function parseRealityFile(raw: unknown): RealityFile {
+  const f = migrateReality(raw);
+  return { ...f, samples: f.samples.sort(byTime) };
+}
+
+/** True when this device holds nothing worth a file (the addon was never used here). */
+export function realityUnused(file: RealityFile): boolean {
+  return deepEqual(file, parseRealityFile(null));
+}
+
+/** Measured time beats tick timing. */
+const SOURCE_RANK: Record<SampleSource, number> = { tick: 0, focus: 1, tracked: 2 };
+
+/**
+ * Both sides hold a different sample for one finished block (often both computers saw the
+ * same tick arrive, but only one had the focus session): the better source wins, then the
+ * later tick, then this device's.
+ */
+function mergeSample(l: Sample, r: Sample): Sample {
+  return (SOURCE_RANK[r.source] - SOURCE_RANK[l.source] || r.at - l.at) > 0 ? r : l;
+}
+
+/**
+ * Focus time per `taskId@date` only grows, and each computer adds its own sessions. Changed
+ * on one side → that side; on both → the base plus what each side added. With no base
+ * (a first sync) the two may share history, so the larger value, never the sum.
+ */
+function mergeFocus(base: Record<string, number> | null, local: Record<string, number>, remote: Record<string, number>): Record<string, number> {
+  const b = base ?? {};
+  const out: Record<string, number> = {};
+  for (const k of unionKeys(remote, local)) {
+    const bv = b[k] ?? 0;
+    const lv = local[k] ?? 0;
+    const rv = remote[k] ?? 0;
+    const v = lv === rv || rv === bv ? lv : lv === bv ? rv : base ? Math.max(lv, rv, lv + rv - bv) : Math.max(lv, rv);
+    if (v > 0) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Samples by id (`taskId@date`; see `mergeById`, both changed → `mergeSample`), in time order,
+ * keeping the newest 1500. Focus time adds up per task and day (`mergeFocus`). Past ticks
+ * count as read in once either computer has read them.
+ */
+export function mergeRealityFiles(base: RealityFile | null, local: RealityFile, remote: RealityFile): RealityFile {
+  const b = base ?? parseRealityFile(null);
+  const samples = mergeById(b.samples, local.samples, remote.samples, (_b, l, r) => mergeSample(l, r)).sort(byTime);
+  return parseRealityFile({
+    version: 1,
+    samples: samples.slice(-MAX_SAMPLES),
+    focus: mergeFocus(base?.focus ?? null, local.focus, remote.focus),
+    backfilledAt: Math.max(local.backfilledAt, remote.backfilledAt),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Waqt
+
+/** Anything (a repo file, a store snapshot) → a valid Waqt file. */
+export function parseWaqtFile(raw: unknown): WaqtFile {
+  return migrateWaqt(raw);
+}
+
+/** True when this device holds nothing worth a file (the addon was never used here). */
+export function waqtUnused(file: WaqtFile): boolean {
+  return deepEqual(file, parseWaqtFile(null));
+}
+
+/** A jamaat mark says more than a plain one, and a plain one more than none. */
+const MARK_RANK: Record<Marked, number> = { prayed: 1, jamaat: 2 };
+const fuller = (l: Marked | undefined, r: Marked | undefined) => ((r ? MARK_RANK[r] : 0) > (l ? MARK_RANK[l] : 0) ? r : l);
+
+/** Per day and prayer: the side that changed a mark wins; both changed → the fuller mark. */
+function mergeMarks(base: WaqtFile['prayed'], local: WaqtFile['prayed'], remote: WaqtFile['prayed']): WaqtFile['prayed'] {
+  const out: WaqtFile['prayed'] = {};
+  for (const date of unionKeys(remote, local).sort()) {
+    const day: Partial<Record<PrayerId, Marked>> = {};
+    for (const id of PRAYERS) {
+      const bv = base[date]?.[id];
+      const lv = local[date]?.[id];
+      const rv = remote[date]?.[id];
+      const v = lv === rv || rv === bv ? lv : lv === bv ? rv : fuller(lv, rv);
+      if (v) day[id] = v;
+    }
+    if (Object.keys(day).length) out[date] = day;
+  }
+  return out;
+}
+
+/**
+ * Settings are one unit, so a place never ends up with another place's method or mosque
+ * times: the side that changed them wins whole, and if both did, this device's (it writes
+ * last). With no base, settings still at the defaults give way to the other side's.
+ * Prayed marks merge per day and prayer (`mergeMarks`).
+ */
+export function mergeWaqtFiles(base: WaqtFile | null, local: WaqtFile, remote: WaqtFile): WaqtFile {
+  const b = base ?? parseWaqtFile(null);
+  return migrateWaqt({
+    version: 1,
+    settings: clone(pick(b.settings, local.settings, remote.settings, true, true)),
+    prayed: mergeMarks(b.prayed, local.prayed, remote.prayed),
   });
 }

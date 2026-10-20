@@ -1,7 +1,7 @@
 // Reality check: how long things really take next to how long you planned, learned from
 // finished blocks. Pure logic (no stores, no clocks), so it's easy to test and to trust.
 
-import { CATEGORY_BY_ID } from '../../engine/categories';
+import { CATEGORIES, CATEGORY_BY_ID } from '../../engine/categories';
 import type { CategoryId } from '../../engine/types';
 
 export type SampleSource = 'tracked' | 'focus' | 'tick';
@@ -21,6 +21,43 @@ export interface Sample {
   source: SampleSource;
   /** When it was finished. */
   at: number;
+}
+
+export interface RealityFile {
+  version: 1;
+  samples: Sample[];
+  /** Focus time (ms) per `taskId@date`. */
+  focus: Record<string, number>;
+  /** When past ticks were read in (0 = not yet). */
+  backfilledAt: number;
+}
+
+export const MAX_SAMPLES = 1500;
+
+const SOURCES: SampleSource[] = ['tracked', 'focus', 'tick'];
+const positive = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0;
+
+/** Anything (a stored or synced file) → a valid file. */
+export function migrateReality(raw: any): RealityFile {
+  const str = (x: unknown) => (typeof x === 'string' ? x : '');
+  const samples: Sample[] = Array.isArray(raw?.samples)
+    ? raw.samples
+        .filter((s: any) => str(s?.id) && str(s?.taskId) && positive(s.planned) && positive(s.actual) && Number.isFinite(s.at))
+        .map((s: any) => ({
+          id: s.id,
+          taskId: s.taskId,
+          title: str(s.title),
+          category: CATEGORIES.some((c) => c.id === s.category) ? s.category : 'focus',
+          icon: str(s.icon),
+          planned: s.planned,
+          actual: s.actual,
+          source: SOURCES.includes(s.source) ? s.source : 'tick',
+          at: s.at,
+        }))
+    : [];
+  const focus: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw?.focus ?? {})) if (positive(v)) focus[k] = v;
+  return { version: 1, samples: samples.slice(-MAX_SAMPLES), focus, backfilledAt: Number.isFinite(raw?.backfilledAt) ? raw.backfilledAt : 0 };
 }
 
 export interface Estimate {

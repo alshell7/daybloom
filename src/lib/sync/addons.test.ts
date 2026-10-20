@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
+import type { Crumb, CrumbsFile, Parked } from '../addons/crumbs/migrate';
+import type { RealityFile, Sample } from '../addons/reality/reality';
 import { DEFAULT_SETTINGS as TRACKER_DEFAULTS } from '../addons/tracker/migrate';
 import type { AppTime, Entry, TrackerFile, TrackerSettings } from '../addons/tracker/types';
+import { defaultWaqtSettings } from '../addons/waqt/defaults';
+import type { WaqtFile, WaqtSettings } from '../addons/waqt/types';
 import type { Client, Invoice, Project, WorkData } from '../addons/work/types';
-import { mergeTrackerFiles, mergeWorkFiles, parseTrackerFile, parseWorkFile, trackerUnused, workUnused } from './addons';
+import {
+  crumbsUnused,
+  mergeCrumbsFiles,
+  mergeRealityFiles,
+  mergeTrackerFiles,
+  mergeWaqtFiles,
+  mergeWorkFiles,
+  parseCrumbsFile,
+  parseRealityFile,
+  parseTrackerFile,
+  parseWaqtFile,
+  parseWorkFile,
+  realityUnused,
+  trackerUnused,
+  waqtUnused,
+  workUnused,
+} from './addons';
 
 const M = 60_000;
 /** 09:00 UTC on Monday 19 October 2026. */
@@ -448,5 +468,280 @@ describe('tracker device-only settings', () => {
     expect(merged.settings.trackApps).toBe(false);
     expect(merged.settings.trackTitles).toBe(false);
     expect(merged.settings.idleMinutes).toBe(10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Breadcrumbs
+
+const crumb = (id: string, taskId: string, min: number, p: Partial<Crumb> = {}): Crumb => ({ id, taskId, title: taskId, text: `note ${id}`, at: at(min), source: 'manual', ...p });
+const parked = (id: string, min: number, p: Partial<Parked> = {}): Parked => ({ id, text: `thought ${id}`, at: at(min), ...p });
+const cf = (crumbs: Crumb[], park: Parked[] = [], settings: Partial<CrumbsFile['settings']> = {}): CrumbsFile =>
+  parseCrumbsFile({ crumbs, parked: park, settings: { askOnLeave: true, askOnStop: true, ...settings } });
+
+describe('mergeCrumbsFiles', () => {
+  const c1 = crumb('c1', 't1', 0);
+  const p1 = parked('p1', 5);
+
+  it('keeps notes and parked thoughts added on either side, in time order', () => {
+    const base = cf([c1], [p1]);
+    const m = mergeCrumbsFiles(base, cf([c1, crumb('mine', 't1', 30)], [p1, parked('p-mine', 40)]), cf([c1, crumb('theirs', 't2', 20)], [p1, parked('p-theirs', 10)]));
+    expect(idsOf(m.crumbs)).toEqual(['c1', 'theirs', 'mine']);
+    expect(idsOf(m.parked)).toEqual(['p1', 'p-theirs', 'p-mine']);
+  });
+
+  it('a note removed, or a thought let go or sent to the backlog, on one computer goes on the other', () => {
+    const base = cf([c1, crumb('c2', 't1', 10)], [p1, parked('p2', 15)]);
+    const done = cf([c1], [p1]);
+    expect(mergeCrumbsFiles(base, done, base)).toEqual(done);
+    expect(mergeCrumbsFiles(base, base, done)).toEqual(done);
+  });
+
+  it('both changed a note: the newer one wins, a tie keeps local', () => {
+    const base = cf([c1]);
+    const later = mergeCrumbsFiles(base, cf([{ ...c1, text: 'here', at: at(3) }]), cf([{ ...c1, text: 'there', at: at(4) }]));
+    expect(later.crumbs[0].text).toBe('there');
+    const tie = mergeCrumbsFiles(base, cf([{ ...c1, text: 'here' }]), cf([{ ...c1, text: 'there' }]));
+    expect(tie.crumbs[0].text).toBe('here');
+  });
+
+  it('keeps the newest 20 notes of a task when both sides added some', () => {
+    const base = cf(Array.from({ length: 15 }, (_, i) => crumb(`b${i}`, 't1', i)));
+    const local = cf([...base.crumbs, ...Array.from({ length: 5 }, (_, i) => crumb(`l${i}`, 't1', 100 + i))]);
+    const remote = cf([...base.crumbs, ...Array.from({ length: 5 }, (_, i) => crumb(`r${i}`, 't1', 200 + i))]);
+    const m = mergeCrumbsFiles(base, local, remote);
+    expect(m.crumbs).toHaveLength(20);
+    expect(idsOf(m.crumbs).slice(0, 2)).toEqual(['b5', 'b6']);
+    expect(idsOf(m.crumbs).slice(-1)).toEqual(['r4']);
+  });
+
+  it('merges settings per field; with no base, a setting at its default gives way', () => {
+    const base = cf([]);
+    expect(mergeCrumbsFiles(base, cf([], [], { askOnLeave: false }), cf([], [], { askOnStop: false })).settings).toEqual({ askOnLeave: false, askOnStop: false });
+    expect(mergeCrumbsFiles(null, cf([]), cf([], [], { askOnStop: false })).settings).toEqual({ askOnLeave: true, askOnStop: false });
+  });
+
+  it('combines both sides on a first sync (no base)', () => {
+    const m = mergeCrumbsFiles(null, cf([c1], [parked('mine', 9)]), cf([crumb('theirs', 't2', 1)], [p1]));
+    expect(idsOf(m.crumbs)).toEqual(['c1', 'theirs']);
+    expect(idsOf(m.parked)).toEqual(['p1', 'mine']);
+  });
+
+  it('is deterministic, idempotent and converges on both computers', () => {
+    const base = cf([c1, crumb('c2', 't1', 10)], [p1], { askOnLeave: false });
+    const local = cf([c1, crumb('l', 't2', 12)], [p1, parked('pl', 13)], { askOnStop: false });
+    const remote = cf([c1, crumb('c2', 't1', 10), crumb('r', 't1', 12)], [], { askOnLeave: true });
+    const m = mergeCrumbsFiles(base, local, remote);
+    expect(mergeCrumbsFiles(base, local, remote)).toEqual(m);
+    expect(mergeCrumbsFiles(m, m, m)).toEqual(m);
+    expect(mergeCrumbsFiles(base, local, local)).toEqual(local);
+    expect(mergeCrumbsFiles(null, m, m)).toEqual(m);
+    expect(mergeCrumbsFiles(remote, remote, m)).toEqual(m);
+    expect(idsOf(m.crumbs)).toEqual(['c1', 'l', 'r']);
+    expect(idsOf(m.parked)).toEqual(['pl']);
+    expect(m.settings).toEqual({ askOnLeave: true, askOnStop: false });
+  });
+});
+
+describe('parseCrumbsFile', () => {
+  it('normalises a garbled file through the addon migrate, in time order', () => {
+    const f = parseCrumbsFile({ crumbs: [crumb('late', 't1', 9), null, { id: 'x', taskId: 't1', text: 42, at: 1 }, crumb('early', 't1', 1, { source: 'nope' as Crumb['source'] })], parked: 'junk', settings: { askOnLeave: 0 } });
+    expect(f.crumbs.map((c) => [c.id, c.source])).toEqual([
+      ['early', 'manual'],
+      ['late', 'manual'],
+    ]);
+    expect(f.parked).toEqual([]);
+    expect(f.settings).toEqual({ askOnLeave: true, askOnStop: true });
+    expect(parseCrumbsFile(f)).toEqual(f);
+  });
+
+  it('knows an unused Breadcrumbs addon', () => {
+    expect(crumbsUnused(parseCrumbsFile(null))).toBe(true);
+    expect(crumbsUnused(cf([crumb('a', 't1', 0)]))).toBe(false);
+    expect(crumbsUnused(cf([], [], { askOnStop: false }))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reality check
+
+const sample = (taskId: string, date: string, p: Partial<Sample> = {}): Sample => ({
+  id: `${taskId}@${date}`,
+  taskId,
+  title: taskId,
+  category: 'focus',
+  icon: 'pen',
+  planned: 30,
+  actual: 40,
+  source: 'tick',
+  at: at(0),
+  ...p,
+});
+const rf = (samples: Sample[], focus: Record<string, number> = {}, backfilledAt = 0): RealityFile => parseRealityFile({ samples, focus, backfilledAt });
+
+describe('mergeRealityFiles', () => {
+  const s1 = sample('t1', '2026-10-18', { at: at(-1440) });
+
+  it('keeps samples from either side in time order; one removed and untouched on the other goes', () => {
+    const base = rf([s1]);
+    const m = mergeRealityFiles(base, rf([s1, sample('mine', '2026-10-19', { at: at(60) })]), rf([s1, sample('theirs', '2026-10-19', { at: at(30) })]));
+    expect(idsOf(m.samples)).toEqual(['t1@2026-10-18', 'theirs@2026-10-19', 'mine@2026-10-19']);
+    expect(mergeRealityFiles(base, rf([]), base).samples).toEqual([]);
+  });
+
+  it('the same finished block on both computers: measured time beats tick timing', () => {
+    const tick = sample('t1', '2026-10-19', { actual: 55, source: 'tick' });
+    const focus = sample('t1', '2026-10-19', { actual: 42, source: 'focus' });
+    const tracked = sample('t1', '2026-10-19', { actual: 44, source: 'tracked' });
+    expect(mergeRealityFiles(null, rf([tick]), rf([focus])).samples).toEqual([focus]);
+    expect(mergeRealityFiles(null, rf([focus]), rf([tick])).samples).toEqual([focus]);
+    expect(mergeRealityFiles(rf([]), rf([focus]), rf([tracked])).samples).toEqual([tracked]);
+    // Same source: the later tick (the block was ticked again), then this device's.
+    const again = sample('t1', '2026-10-19', { actual: 50, source: 'focus', at: at(5) });
+    expect(mergeRealityFiles(null, rf([again]), rf([focus])).samples).toEqual([again]);
+    expect(mergeRealityFiles(null, rf([focus]), rf([{ ...focus, actual: 43 }])).samples).toEqual([focus]);
+  });
+
+  it('adds up the focus time each computer added since the last sync', () => {
+    const k = 't1@2026-10-19';
+    const base = rf([], { [k]: 10 * M, old: 5 * M });
+    const m = mergeRealityFiles(base, rf([], { [k]: 25 * M, old: 5 * M }), rf([], { [k]: 30 * M, old: 5 * M, new: M }));
+    expect(m.focus).toEqual({ [k]: 45 * M, old: 5 * M, new: M });
+    // A key new on both sides since the last sync: both sessions count.
+    expect(mergeRealityFiles(rf([]), rf([], { [k]: 4 * M }), rf([], { [k]: 6 * M })).focus).toEqual({ [k]: 10 * M });
+    // With no base the two may share history: the larger value, never the sum.
+    expect(mergeRealityFiles(null, rf([], { [k]: 4 * M }), rf([], { [k]: 6 * M })).focus).toEqual({ [k]: 6 * M });
+  });
+
+  it('keeps the newest 1500 samples, and past ticks count as read in once either side read them', () => {
+    const many = (n: number, from: number, tag: string) => Array.from({ length: n }, (_, i) => sample(`${tag}${i}`, '2026-10-19', { at: at(from + i) }));
+    const m = mergeRealityFiles(null, rf(many(1000, 0, 'l'), {}, at(5)), rf(many(1000, 2000, 'r'), {}, 0));
+    expect(m.samples).toHaveLength(1500);
+    expect(m.samples[0].id).toBe('l500@2026-10-19');
+    expect(m.samples.at(-1)!.id).toBe('r999@2026-10-19');
+    expect(m.backfilledAt).toBe(at(5));
+  });
+
+  it('is deterministic, idempotent and converges on both computers', () => {
+    const k = 't1@2026-10-19';
+    const base = rf([s1], { [k]: 10 * M }, at(1));
+    const local = rf([s1, sample('t1', '2026-10-19', { source: 'focus' })], { [k]: 20 * M }, at(1));
+    const remote = rf([sample('t2', '2026-10-19', { at: at(9) }), sample('t1', '2026-10-19')], { [k]: 15 * M, x: M }, at(1));
+    const m = mergeRealityFiles(base, local, remote);
+    expect(mergeRealityFiles(base, local, remote)).toEqual(m);
+    expect(mergeRealityFiles(m, m, m)).toEqual(m);
+    expect(mergeRealityFiles(base, local, local)).toEqual(local);
+    expect(mergeRealityFiles(null, m, m)).toEqual(m);
+    expect(mergeRealityFiles(remote, remote, m)).toEqual(m);
+    expect(m.samples.map((s) => [s.id, s.source])).toEqual([
+      ['t1@2026-10-19', 'focus'],
+      ['t2@2026-10-19', 'tick'],
+    ]);
+    expect(m.focus).toEqual({ [k]: 25 * M, x: M });
+  });
+});
+
+describe('parseRealityFile', () => {
+  it('normalises a garbled file instead of trusting it, in time order', () => {
+    const f = parseRealityFile({
+      samples: [sample('late', '2026-10-19', { at: at(9) }), { ...sample('t', '2026-10-19'), title: 7, category: 'party', source: 'guess', icon: null }, { ...sample('bad', '2026-10-19'), planned: '30' }, null],
+      focus: { a: 60_000, b: -1, c: 'lots', d: Infinity },
+      backfilledAt: 'yes',
+    });
+    expect(f.samples.map((s) => [s.id, s.title, s.category, s.source, s.icon])).toEqual([
+      ['t@2026-10-19', '', 'focus', 'tick', ''],
+      ['late@2026-10-19', 'late', 'focus', 'tick', 'pen'],
+    ]);
+    expect(f.focus).toEqual({ a: 60_000 });
+    expect(f.backfilledAt).toBe(0);
+    expect(parseRealityFile(f)).toEqual(f);
+  });
+
+  it('knows an unused Reality check addon', () => {
+    expect(realityUnused(parseRealityFile(null))).toBe(true);
+    expect(realityUnused(rf([sample('t1', '2026-10-19')]))).toBe(false);
+    expect(realityUnused(rf([], {}, at(0)))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Waqt
+
+const mecca = { name: 'Makkah', country: 'SA', lat: 21.42, lng: 39.83 };
+const leeds = { name: 'Leeds', country: 'GB', lat: 53.8, lng: -1.55 };
+const settings = (p: Partial<WaqtSettings> = {}): WaqtSettings => ({ ...defaultWaqtSettings(), ...p });
+const wf = (s: WaqtSettings, prayed: WaqtFile['prayed'] = {}): WaqtFile => parseWaqtFile({ version: 1, settings: s, prayed });
+
+describe('mergeWaqtFiles', () => {
+  it('settings: the side that changed them wins whole, never stitched from both', () => {
+    const base = wf(settings({ place: mecca, method: 'UmmAlQura' }));
+    const moved = wf(settings({ place: leeds, method: 'MoonsightingCommittee', madhab: 'hanafi' }));
+    const quieter = wf(settings({ place: mecca, method: 'UmmAlQura', remind: { ...defaultWaqtSettings().remind, sound: false } }));
+    expect(mergeWaqtFiles(base, moved, base).settings).toEqual(moved.settings);
+    expect(mergeWaqtFiles(base, base, moved).settings).toEqual(moved.settings);
+    // Both changed: this device's, whole (the last writer).
+    expect(mergeWaqtFiles(base, moved, quieter).settings).toEqual(moved.settings);
+    expect(mergeWaqtFiles(base, quieter, moved).settings).toEqual(quieter.settings);
+  });
+
+  it('with no base, settings still at the defaults give way to a computer that set Waqt up', () => {
+    const fresh = wf(settings());
+    const setUp = wf(settings({ place: leeds }));
+    expect(mergeWaqtFiles(null, fresh, setUp).settings).toEqual(setUp.settings);
+    expect(mergeWaqtFiles(null, setUp, fresh).settings).toEqual(setUp.settings);
+    expect(mergeWaqtFiles(null, wf(settings({ place: mecca })), setUp).settings.place).toEqual(mecca);
+  });
+
+  it('marks merge per day and prayer: both sides’ marks are kept, an unmark goes if untouched there', () => {
+    const s = settings({ place: leeds });
+    const base = wf(s, { '2026-10-18': { fajr: 'prayed', isha: 'jamaat' } });
+    const local = wf(s, { '2026-10-18': { fajr: 'prayed' }, '2026-10-19': { fajr: 'prayed' } });
+    const remote = wf(s, { '2026-10-18': { fajr: 'prayed', isha: 'jamaat', dhuhr: 'jamaat' }, '2026-10-19': { asr: 'prayed' } });
+    expect(mergeWaqtFiles(base, local, remote).prayed).toEqual({
+      '2026-10-18': { fajr: 'prayed', dhuhr: 'jamaat' },
+      '2026-10-19': { fajr: 'prayed', asr: 'prayed' },
+    });
+  });
+
+  it('both changed one mark: the fuller mark wins (in jamaat, then prayed, then none)', () => {
+    const s = settings();
+    const d = '2026-10-19';
+    expect(mergeWaqtFiles(null, wf(s, { [d]: { asr: 'prayed' } }), wf(s, { [d]: { asr: 'jamaat' } })).prayed).toEqual({ [d]: { asr: 'jamaat' } });
+    expect(mergeWaqtFiles(null, wf(s, { [d]: { asr: 'jamaat' } }), wf(s, { [d]: { asr: 'prayed' } })).prayed).toEqual({ [d]: { asr: 'jamaat' } });
+    // Unmarked here, changed to jamaat there: the mark stays.
+    const base = wf(s, { [d]: { asr: 'prayed' } });
+    expect(mergeWaqtFiles(base, wf(s), wf(s, { [d]: { asr: 'jamaat' } })).prayed).toEqual({ [d]: { asr: 'jamaat' } });
+    expect(mergeWaqtFiles(base, wf(s, { [d]: { asr: 'jamaat' } }), wf(s)).prayed).toEqual({ [d]: { asr: 'jamaat' } });
+  });
+
+  it('is deterministic, idempotent and converges on both computers', () => {
+    const base = wf(settings({ place: mecca }), { '2026-10-17': { fajr: 'prayed' } });
+    const local = wf(settings({ place: leeds }), { '2026-10-17': { fajr: 'jamaat' }, '2026-10-19': { isha: 'prayed' } });
+    const remote = wf(settings({ place: mecca, madhab: 'hanafi' }), { '2026-10-18': { maghrib: 'jamaat' } });
+    const m = mergeWaqtFiles(base, local, remote);
+    expect(mergeWaqtFiles(base, local, remote)).toEqual(m);
+    expect(mergeWaqtFiles(m, m, m)).toEqual(m);
+    expect(mergeWaqtFiles(base, local, local)).toEqual(local);
+    expect(mergeWaqtFiles(null, m, m)).toEqual(m);
+    expect(mergeWaqtFiles(remote, remote, m)).toEqual(m);
+    expect(m.settings).toEqual(local.settings);
+    expect(Object.keys(m.prayed)).toEqual(['2026-10-17', '2026-10-18', '2026-10-19']);
+  });
+});
+
+describe('parseWaqtFile', () => {
+  it('normalises a garbled file through the addon migrate', () => {
+    const f = parseWaqtFile({ settings: { place: { name: 'X', lat: 200, lng: 0 }, method: 'Made up', dial: { minutes: 999 } }, prayed: { '2026-10-19': { fajr: 'twice', asr: 'jamaat' }, soon: { fajr: 'prayed' } } });
+    expect(f.settings.place).toBeNull();
+    expect(f.settings.method).toBe('MuslimWorldLeague');
+    expect(f.settings.dial.minutes).toBe(60);
+    expect(f.prayed).toEqual({ '2026-10-19': { asr: 'jamaat' } });
+    expect(parseWaqtFile(f)).toEqual(f);
+  });
+
+  it('knows an unused Waqt addon', () => {
+    expect(waqtUnused(parseWaqtFile(null))).toBe(true);
+    expect(waqtUnused(wf(settings({ place: leeds })))).toBe(false);
+    expect(waqtUnused(wf(settings(), { '2026-10-19': { fajr: 'prayed' } }))).toBe(false);
   });
 });

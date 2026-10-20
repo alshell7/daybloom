@@ -1,6 +1,7 @@
 // Breadcrumbs: one line about where you were, left when you step away from a task, and shown
 // first when you come back. Plus a parking spot for stray thoughts during focus, so they wait
-// instead of pulling you away. Kept on this computer, in its own file (never inside tasks).
+// instead of pulling you away. Kept in its own file (never inside tasks), which syncs with GitHub
+// when sync is on.
 
 import { untrack } from 'svelte';
 import { backlog } from '../../backlog';
@@ -10,69 +11,15 @@ import { persisted } from '../../stores/persisted.svelte';
 import { taskFile } from '../../stores/tasks.svelte';
 import { timer } from '../../stores/timer.svelte';
 import { view } from '../../stores/view.svelte';
+import { migrateCrumbs, trim, type Crumb, type CrumbsFile, type Parked } from './migrate';
 
-export interface Crumb {
-  id: string;
-  taskId: string;
-  /** The task's title when the crumb was left (in case the task goes away). */
-  title: string;
-  text: string;
-  at: number;
-  source: 'leave' | 'stop' | 'manual';
-}
+export { migrateCrumbs, trim, type Crumb, type CrumbsFile, type Parked };
 
-export interface Parked {
-  id: string;
-  text: string;
-  at: number;
-  /** What you were focusing on when it came up. */
-  from?: string;
-}
-
-export interface CrumbsFile {
-  version: 1;
-  crumbs: Crumb[];
-  parked: Parked[];
-  settings: { askOnLeave: boolean; askOnStop: boolean };
-}
-
-const PER_TASK = 20;
-const MAX = 600;
 const ASK_AGAIN_MS = 2 * 60_000;
 
-const EMPTY: CrumbsFile = { version: 1, crumbs: [], parked: [], settings: { askOnLeave: true, askOnStop: true } };
-
-export function migrateCrumbs(raw: any): CrumbsFile {
-  const str = (x: unknown) => (typeof x === 'string' ? x : '');
-  const crumbs: Crumb[] = Array.isArray(raw?.crumbs)
-    ? raw.crumbs
-        .filter((c: any) => str(c?.id) && str(c?.taskId) && str(c?.text).trim() && Number.isFinite(c?.at))
-        .map((c: any) => ({ id: c.id, taskId: c.taskId, title: str(c.title), text: str(c.text).slice(0, 500), at: c.at, source: ['leave', 'stop', 'manual'].includes(c.source) ? c.source : 'manual' }))
-    : [];
-  const parked: Parked[] = Array.isArray(raw?.parked)
-    ? raw.parked.filter((p: any) => str(p?.id) && str(p?.text).trim() && Number.isFinite(p?.at)).map((p: any) => ({ id: p.id, text: str(p.text).slice(0, 500), at: p.at, ...(str(p.from) ? { from: p.from } : {}) }))
-    : [];
-  const s = raw?.settings ?? {};
-  return { version: 1, crumbs, parked, settings: { askOnLeave: s.askOnLeave !== false, askOnStop: s.askOnStop !== false } };
-}
-
-export const crumbsFile = persisted<CrumbsFile>('addon-crumbs', EMPTY, migrateCrumbs);
+export const crumbsFile = persisted<CrumbsFile>('addon-crumbs', migrateCrumbs(null), migrateCrumbs);
 
 const id = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
-
-/** Keep the newest PER_TASK crumbs of each task, and MAX overall. */
-export function trim(list: Crumb[]): Crumb[] {
-  const seen = new Map<string, number>();
-  const out: Crumb[] = [];
-  for (const c of [...list].sort((a, b) => b.at - a.at)) {
-    const n = seen.get(c.taskId) ?? 0;
-    if (n >= PER_TASK) continue;
-    seen.set(c.taskId, n + 1);
-    out.push(c);
-    if (out.length >= MAX) break;
-  }
-  return out.sort((a, b) => a.at - b.at);
-}
 
 /** "just now", "12 min ago", "3 h ago", "yesterday", "4 days ago", "on 2 Oct". */
 export function ago(at: number, now = Date.now()): string {

@@ -675,7 +675,7 @@ Calendar events are read-only. In the timeline they have a striped, outlined cap
 
 ### Sync with GitHub
 
-Sync keeps your blocks, settings, badges, Work projects and bills, and Time Tracker entries the same on all your computers. Daybloom writes small JSON files to a private GitHub repo that you own. There is no Daybloom server.
+Sync keeps your blocks, settings and badges the same on all your computers. It also syncs the data of these addons: Work, Time Tracker, Breadcrumbs, Reality check and Waqt. Daybloom writes small JSON files to a private GitHub repo that you own. There is no Daybloom server.
 
 <img src="docs/media/sync.png" width="360" align="right" alt="The 'Sync with GitHub' section in Settings.">
 
@@ -746,8 +746,9 @@ To find a setting fast, type a word in **Find a setting**, for example â€œsoundâ
   - macOS: `~/Library/Application Support/app.daybloom.desktop/state/`
   - Windows: `%APPDATA%\app.daybloom.desktop\state\`
 - Tokens, calendar sign-ins and calendar links stay in the system keychain (macOS Keychain or Windows Credential Manager).
-- Work and Time Tracker data stay on your computer, and sync with GitHub when you turn sync on. App activity tracking is a setting for each computer and never syncs.
-- Breadcrumbs, Reality check, Waqt and MCP data stay on this computer. They do not sync.
+- Work, Time Tracker, Breadcrumbs, Reality check and Waqt data stay on your computer, and sync with GitHub when you turn sync on. App activity tracking is a setting for each computer and never syncs.
+- When sync is on, your Waqt place goes to your GitHub repo with the other Waqt settings.
+- MCP data (the key and the **Activity** list) stays on this computer. It does not sync.
 - The MCP addon answers only on this computer (127.0.0.1) and only to apps that have its key. An AI app gets your plans only when it uses a tool, and each use shows in the **Activity** list.
 - Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
 - Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
