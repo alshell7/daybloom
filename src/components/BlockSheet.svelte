@@ -194,7 +194,7 @@
 </script>
 
 {#if task}
-  <Panel title={task.date === null ? 'Later' : task.recurrence ? 'Repeating block' : 'Block'} onclose={close} accent={color}>
+  <Panel title={task.date === null ? 'Later' : task.recurrence ? 'Repeating block' : 'Block'} onclose={close} accent={color} genieFrom={sheetKey ? `block:${sheetKey}` : undefined}>
     <div class="title-row">
       <button
         class="icon-pick"
@@ -437,7 +437,7 @@
   </Panel>
 {:else if event}
   {#if event.event?.provider === 'salah'}
-    <Panel title="Salah" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color}>
+    <Panel title="Salah" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color} genieFrom={`block:${event.key}`}>
       <p class="event-title">{event.title}</p>
       <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)}{event.event.calendarName && event.event.calendarName !== 'Salah' ? ` · ${event.event.calendarName}` : ''}</p>
       <p class="note">Time kept free for salah. Times, jamaat and how much time to keep are set in Waqt.</p>
@@ -448,7 +448,7 @@
       {/snippet}
     </Panel>
   {:else}
-    <Panel title="From your calendar" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color}>
+    <Panel title="From your calendar" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color} genieFrom={`block:${event.key}`}>
       <EventDetails block={event} />
       {#snippet footer()}
         <span class="spacer"></span>

@@ -13,7 +13,7 @@
   import { voice } from '../../../lib/voice/voice.svelte';
   import MicButton from '../../voice/MicButton.svelte';
 
-  let { start = '', onclose, ink, face }: { start?: string; onclose: () => void; ink: string; face: string } = $props();
+  let { start = '', bar = true, onclose, ink, face }: { start?: string; bar?: boolean; onclose: () => void; ink: string; face: string } = $props();
 
   let text = $state(untrack(() => start));
   let field = $state<HTMLInputElement>();
@@ -22,6 +22,7 @@
   const rm = $derived(view.reducedMotion);
 
   onMount(() => {
+    if (!bar) return;
     void platform.focusSelf().finally(() =>
       tick().then(() => {
         field?.focus();
@@ -47,6 +48,8 @@
     if (b && sent) untrack(() => (reply = b.text));
   });
   const thinking = $derived(sent && alef.thinking);
+  // Your answer while you talk here; otherwise whatever Alef is saying (its own lines too).
+  const shown = $derived(reply ?? alef.bubble?.text ?? null);
 
   // Spoken words go to Alef too.
   let usedFinal = '';
@@ -72,22 +75,24 @@
 </script>
 
 <div class="talk" style:--ink={ink} style:--face={face} role="presentation" onpointerdown={(e) => e.stopPropagation()} onkeydown={key}>
-  {#if thinking || reply || needsModel}
-    <div class="reply" in:scale={{ start: 0.85, duration: rm ? 0 : 320, easing: cubicOut }} aria-live="polite">
+  {#if thinking || shown || needsModel}
+    <div class="reply" role="status" onpointerenter={() => alef.holdBubble(true)} onpointerleave={() => alef.holdBubble(false)} in:scale={{ start: 0.85, duration: rm ? 0 : 320, easing: cubicOut }} aria-live="polite">
       {#if needsModel}
         To talk, get the speech model in Daybloom first: Settings › Voice.
       {:else if thinking && !reply}
         <span class="dots" aria-label="Alef is thinking"><i></i><i></i><i></i></span>
       {:else}
-        {reply}
+        {shown}
       {/if}
     </div>
   {/if}
+  {#if bar}
   <form class="bar" onsubmit={send} data-voice="alef" in:fly={{ y: 10, duration: rm ? 0 : 260, easing: cubicOut }}>
     <input bind:this={field} bind:value={text} placeholder={listening ? voice.live || 'Listening…' : 'Talk to Alef…'} aria-label="Talk to Alef" autocomplete="off" maxlength="600" enterkeyhint="send" />
     <span class="mic"><MicButton surface="alef" size={24} label="Hold to talk to Alef" /></span>
     <button type="button" class="x" onclick={onclose} aria-label="Close" title="Close (Esc)"><Icon name="x" size={12} stroke={2.4} /></button>
   </form>
+  {/if}
 </div>
 
 <style>
@@ -111,7 +116,7 @@
     background: color-mix(in srgb, var(--face) 96%, transparent);
     color: var(--ink);
     box-shadow:
-      0 6px 20px rgb(0 0 0 / 0.22),
+      0 3px 10px rgb(0 0 0 / 0.2),
       0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent);
     pointer-events: auto;
     cursor: auto;
@@ -152,9 +157,11 @@
     top: 8%;
     translate: -50% 0;
     width: max-content;
-    max-width: min(86%, 300px);
-    max-height: 40%;
+    max-width: min(88%, 320px);
+    max-height: 60%;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
     padding: 8px 12px;
     border-radius: 14px;
     background: color-mix(in srgb, var(--face) 97%, transparent);

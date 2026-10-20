@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import Icon from '../lib/Icon.svelte';
@@ -34,12 +34,19 @@
 
   let panel = $state<HTMLDivElement>();
 
+  // The lamp it last came from: a sheet's subject can be gone by the time it closes (the block
+  // sheet's key clears as it shuts), and it should still pour back into it.
+  let lampName: string | undefined = untrack(() => genieFrom);
+  $effect.pre(() => {
+    if (genieFrom) lampName = genieFrom;
+  });
+
   function enter(node: HTMLElement) {
-    if (genieFrom) return genie(node, { from: () => lamp(genieFrom!), reduced: view.reducedMotion });
+    if (lampName) return genie(node, { from: () => lamp(lampName!), reduced: view.reducedMotion });
     return fly(node, { x: 40, duration: view.reducedMotion ? 0 : 340, easing: cubicOut, opacity: 0 });
   }
   function leave(node: HTMLElement) {
-    if (genieFrom) return genie(node, { from: () => lamp(genieFrom!), reduced: view.reducedMotion, duration: 480 });
+    if (lampName) return genie(node, { from: () => lamp(lampName!), reduced: view.reducedMotion, duration: 480 });
     return fly(node, { x: 30, duration: view.reducedMotion ? 0 : 200, easing: cubicOut, opacity: 0 });
   }
 

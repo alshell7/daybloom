@@ -9,6 +9,11 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 ## Next
 
 ## 0.1.13
+
+### New
+
+- **Blocks open like a genie** — a block's editor pours out of the block you clicked, in the timeline or on the dial, and back into it when you close it. Calendar events, salah and backlog tasks too.
+
 ### Addons
 
 - **Alef on the widget** — talk to Alef from the desktop widget: click the chat button or just start typing, or hold Space to speak. Its answer shows over the dial, and the talk stays in Alef's chat in the planner.
@@ -18,6 +23,9 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 ### Fixes
 
 - **Alef's eyes** — when Alef frowned or looked sad, one eye's lid could cut too deep, so that eye looked cut off. Both eyes now match.
+- **Alef's long answers** — show in full, on the dial and on the widget, and stay up long enough to read (longer still while you point at them).
+- **Widget edges** — the widget's shadow no longer ends in a straight line on light desktops.
+- **Update notes** — read clearly in every version of the app, also in older ones.
 
 ## 0.1.12
 ### New

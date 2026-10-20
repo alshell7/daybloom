@@ -17,6 +17,13 @@ describe('genie', () => {
     expect(gone.opacity).toBeCloseTo(0);
   });
 
+  it('slides over to a button off to the side, its tip staying inside the panel', () => {
+    const gone = genieShape(1, 400, 600, -300, 100, 28);
+    for (const [x] of gone.points) expect(x).toBeGreaterThanOrEqual(0);
+    expect(gone.dx).toBeCloseTo(-300 - 14);
+    expect(genieShape(0, 400, 600, -300, 100, 28).dx).toBeCloseTo(0);
+  });
+
   it('narrows the edge nearest the button first', () => {
     const mid = genieShape(0.35, 400, 600, 300, -20, 28);
     const n = mid.points.length / 2;

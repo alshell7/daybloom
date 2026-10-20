@@ -69,6 +69,7 @@
     bubble={alef.bubble}
     onpoke={() => alef.poke()}
     ontouch={(k) => alef.touch(k)}
+    onhold={(on) => alef.holdBubble(on)}
     ondismiss={() => alef.dismissBubble()}
   />
 {/snippet}

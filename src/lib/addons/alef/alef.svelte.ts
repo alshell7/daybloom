@@ -297,10 +297,8 @@ class Alef {
     this.bubble = { text, seq: ++this.#seq };
     this.#send({ bubble: this.bubble });
     if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
-    this.#bubbleTimer = setTimeout(() => {
-      this.bubble = null;
-      this.#send({ bubble: null });
-    }, o.ms ?? Math.max(3600, Math.min(9000, text.length * 75)));
+    this.#bubbleMs = o.ms ?? readingMs(text);
+    this.#hideBubbleLater(this.#bubbleMs);
     if (o.voice) void this.#voice(text);
   }
 
@@ -321,7 +319,25 @@ class Alef {
 
   dismissBubble() {
     this.bubble = null;
+    this.#send({ bubble: null });
     hush();
+  }
+
+  #bubbleMs = 0;
+  #held = false;
+  #hideBubbleLater(ms: number) {
+    if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
+    this.#bubbleTimer = setTimeout(() => {
+      if (this.#held) return;
+      this.bubble = null;
+      if (this.mirror) this.#send({ bubble: null });
+    }, ms);
+  }
+  /** The pointer rests on the bubble: keep it up while you read, then a few seconds more. */
+  holdBubble(on: boolean) {
+    this.#held = on;
+    if (!on && this.bubble) this.#hideBubbleLater(3500);
+    else if (on && this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
   }
 
   /** A tap on the face. Once is a hello; a flurry gets a grumble. */
@@ -472,9 +488,14 @@ class Alef {
     if (m.bubble !== undefined) {
       this.bubble = m.bubble;
       if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
-      if (m.bubble) this.#bubbleTimer = setTimeout(() => (this.bubble = null), 9000);
+      if (m.bubble) this.#hideBubbleLater(readingMs(m.bubble.text) + 1500);
     }
   }
+}
+
+/** Long enough to read a line, unhurried: ~14 characters a second, 4–25 s. */
+export function readingMs(text: string): number {
+  return Math.max(4000, Math.min(25_000, 1500 + text.length * 70));
 }
 
 export const alef = new Alef();

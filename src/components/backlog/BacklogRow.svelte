@@ -240,6 +240,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   bind:this={row}
+  data-genie={`block:later:${task.id}`}
   class="row"
   class:checking
   class:done={isDone}
@@ -274,7 +275,7 @@
       <span class="tick"><Icon name="check" size={13} stroke={3} /></span>
     </button>
 
-    <button class="tile" onclick={() => (view.sheet = { kind: 'edit', key: `later:${task.id}` })} tabindex="-1" title="Open details">
+    <button class="tile" data-genie-anchor onclick={() => (view.sheet = { kind: 'edit', key: `later:${task.id}` })} tabindex="-1" title="Open details">
       <Icon name={task.icon} size={15} stroke={2} />
     </button>
 

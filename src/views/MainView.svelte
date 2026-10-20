@@ -264,6 +264,7 @@
     bubble={alef.bubble}
     onpoke={() => alef.poke()}
     ontouch={(k) => alef.touch(k)}
+    onhold={(on) => alef.holdBubble(on)}
     onopen={() => (view.sheet = { kind: 'alef', tab: 'talk' })}
     ondismiss={() => ((view.sheet = { kind: 'alef', tab: 'talk' }), alef.dismissBubble())}
   />

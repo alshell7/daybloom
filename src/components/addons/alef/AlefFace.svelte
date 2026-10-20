@@ -30,6 +30,7 @@
     onpoke,
     onopen,
     ondismiss,
+    onhold,
     label = 'Alef',
     screen = null,
     attend = null,
@@ -57,6 +58,8 @@
     onpoke?: () => void;
     onopen?: () => void;
     ondismiss?: () => void;
+    /** The pointer rests on the speech bubble (keep it up while you read). */
+    onhold?: (on: boolean) => void;
     label?: string;
     /** The screen's colours (the dial's finish, or black glass). */
     screen?: ScreenPalette | null;
@@ -231,7 +234,7 @@
 >
   {#if bubble && !compact}
     {#key bubble.seq}
-      <button class="bubble" onclick={() => ondismiss?.()} aria-live="polite" title="Click to talk">{bubble.text}</button>
+      <button class="bubble" class:long={bubble.text.length > 120} onclick={() => ondismiss?.()} onpointerenter={() => onhold?.(true)} onpointerleave={() => onhold?.(false)} aria-live="polite" title="Click to talk"><span class="say">{bubble.text}</span></button>
     {/key}
   {/if}
 
@@ -636,7 +639,7 @@
     z-index: 3;
     translate: -50% 0;
     width: max-content;
-    max-width: min(280px, 170%);
+    max-width: min(300px, 190%);
     padding: 9px 14px;
     border-radius: 18px;
     background: var(--raised);
@@ -648,16 +651,24 @@
     font-size: 14px;
     line-height: 1.35;
     text-align: center;
-    /* Long answers stay short here; the whole of it is in the chat. */
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    overflow: hidden;
+    overflow-wrap: anywhere;
     pointer-events: auto;
     animation: speak 480ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
     transform-origin: 50% 100%;
     cursor: pointer;
+  }
+  /* The whole line, always; a long one scrolls inside the bubble. */
+  .say {
+    display: block;
+    max-height: min(44vh, 250px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .bubble.long {
+    width: min(300px, 190%);
+    text-align: left;
+    font-size: 13.5px;
   }
   .bubble::after {
     content: '';

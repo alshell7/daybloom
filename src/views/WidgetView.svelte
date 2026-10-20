@@ -226,7 +226,7 @@
         compact
         reduced={view.reducedMotion}
         face={alefOn ? alefFace : undefined}
-        note={alefOn && !talk ? (alef.bubble?.text ?? null) : null}
+
       />
     </Dial>
     </AlefPosture>
@@ -238,8 +238,10 @@
     </button>
   {/if}
 
-  {#if talk}
-    <WidgetTalk start={talk.start} ink={finish.ink} face={finish.face} onclose={() => (talk = null)} />
+  {#if alefOn && (talk || alef.bubble || alef.thinking)}
+    {#key !!talk}
+      <WidgetTalk bar={!!talk} start={talk?.start ?? ''} ink={finish.ink} face={finish.face} onclose={() => (talk = null)} />
+    {/key}
   {/if}
 
   <div class="tools" class:hidden={!!talk} style:--face={finish.face} style:--ink={finish.ink}>
@@ -269,7 +271,8 @@
   }
   .dial {
     width: min(100vw, 100vh);
-    padding: 7px;
+    /* Room for the case's shadow inside the square window. */
+    padding: 12px;
   }
   .pip {
     position: absolute;

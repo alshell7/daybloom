@@ -829,11 +829,13 @@
       opacity: 0.7;
     }
   }
+  /* The widget's case. Its shadow stays within ~10px, inside the widget's transparent square
+     window: anything further would be cut in a straight line, visible on light desktops. */
   .dial-wrap.case {
     border-radius: 50%;
     box-shadow:
-      0 1px 2px rgb(0 0 0 / 0.18),
-      0 10px 30px -8px rgb(0 0 0 / 0.35);
+      0 1px 2px rgb(0 0 0 / 0.16),
+      0 4px 10px -4px rgb(0 0 0 / 0.3);
   }
   .dial {
     width: 100%;

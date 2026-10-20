@@ -157,6 +157,7 @@
 
 <div
   class="row"
+  data-genie={`block:${block.key}`}
   class:selected
   class:done={block.done}
   class:missed
@@ -182,6 +183,7 @@
 
   <div
     class="capsule"
+    data-genie-anchor
     class:grab={editable}
     role="button"
     tabindex="-1"

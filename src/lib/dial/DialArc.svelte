@@ -211,6 +211,7 @@
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <g
   class="arc"
+  data-genie={`block:${block.key}`}
   class:selected
   class:dimmed
   class:past
