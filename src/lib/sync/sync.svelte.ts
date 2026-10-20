@@ -38,6 +38,7 @@ import type { WorkData } from '../addons/work/types';
 import { loadWork, workFile } from '../addons/work/work.svelte';
 import type { Task } from '../engine/types';
 import {
+  applySharedTracker,
   crumbsUnused,
   mergeCrumbsFiles,
   mergeRealityFiles,
@@ -46,13 +47,14 @@ import {
   mergeWorkFiles,
   parseCrumbsFile,
   parseRealityFile,
-  parseTrackerFile,
   parseWaqtFile,
   parseWorkFile,
+  pickSharedTracker,
   realityUnused,
   trackerUnused,
   waqtUnused,
   workUnused,
+  type SharedTrackerFile,
 } from './addons';
 import { createGitHubClient, GitHubError, parseRepo, type DirEntry, type FetchLike, type GitHubClient, type RepoInfo } from './github';
 import {
@@ -243,15 +245,16 @@ function codecs(s: SyncStores): Codec<any>[] {
     parse: parseWorkFile,
     merge: mergeWorkFiles,
   };
-  const tracker: Codec<TrackerFile> = {
+  // App and title tracking stay out of tracker.json, so computers that differ never rewrite it.
+  const tracker: Codec<SharedTrackerFile> = {
     key: 'tracker',
     file: 'tracker.json',
     replaceOnJoin: true,
     unused: trackerUnused,
-    read: () => parseTrackerFile(s.tracker.read()),
-    write: (v) => s.tracker.write(v),
-    parse: parseTrackerFile,
-    merge: mergeTrackerFiles,
+    read: () => pickSharedTracker(s.tracker.read()),
+    write: (v) => s.tracker.write(applySharedTracker(s.tracker.read(), v)),
+    parse: pickSharedTracker,
+    merge: (b, l, r) => pickSharedTracker(mergeTrackerFiles(b, l, r)),
   };
   const crumbs: Codec<CrumbsFile> = {
     key: 'crumbs',

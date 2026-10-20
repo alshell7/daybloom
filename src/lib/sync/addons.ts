@@ -19,7 +19,7 @@
 import { migrateCrumbs, trim, type CrumbsFile } from '../addons/crumbs/migrate';
 import { MAX_SAMPLES, migrateReality, type RealityFile, type Sample, type SampleSource } from '../addons/reality/reality';
 import { migrateTrackerFile } from '../addons/tracker/migrate';
-import type { AppTime, Entry, TrackerFile } from '../addons/tracker/types';
+import type { AppTime, Entry, TrackerFile, TrackerSettings } from '../addons/tracker/types';
 import { nextInvoiceNumber, parseInvoiceNumber, yearOf } from '../addons/work/invoices';
 import { migrateWork, reconcileInvoicedKeys } from '../addons/work/migrate';
 import { migrateWaqt } from '../addons/waqt/defaults';
@@ -92,9 +92,36 @@ export function parseTrackerFile(raw: unknown): TrackerFile {
   return migrateTrackerFile(raw);
 }
 
+/**
+ * Noting apps and window titles is an opt-in for one computer: turning it on at work must
+ * not start recording on your laptop. These settings never travel between computers:
+ * tracker.json leaves them out, and each computer keeps its own.
+ */
+export const TRACKER_DEVICE_SETTINGS = ['trackApps', 'trackTitles'] as const;
+type DeviceSetting = (typeof TRACKER_DEVICE_SETTINGS)[number];
+
+const deviceOnly = (s: Partial<TrackerSettings>): Partial<TrackerSettings> =>
+  Object.fromEntries(TRACKER_DEVICE_SETTINGS.filter((k) => s[k] !== undefined).map((k) => [k, s[k]]));
+
+/** What tracker.json holds: a tracker file without the settings that stay on each computer. */
+export type SharedTrackerFile = Omit<TrackerFile, 'settings'> & { settings: Omit<TrackerSettings, DeviceSetting> };
+
+/** The part of a tracker file (or of anything claiming to be one) that travels. */
+export function pickSharedTracker(raw: unknown): SharedTrackerFile {
+  const file = parseTrackerFile(raw);
+  const settings: Partial<TrackerSettings> = { ...file.settings };
+  for (const k of TRACKER_DEVICE_SETTINGS) delete settings[k];
+  return { ...file, settings: settings as SharedTrackerFile['settings'] };
+}
+
+/** This computer's tracker file with a shared one applied. Its own settings are never touched. */
+export function applySharedTracker(full: TrackerFile, shared: SharedTrackerFile): TrackerFile {
+  return parseTrackerFile({ ...shared, settings: { ...shared.settings, ...deviceOnly(full.settings) } });
+}
+
 /** True when this device holds nothing worth a file (the addon was never used here). */
-export function trackerUnused(file: TrackerFile): boolean {
-  return deepEqual(file, parseTrackerFile(null));
+export function trackerUnused(file: SharedTrackerFile): boolean {
+  return deepEqual(pickSharedTracker(file), pickSharedTracker(null));
 }
 
 const endKey = (e: Entry) => e.endMs ?? Infinity;
@@ -143,9 +170,11 @@ function oneRunning(entries: Entry[]): Entry[] {
 
 /**
  * Entries by id (see `mergeById`; both changed → `mergeEntry`), then the one-running rule.
- * Settings merge per field. The result is in start order, as the store keeps it.
+ * Settings merge per field, except this computer's own (TRACKER_DEVICE_SETTINGS): those stay
+ * as `local` has them, or at their defaults for shared files, which leave them out. The
+ * result is in start order, as the store keeps it.
  */
-export function mergeTrackerFiles(base: TrackerFile | null, local: TrackerFile, remote: TrackerFile): TrackerFile {
+export function mergeTrackerFiles(base: SharedTrackerFile | null, local: SharedTrackerFile, remote: SharedTrackerFile): TrackerFile {
   const b = base ?? parseTrackerFile(null);
   const entries = mergeById(b.entries, local.entries, remote.entries, (_b, l, r) => mergeEntry(l, r));
   return migrateTrackerFile({
@@ -153,16 +182,6 @@ export function mergeTrackerFiles(base: TrackerFile | null, local: TrackerFile, 
     entries: oneRunning(entries).sort(byStart),
     settings: { ...mergeFields(b.settings, local.settings, remote.settings), ...deviceOnly(local.settings) },
   });
-}
-
-/**
- * Noting apps and window titles is an opt-in for one computer: turning it on at work must
- * not start recording on your laptop. These settings never travel between computers.
- */
-export const TRACKER_DEVICE_SETTINGS = ['trackApps', 'trackTitles'] as const;
-
-function deviceOnly(s: TrackerFile['settings']): Partial<TrackerFile['settings']> {
-  return Object.fromEntries(TRACKER_DEVICE_SETTINGS.map((k) => [k, s[k]]));
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import { defaultWaqtSettings } from '../addons/waqt/defaults';
 import type { WaqtFile, WaqtSettings } from '../addons/waqt/types';
 import type { Client, Invoice, Project, WorkData } from '../addons/work/types';
 import {
+  applySharedTracker,
   crumbsUnused,
   mergeCrumbsFiles,
   mergeRealityFiles,
@@ -18,6 +19,7 @@ import {
   parseTrackerFile,
   parseWaqtFile,
   parseWorkFile,
+  pickSharedTracker,
   realityUnused,
   trackerUnused,
   waqtUnused,
@@ -200,6 +202,35 @@ describe('parseTrackerFile', () => {
     expect(trackerUnused(parseTrackerFile(null))).toBe(true);
     expect(trackerUnused(tf([entry('a', 0, 1)]))).toBe(false);
     expect(trackerUnused(tf([], { roundTo: 15 }))).toBe(false);
+    // This computer's own settings are not worth a file: they never leave it.
+    expect(trackerUnused(tf([], { trackApps: true, trackTitles: true }))).toBe(true);
+  });
+});
+
+describe('the shared tracker file', () => {
+  it('leaves out app and title tracking, and puts this computer’s back', () => {
+    const mine = tf([entry('a', 0, 30)], { trackApps: true, trackTitles: true, roundTo: 15 });
+    const shared = pickSharedTracker(mine);
+    expect(shared.settings).not.toHaveProperty('trackApps');
+    expect(shared.settings).not.toHaveProperty('trackTitles');
+    expect(shared.settings).toMatchObject({ roundTo: 15, idleMinutes: 5 });
+    expect(ids(shared)).toEqual(['a']);
+    expect(pickSharedTracker(shared)).toEqual(shared);
+
+    // Another computer's file (or an older one that still holds them) never sets them here.
+    const theirs = pickSharedTracker(tf([entry('b', 40, 50)], { trackApps: false, idleMinutes: 10 }));
+    expect(applySharedTracker(mine, theirs)).toEqual(tf([entry('b', 40, 50)], { trackApps: true, trackTitles: true, idleMinutes: 10 }));
+    expect(applySharedTracker(tf([]), pickSharedTracker({ settings: { trackApps: true } })).settings.trackApps).toBe(false);
+    expect(applySharedTracker(mine, shared)).toEqual(mine);
+  });
+
+  it('merges shared files into a shared file', () => {
+    const base = pickSharedTracker(tf([entry('a', 0, 30)]));
+    const local = pickSharedTracker(tf([entry('a', 0, 30), entry('mine', 40, 50)], { trackApps: true }));
+    const remote = pickSharedTracker(tf([entry('a', 0, 30), entry('theirs', 60, 70)], { roundTo: 5 }));
+    const m = pickSharedTracker(mergeTrackerFiles(base, local, remote));
+    expect(ids(m)).toEqual(['a', 'mine', 'theirs']);
+    expect(m.settings).toEqual(pickSharedTracker(tf([], { roundTo: 5 })).settings);
   });
 });
 
