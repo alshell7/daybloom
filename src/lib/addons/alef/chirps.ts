@@ -1,9 +1,11 @@
-// Alef's voice without words: a tiny creature's vocal sounds, synthesised with WebAudio (no
-// files). Each syllable is a soft, warm "glottal" tone shaped by three vowel formants (oo, ee,
-// ah, a closed-mouth hum…) that glide as it sounds, with a little scoop at the start, a gentle
-// vibrato and a breath of air — closer to a baby animal than a beep. Feelings are short
-// utterances ("wee-hee!", "ooh!", "aww…", a cute "grr"); `babble` speaks a sentence in Alef's
-// gibberish, following its vowels and its tune (a question lifts, a statement settles).
+// Alef's voice without words, synthesised with WebAudio (no files). Like Cozmo's — a person's
+// voice, sampled, pitched and processed into a little robot — it is a voice first: a warm
+// glottal tone around 250–450 Hz shaped by three gliding vowel formants (oo, ee, ah, a closed-
+// mouth hum), with a scoop at the start, vibrato, a little pitch jitter and a breath of air,
+// then coloured like a small robot's speaker: a tinny presence and a touch of digital grit.
+// Feelings are short utterances ("hee-hee!", "ooh?", "aww…", a gruff little "hrrm"); every
+// one varies a little each time, so it never sounds canned. `babble` speaks a sentence in
+// Alef's gibberish, following its vowels and its tune.
 
 import { audioOut } from '../../sound';
 import type { ChirpId } from './behaviors';
@@ -71,8 +73,22 @@ export const PATTERNS: Record<ChirpId, Syl[]> = {
   aww: [S('a', 'u', [700, 640, 520, 470], 0.5, 0, { vib: 0.02 })],
   frustrated: [S('m', 'a', [380, 460, 520], 0.22, 0.03, { growl: 0.4 }), S('a', 'm', [500, 420], 0.18, 0, { growl: 0.3 })],
   whimper: [S('m', 'i', [720, 800, 700], 0.22, 0.08, { vib: 0.05, vibHz: 7 }), S('i', 'u', [700, 560, 480], 0.32, 0, { vib: 0.05, vibHz: 7 })],
+  // Pet sounds
+  purr: [S('m', 'm', [430, 410, 420, 400], 0.5, 0.04, { growl: 0.5, gain: 0.55, vib: 0.004 }), S('m', 'o', [420, 440, 400], 0.6, 0, { growl: 0.45, gain: 0.5, vib: 0.004 })],
+  giggle: [S('i', 'i', [760, 860], 0.07, 0.045), S('i', 'i', [820, 920], 0.07, 0.045), S('i', 'e', [800, 900], 0.07, 0.045), S('e', 'i', [760, 880, 820], 0.12, 0)],
+  squeak: [S('i', 'i', [900, 1340, 1240], 0.14, 0, { gain: 0.85 })],
+  hiccup: [S('i', 'u', [780, 1120, 760], 0.08, 0, { gain: 0.8 })],
+  sneeze: [S('a', 'a', [600, 690], 0.2, 0.12, { breath: 0.3 }), S('a', 'e', [690, 820], 0.2, 0.08, { breath: 0.35 }), S('u', 'u', [940, 620, 520], 0.16, 0, { breath: 0.9 })],
+  stretch: [S('m', 'm', [480, 560, 610], 0.42, 0.05, { vib: 0.02 }), S('a', 'o', [650, 540, 450], 0.46, 0, { breath: 0.3 })],
+  hum: [S('m', 'm', [520, 560], 0.24, 0.06, { gain: 0.6 }), S('m', 'm', [600, 640], 0.24, 0.06, { gain: 0.6 }), S('m', 'o', [560, 500], 0.32, 0, { gain: 0.55, vib: 0.015 })],
+  dance: [S('a', 'a', [620, 630], 0.12, 0.04), S('i', 'i', [740, 750], 0.12, 0.04), S('a', 'a', [830, 840], 0.12, 0.04), S('i', 'i', [990, 1000], 0.12, 0.04), S('a', 'o', [1240, 1260, 1180], 0.32, 0, { vib: 0.03 })],
+  welcome: [S('o', 'o', [620, 830], 0.13, 0.07), S('a', 'i', [760, 950], 0.12, 0.04), S('a', 'i', [830, 1050, 990], 0.22, 0)],
+  peekaboo: [S('u', 'u', [500, 780, 720], 0.2, 0)],
   none: [],
 };
+
+/** Where Alef's voice sits, relative to the written patterns. */
+const VOICE_BASE = 0.56;
 
 export interface VoiceOpts {
   /** 1 = Alef's own pitch; 0.8..1.4. */
@@ -119,9 +135,37 @@ export function contour(p: number[], pitch: number, steps = 24): Float32Array {
     const e = f * f * (3 - 2 * f);
     let hz = (pts[a] + (pts[b] - pts[a]) * e) * pitch;
     if (i < 3) hz *= 0.9 + i * 0.035;
-    out[i] = Math.max(60, hz);
+    out[i] = Math.max(105, hz);
   }
   return out;
+}
+
+let gritCache: Float32Array<ArrayBuffer> | null = null;
+/** A coarse staircase: the gentle "digital" edge of a small robot's voice chip. */
+function gritCurve(): Float32Array<ArrayBuffer> {
+  if (gritCache) return gritCache;
+  const n = 1024;
+  const steps = 22;
+  const c = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    c[i] = Math.round(Math.tanh(x * 1.6) * steps) / steps;
+  }
+  gritCache = c;
+  return c;
+}
+
+/** A take: the same utterance, never quite the same twice (pitch, timing and colour vary a little). */
+export function vary(syls: Syl[], rnd: () => number = Math.random): Syl[] {
+  const shift = 0.94 + rnd() * 0.12;
+  const pace = 0.92 + rnd() * 0.16;
+  return syls.map((y) => ({
+    ...y,
+    p: y.p.map((f) => f * shift * (0.985 + rnd() * 0.03)),
+    dur: y.dur * pace,
+    gap: y.gap * pace,
+    vib: (y.vib ?? 0.012) * (0.8 + rnd() * 0.4),
+  }));
 }
 
 /** Play syllables; returns when each one starts (s, from now) and the total length (s). */
@@ -129,14 +173,33 @@ export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total:
   const out = o.out ?? audioOut();
   if (!out || !syls.length) return { starts: [], total: 0 };
   const { ctx, master } = out;
-  const pitch = Math.max(0.6, Math.min(1.6, o.pitch ?? 1));
+  // The patterns are written an octave-ish high; Alef's voice sits lower, like a small boy-robot.
+  const pitch = Math.max(0.6, Math.min(1.6, o.pitch ?? 1)) * VOICE_BASE;
   const bus = ctx.createGain();
   bus.gain.value = Math.max(0, Math.min(1, o.volume ?? 0.8)) * 0.55;
-  // A soft top and a touch of warmth (a very short, quiet echo, like a small room).
+  // A small robot's speaker: no deep bass, a tinny presence, a soft top, a touch of digital
+  // grit mixed in, and a very short, quiet echo, like a small room.
+  const low = ctx.createBiquadFilter();
+  low.type = 'highpass';
+  low.frequency.value = 170;
+  const presence = ctx.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = 2500;
+  presence.Q.value = 1.1;
+  presence.gain.value = 5;
   const tone = ctx.createBiquadFilter();
   tone.type = 'lowpass';
-  tone.frequency.value = 6500;
+  tone.frequency.value = 6800;
   tone.Q.value = 0.5;
+  const grit = ctx.createWaveShaper();
+  grit.curve = gritCurve();
+  const gritGain = ctx.createGain();
+  gritGain.gain.value = 0.16;
+  const clean = ctx.createGain();
+  clean.gain.value = 0.9;
+  bus.connect(low).connect(presence);
+  presence.connect(clean).connect(tone);
+  presence.connect(grit).connect(gritGain).connect(tone);
   const room = ctx.createDelay(0.1);
   room.delayTime.value = 0.027;
   const roomGain = ctx.createGain();
@@ -150,13 +213,13 @@ export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total:
   even.release.value = 0.12;
   const makeup = ctx.createGain();
   makeup.gain.value = 1.5;
-  bus.connect(tone).connect(even).connect(makeup).connect(master);
+  tone.connect(even).connect(makeup).connect(master);
   makeup.connect(room).connect(roomGain).connect(master);
 
   let t = ctx.currentTime + 0.02;
   const t0 = t;
   const starts: number[] = [];
-  const formantScale = 0.94 + (pitch - 1) * 0.5;
+  const formantScale = 1 + ((o.pitch ?? 1) - 1) * 0.5;
   for (const y of syls) {
     starts.push(t - t0);
     const end = t + y.dur;
@@ -175,6 +238,15 @@ export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total:
       lfo.start(t);
       lfo.stop(end + 0.05);
     }
+    // A little irregularity, as in any living voice.
+    const jit = ctx.createOscillator();
+    const jg = ctx.createGain();
+    jit.type = 'triangle';
+    jit.frequency.value = 9 + Math.random() * 5;
+    jg.gain.value = y.p[0] * pitch * 0.007;
+    jit.connect(jg).connect(osc.frequency);
+    jit.start(t);
+    jit.stop(end + 0.05);
     // The envelope: a soft start, a little swell, a gentle fall.
     const env = ctx.createGain();
     const peak = (y.gain ?? 1) * 0.9;
@@ -243,7 +315,7 @@ export function play(syls: Syl[], o: VoiceOpts = {}): { starts: number[]; total:
 }
 
 export function chirp(id: ChirpId, o: VoiceOpts = {}) {
-  return play(PATTERNS[id] ?? [], o);
+  return play(vary(PATTERNS[id] ?? []), o);
 }
 
 const VOWEL_OF: Record<string, Vowel> = { a: 'a', e: 'e', i: 'i', o: 'o', u: 'u', y: 'i' };

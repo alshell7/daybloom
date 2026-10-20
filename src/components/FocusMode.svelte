@@ -21,7 +21,7 @@
   import AlefFace from './addons/alef/AlefFace.svelte';
   import AlefPosture from './addons/alef/AlefPosture.svelte';
   import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
-  import { BEHAVIORS } from '../lib/addons/alef/behaviors';
+  import { ACTS } from '../lib/addons/alef/behaviors';
 
   // Alef works beside you here: body doubling.
   const alefOn = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.onDial);
@@ -68,6 +68,7 @@
         reduced={view.reducedMotion}
     bubble={alef.bubble}
     onpoke={() => alef.poke()}
+    ontouch={(k) => alef.touch(k)}
     ondismiss={() => alef.dismissBubble()}
   />
 {/snippet}
@@ -93,7 +94,7 @@
         label="Focus dial"
         prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
         prayerBloom={waqt.bloom}
-        lift={alefOn && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
+        lift={alefOn && alef.performing ? ACTS[alef.perf.id].lift : 0}
         screen={alefOn ? { led: alef.led, glow: alef.glow, palette: alef.screenFor(view.finish) } : null}
       >
         <Readout

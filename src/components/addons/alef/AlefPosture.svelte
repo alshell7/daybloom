@@ -3,11 +3,11 @@
   // can hop or shiver once. Transform only, one-shot; at rest it's just the dial.
   import type { Snippet } from 'svelte';
   import { alef, alefFile } from '../../../lib/addons/alef/alef.svelte';
-  import { BEHAVIORS } from '../../../lib/addons/alef/behaviors';
+  import { ACTS } from '../../../lib/addons/alef/behaviors';
 
   let { on, reduced = false, compact = false, children }: { on: boolean; reduced?: boolean; compact?: boolean; children: Snippet } = $props();
 
-  const p = $derived(on && !reduced && alef.performing ? BEHAVIORS[alef.perf.id].posture : null);
+  const p = $derived(on && !reduced && alef.performing ? ACTS[alef.perf.id].posture : null);
   // A dial tells the time: it only leans a little, so the hand still reads true.
   const transform = $derived(p ? `translateY(${(p.y * (compact ? 0.7 : 1)).toFixed(1)}px) rotate(${(p.tilt * 0.4).toFixed(2)}deg) scale(${1 + (p.scale - 1) * 0.6})` : null);
   // Two copies of each keyframe, alternating, restart the move for each new feeling.

@@ -242,3 +242,64 @@ describe('alef: conversation', () => {
     expect(feelingOfResult({ say: '', card: { kind: 'block', key: 'k', verb: 'done' } })).toBe('delighted');
   });
 });
+
+describe('alef: formatting replies', async () => {
+  const { md } = await import('./md');
+  it('keeps a little Markdown and nothing unsafe', () => {
+    expect(md('**Done!** Moved *lunch*.')).toBe('<p><b>Done!</b> Moved <i>lunch</i>.</p>');
+    expect(md('- one\n- two')).toBe('<ul><li>one</li><li>two</li></ul>');
+    expect(md('<img src=x onerror=alert(1)> [x](javascript:1)')).toBe('<p>&lt;img src=x onerror=alert(1)&gt; [x](javascript:1)</p>');
+    expect(md('a\nb\n\nc')).toBe('<p>a<br>b</p><p>c</p>');
+  });
+});
+
+describe('alef: a pet', async () => {
+  const { gesture, petMoment, FRESH_MEMORY } = await import('./pet');
+  const { ACTS, TRICK_IDS } = await import('./behaviors');
+  const { PATTERNS } = await import('./chirps');
+  const stroke = (n: number, ms: number, amp = 0.35) => Array.from({ length: n }, (_, i) => ({ x: 0.5 + (i % 2 ? amp : -amp) * (i % 4 < 2 ? 1 : 0.9), y: 0.5, t: (i * ms) / n }));
+
+  it('tells petting from tickling, and a pass-over from either', () => {
+    expect(gesture(stroke(6, 1200), 1200)).toBe('pet');
+    expect(gesture(stroke(14, 700, 0.2), 700)).toBe('tickle');
+    expect(gesture([{ x: 0, y: 0.5, t: 0 }, { x: 0.3, y: 0.5, t: 50 }, { x: 0.6, y: 0.5, t: 100 }, { x: 0.9, y: 0.5, t: 150 }, { x: 1, y: 0.5, t: 200 }], 200)).toBeNull();
+  });
+
+  const ctx = { now: Date.UTC(2026, 9, 19, 11), awake: true, idleMin: 0, prevIdleMin: 0, activeMin: 10, focus: null, v: 0.2, a: 0, quiet: false, backlog: 0, roll: 0.5 };
+
+  it('welcomes you back, once', () => {
+    const a = petMoment({ ...ctx, prevIdleMin: 25 }, FRESH_MEMORY);
+    expect(a.moment?.kind).toBe('welcome');
+    expect(petMoment({ ...ctx, prevIdleMin: 25, now: ctx.now + 60_000 }, a.memory).moment).toBeNull();
+  });
+
+  it('cheers halfway through focus and checks you are still there, once each', () => {
+    const f = { progress: 0.55, startedAt: 1 };
+    const a = petMoment({ ...ctx, focus: f }, FRESH_MEMORY);
+    expect(a.moment?.kind).toBe('halfway');
+    const b = petMoment({ ...ctx, focus: f, idleMin: 6 }, a.memory);
+    expect(b.moment?.kind).toBe('still-there');
+    expect(petMoment({ ...ctx, focus: f, idleMin: 7 }, b.memory).moment).toBeNull();
+  });
+
+  it('asks for a stretch after a long stretch of work, and keeps hiccups rare', () => {
+    expect(petMoment({ ...ctx, activeMin: 85 }, FRESH_MEMORY).moment?.act).toBe('stretching');
+    let mem = FRESH_MEMORY;
+    let quirks = 0;
+    for (let i = 0; i < 400; i++) {
+      const r = petMoment({ ...ctx, now: ctx.now + i * 60_000 * 100, roll: 0.001 }, mem);
+      mem = r.memory;
+      if (r.moment?.kind === 'quirk') quirks++;
+    }
+    expect(quirks).toBeLessThanOrEqual(2 * Math.ceil((400 * 100) / (60 * 24)) + 2);
+    // At night, Alef leaves you be.
+    expect(petMoment({ ...ctx, awake: false, prevIdleMin: 30, activeMin: 200, roll: 0.001 }, FRESH_MEMORY).moment).toBeNull();
+  });
+
+  it('has a full performance and a sound for every trick', () => {
+    for (const id of TRICK_IDS) {
+      expect(ACTS[id].poses.length).toBeGreaterThan(0);
+      expect(PATTERNS[ACTS[id].chirp]).toBeDefined();
+    }
+  });
+});

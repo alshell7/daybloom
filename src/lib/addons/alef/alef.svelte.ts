@@ -18,7 +18,7 @@ import { view } from '../../stores/view.svelte';
 import type { Entry } from '../../assistant/session.svelte';
 import type { Call } from '../../assistant/tools';
 import { behaviorForEvent, idleBehavior, impulse, moodTarget, settle, type Affect, type AffectEvent } from './affect';
-import { BEHAVIORS, BEHAVIOR_IDS, lengthOf, type BehaviorId } from './behaviors';
+import { ACTS, BEHAVIOR_IDS, lengthOf, type ActId, type BehaviorId } from './behaviors';
 import { chirp } from './chirps';
 import { moodGlow, moodLed } from './face';
 import { screenPalette, type ScreenPalette, type ScreenStyle } from './palette';
@@ -62,6 +62,8 @@ export interface AlefFile {
   settings: AlefSettings;
   /** The day you met. */
   met: string | null;
+  /** Your friendship: the days you spent together, pets and chats. */
+  bond: { days: string[]; pets: number; chats: number };
 }
 
 export const EYE_COLORS = [
@@ -116,6 +118,11 @@ export function migrateAlef(raw: any): AlefFile {
   return {
     version: 1,
     met: typeof raw?.met === 'string' ? raw.met : null,
+    bond: {
+      days: Array.isArray(raw?.bond?.days) ? raw.bond.days.filter((d: unknown): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(-400) : [],
+      pets: Number.isFinite(raw?.bond?.pets) ? Math.max(0, raw.bond.pets) : 0,
+      chats: Number.isFinite(raw?.bond?.chats) ? Math.max(0, raw.bond.chats) : 0,
+    },
     settings: {
       eyes: s.eyes === 'dial' ? 'dial' : hex(s.eyes, DEFAULT_ALEF.eyes),
       screen: s.screen === 'oled' ? 'oled' : 'dial',
@@ -158,20 +165,21 @@ export interface Msg {
 
 /** What the widget needs to mirror the face. */
 interface Mirror {
-  perf?: { id: BehaviorId; seq: number };
+  perf?: { id: ActId; seq: number };
   affect?: Affect;
   talk?: { seq: number; starts: number[]; total: number } | null;
+  bubble?: { text: string; seq: number } | null;
 }
 
 /** Feeling colours for the mood light. */
-export function ledOf(id: BehaviorId, s: AlefSettings): string {
-  return s.led === 'feeling' ? BEHAVIORS[id].led : s.led;
+export function ledOf(id: ActId, s: AlefSettings): string {
+  return s.led === 'feeling' ? ACTS[id].led : s.led;
 }
 
 class Alef {
   affect = $state<Affect>({ v: 0.25, a: 0.05 });
   /** The behaviour playing (or last played) and a counter that restarts it. */
-  perf = $state<{ id: BehaviorId; seq: number }>({ id: 'blinking', seq: 0 });
+  perf = $state<{ id: ActId; seq: number }>({ id: 'blinking', seq: 0 });
   /** While a behaviour plays: the dial's posture and the blocks' lift follow it. */
   performing = $state(false);
   /** A line in a speech bubble. */
@@ -179,6 +187,8 @@ class Alef {
   /** Syllable timings while Alef speaks (the eyes bob to them). */
   talk = $state<{ seq: number; starts: number[]; total: number } | null>(null);
   thinking = $state(false);
+  /** You're typing to Alef (it watches the field). */
+  typing = $state(false);
   messages = $state<Msg[]>([]);
   busy = $state(false);
   /** A key is saved for the chosen AI brain. */
@@ -211,12 +221,16 @@ class Alef {
   #lastChirp = 0;
   #lastLine = 0;
   #pokes: number[] = [];
+  #lastTouch = 0;
+  /** Asleep after a "sleeping" performance, until the next one. */
+  asleep = $state(false);
   /** Main window: broadcast to the widget. */
   mirror = false;
 
   /** Play a behaviour: the face, the dial's posture and lift, and (if asked) its chirp. */
-  perform(id: BehaviorId, o: { sound?: boolean } = {}) {
-    const b = BEHAVIORS[id];
+  perform(id: ActId, o: { sound?: boolean } = {}) {
+    const b = ACTS[id];
+    this.asleep = id === 'sleeping';
     this.perf = { id, seq: ++this.#seq };
     this.performing = true;
     if (this.#perfTimer) clearTimeout(this.#perfTimer);
@@ -225,13 +239,13 @@ class Alef {
     this.#send({ perf: this.perf, affect: this.affect });
   }
 
-  #chirp(id: BehaviorId) {
+  #chirp(id: ActId) {
     const s = this.settings;
     if (s.voice === 'off' || !settings.value.sound) return;
     const now = Date.now();
     if (now - this.#lastChirp < 2500) return;
     this.#lastChirp = now;
-    chirp(BEHAVIORS[id].chirp, { pitch: s.pitch, volume: s.volume });
+    chirp(ACTS[id].chirp, { pitch: s.pitch, volume: s.volume });
   }
 
   /** A moment happened: feel it, show it, maybe say something. */
@@ -255,6 +269,8 @@ class Alef {
           );
     // A line speaks for itself; otherwise the chirp does.
     this.perform(id, { sound: !o.quiet && !line });
+    // The whole day done: after the cheer, a little dance.
+    if (ev === 'allDone') setTimeout(() => this.perform('dancing', { sound: true }), lengthOf(ACTS[id]) + 300);
     if (line && !o.quiet) this.say(line, { voice: true, important: ['allDone', 'poke', 'pokeAgain', 'pokeTooMuch', 'greet'].includes(ev) });
   }
 
@@ -264,8 +280,12 @@ class Alef {
     if (!o.important && now - this.#lastLine < 15_000) return;
     this.#lastLine = now;
     this.bubble = { text, seq: ++this.#seq };
+    this.#send({ bubble: this.bubble });
     if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
-    this.#bubbleTimer = setTimeout(() => (this.bubble = null), o.ms ?? Math.max(3600, Math.min(9000, text.length * 75)));
+    this.#bubbleTimer = setTimeout(() => {
+      this.bubble = null;
+      this.#send({ bubble: null });
+    }, o.ms ?? Math.max(3600, Math.min(9000, text.length * 75)));
     if (o.voice) void this.#voice(text);
   }
 
@@ -292,9 +312,40 @@ class Alef {
   /** A tap on the face. Once is a hello; a flurry gets a grumble. */
   poke() {
     const now = Date.now();
+    // Asleep: a poke wakes it, groggily.
+    if (this.asleep) {
+      this.asleep = false;
+      this.affect = { v: this.affect.v, a: Math.max(this.affect.a, -0.1) };
+      this.perform('waking', { sound: true });
+      setTimeout(() => this.say('Huh? Oh, hi!', { voice: true, important: true }), 900);
+      this.#pokes = [now];
+      return;
+    }
     this.#pokes = [...this.#pokes.filter((t) => now - t < 8000), now];
     const n = this.#pokes.length;
     this.react(n >= 6 ? 'pokeTooMuch' : n >= 3 ? 'pokeAgain' : 'poke');
+  }
+
+  /** Touch from the face (here or on the widget): petting, a tickle, a squeeze. */
+  touch(kind: 'pet' | 'tickle' | 'squish' | 'poke') {
+    if (kind === 'poke') return this.poke();
+    const now = Date.now();
+    // One reaction per touch, not one per pointer move.
+    if (now - this.#lastTouch < 2600) return;
+    this.#lastTouch = now;
+    this.asleep = false;
+    if (kind === 'pet') {
+      alefFile.value.bond.pets++;
+      this.affect = { v: Math.min(1, this.affect.v + 0.35), a: Math.max(-0.6, this.affect.a - 0.1) };
+      this.perform('purring', { sound: true });
+      if (this.settings.chattiness === 'chatty' && Math.random() < 0.4) this.say(['Mmm…', 'That’s nice.', 'Purrr…'][Math.floor(Math.random() * 3)], { important: true, ms: 2600 });
+    } else if (kind === 'tickle') {
+      this.affect = { v: Math.min(1, this.affect.v + 0.3), a: Math.min(1, this.affect.a + 0.4) };
+      this.perform('giggling', { sound: true });
+    } else {
+      this.affect = { v: this.affect.v, a: Math.min(1, this.affect.a + 0.3) };
+      this.perform('squished', { sound: true });
+    }
   }
 
   // ── Conversation ───────────────────────────────────────────────────────────
@@ -329,6 +380,8 @@ class Alef {
   async ask(raw: string) {
     const text = raw.trim();
     if (!text || this.busy) return;
+    this.asleep = false;
+    alefFile.value.bond.chats++;
     this.#push({ who: 'you', text });
     const reply = this.#push({ who: 'alef', text: '', pending: true });
     this.busy = true;
@@ -394,9 +447,14 @@ class Alef {
       this.perf = m.perf;
       this.performing = true;
       if (this.#perfTimer) clearTimeout(this.#perfTimer);
-      this.#perfTimer = setTimeout(() => (this.performing = false), Math.min(lengthOf(BEHAVIORS[m.perf.id]), 6000) + 120);
+      this.#perfTimer = setTimeout(() => (this.performing = false), Math.min(lengthOf(ACTS[m.perf.id]), 6000) + 120);
     }
     if (m.talk !== undefined) this.talk = m.talk;
+    if (m.bubble !== undefined) {
+      this.bubble = m.bubble;
+      if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
+      if (m.bubble) this.#bubbleTimer = setTimeout(() => (this.bubble = null), 9000);
+    }
   }
 }
 
@@ -431,6 +489,9 @@ export function startAlef(): () => void {
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let greeted = false;
   let saidLate = '';
+  let prevIdleMin = 0;
+  let activeMin = 0;
+  let petMemory: import('./pet').PetMemory = { last: {}, halfway: null, checked: null, quirks: { day: '', n: 0 } };
 
   async function look() {
     if (stopped) return;
@@ -461,7 +522,31 @@ export function startAlef(): () => void {
         return;
       }
     }
-    for (const m of r.moments.slice(0, 1)) alef.react(m.ev, { block: m.block ?? null });
+    // A day together.
+    const bond = alefFile.value.bond;
+    if (sig.awake && idleMin < 5 && bond.days.at(-1) !== today) bond.days = [...bond.days, today].slice(-400);
+    activeMin = idleMin >= 5 ? 0 : activeMin + Math.max(1, Math.round(dt / MINUTE));
+    if (r.moments.length) {
+      for (const m of r.moments.slice(0, 1)) alef.react(m.ev, { block: m.block ?? null });
+    } else if (!alef.performing && !alef.busy && !alef.talk) {
+      // Nothing happened in the day: maybe Alef does something on its own.
+      const ts = timer.active ? timer.status(now) : null;
+      const focus = ts && timer.active && !ts.finished ? { progress: ts.progress, startedAt: timer.active.startedAt } : null;
+      const { petMoment } = await import('./pet');
+      const next = snap.blocks.find((b) => !b.floating && b.startMs > now && b.startMs - now < 60 * MINUTE);
+      const { openItems } = await import('../../backlog');
+      const p = petMoment(
+        { now, awake: sig.awake, idleMin, prevIdleMin, activeMin, focus, v: alef.affect.v, a: alef.affect.a, quiet: !next && !snap.blocks.some((b) => !b.floating && b.startMs <= now && b.endMs > now), backlog: openItems(taskFile.value.tasks).length, roll: Math.random() },
+        petMemory,
+      );
+      petMemory = p.memory;
+      if (p.moment) {
+        const quietLine = alef.settings.chattiness === 'quiet' && p.moment.kind !== 'still-there';
+        alef.perform(p.moment.act, { sound: !p.moment.line || quietLine });
+        if (p.moment.line && !quietLine) alef.say(p.moment.line, { voice: true, important: true });
+      }
+    }
+    prevIdleMin = idleMin;
     // Late and you're still here: a gentle goodnight, once.
     if (!sig.awake && idleMin < 3 && saidLate !== today && alef.settings.chattiness !== 'quiet') {
       saidLate = today;
@@ -546,6 +631,9 @@ export function startAlef(): () => void {
     );
   });
 
+  // Touches on the widget's face come here; the reaction goes back to it.
+  const offTouch = platform.onBroadcast<{ kind: 'pet' | 'tickle' | 'squish' | 'poke' }>('alef-touch', (m) => alef.touch(m.kind));
+
   scheduleIdle();
   const settleTimer = setInterval(() => {
     const dt = Date.now() - lastTick;
@@ -555,6 +643,7 @@ export function startAlef(): () => void {
   return () => {
     stopped = true;
     alef.mirror = false;
+    offTouch();
     root();
     offers.forEach((f) => f());
     if (idleTimer) clearTimeout(idleTimer);

@@ -19,9 +19,42 @@
   import AlefFace from '../components/addons/alef/AlefFace.svelte';
   import AlefPosture from '../components/addons/alef/AlefPosture.svelte';
   import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
-  import { BEHAVIORS } from '../lib/addons/alef/behaviors';
+  import { ACTS } from '../lib/addons/alef/behaviors';
+  import { gesture, type Sample } from '../lib/addons/alef/pet';
 
   const alefOn = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.inWidget);
+
+  // Alef's face on the widget answers touch: a stroke over it is petting, a wiggle tickles, a
+  // click is a poke. The planner window decides how Alef feels; the widget shows it.
+  let dialEl = $state<HTMLDivElement>();
+  let strokes: Sample[] = [];
+  function faceAt(e: MouseEvent): { x: number; y: number } | null {
+    if (!dialEl) return null;
+    const r = dialEl.getBoundingClientRect();
+    const size = r.width * 0.42;
+    const x = (e.clientX - (r.left + r.width / 2 - size / 2)) / size;
+    const y = (e.clientY - (r.top + r.height / 2 - size / 2)) / size;
+    return Math.hypot(x - 0.5, y - 0.5) <= 0.5 ? { x, y } : null;
+  }
+  function onHover(e: PointerEvent) {
+    if (!alefOn || e.buttons) return;
+    const p = faceAt(e);
+    if (!p) {
+      strokes = [];
+      return;
+    }
+    const now = performance.now();
+    strokes.push({ ...p, t: now });
+    if (strokes.length > 60) strokes.splice(0, strokes.length - 60);
+    const g = gesture(strokes, now);
+    if (g) {
+      strokes = [];
+      void platform.broadcast('alef-touch', { kind: g });
+    }
+  }
+  function onTap(e: MouseEvent) {
+    if (alefOn && e.detail === 1 && faceAt(e)) void platform.broadcast('alef-touch', { kind: 'poke' });
+  }
 
   // The desktop object: a watch on your wallpaper. Drag to move, double-click to open
   // the planner, hover for a few quiet controls.
@@ -122,12 +155,13 @@
   class="widget"
   role="presentation"
   onpointerdown={onDown}
-  onpointermove={onMove}
+  onpointermove={(e) => (onMove(e), onHover(e))}
   onpointerup={() => (press = null)}
+  onclick={onTap}
   ondblclick={openMain}
   title={`${PRESETS[presetId].name} · double-click to open ${timer.active ? 'your focus' : 'Daybloom'}`}
 >
-  <div class="dial">
+  <div class="dial" bind:this={dialEl}>
     <AlefPosture on={alefOn} reduced={view.reducedMotion} compact>
     <Dial
       {presetId}
@@ -150,7 +184,7 @@
       prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
       prayerBloom={waqt.bloom}
       label="Daybloom widget"
-      lift={alefOn && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
+      lift={alefOn && alef.performing ? ACTS[alef.perf.id].lift : 0}
       screen={alefOn ? { led: alef.led, glow: alef.glow, palette: alef.screenFor(finish) } : null}
     >
       <Readout
@@ -164,6 +198,7 @@
         compact
         reduced={view.reducedMotion}
         face={alefOn ? alefFace : undefined}
+        note={alefOn ? (alef.bubble?.text ?? null) : null}
       />
     </Dial>
     </AlefPosture>

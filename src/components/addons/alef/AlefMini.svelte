@@ -1,13 +1,13 @@
 <script lang="ts">
   // A small, still Alef: the pose that says a feeling best, drawn once with the same eyes as
   // the live face (no timers, no motion), for chat avatars and the feelings gallery.
-  import { BEHAVIORS, type BehaviorId } from '../../../lib/addons/alef/behaviors';
+  import { ACTS, type ActId } from '../../../lib/addons/alef/behaviors';
   import { drawEyes, eyeOf } from '../../../lib/addons/alef/eyes';
   import type { ScreenPalette } from '../../../lib/addons/alef/palette';
 
-  let { feeling = 'pleased', screen, size = 28 }: { feeling?: BehaviorId; screen: ScreenPalette; size?: number } = $props();
+  let { feeling = 'pleased', screen, size = 28 }: { feeling?: ActId; screen: ScreenPalette; size?: number } = $props();
 
-  const b = $derived(BEHAVIORS[feeling]);
+  const b = $derived(ACTS[feeling]);
   // The pose held longest is the one that reads best still.
   const pose = $derived(b.poses.reduce((a, p) => (p.hold > a.hold ? p : a), b.poses[0]));
 

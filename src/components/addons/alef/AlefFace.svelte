@@ -6,10 +6,11 @@
   // tear…) are one-shot, transform and opacity only.
   import { onMount, untrack } from 'svelte';
   import type { Affect } from '../../../lib/addons/alef/affect';
-  import { BEHAVIORS, type BehaviorId, type Eye } from '../../../lib/addons/alef/behaviors';
+  import { ACTS, type ActId, type Eye } from '../../../lib/addons/alef/behaviors';
   import { moodGlow, moodLed, restPose, STICKY } from '../../../lib/addons/alef/face';
   import AlefEyes from './AlefEyes.svelte';
   import type { ScreenPalette } from '../../../lib/addons/alef/palette';
+  import { gesture, type Gesture, type Sample } from '../../../lib/addons/alef/pet';
 
   let {
     perf,
@@ -31,8 +32,10 @@
     ondismiss,
     label = 'Alef',
     screen = null,
+    attend = null,
+    ontouch,
   }: {
-    perf: { id: BehaviorId; seq: number };
+    perf: { id: ActId; seq: number };
     performing?: boolean;
     affect: Affect;
     talk?: { seq: number; starts: number[]; total: number } | null;
@@ -57,7 +60,55 @@
     label?: string;
     /** The screen's colours (the dial's finish, or black glass). */
     screen?: ScreenPalette | null;
+    /** Somewhere to look (−1..1 each way), e.g. the field you're typing in. */
+    attend?: { x: number; y: number } | null;
+    /** Stroking the face (petting), a fast wiggle (tickling), or a press held (a squeeze). */
+    ontouch?: (kind: Gesture | 'squish') => void;
   } = $props();
+
+  // ── Touch: strokes and wiggles over the face, and a long press ──
+  let samples: Sample[] = [];
+  let hold: ReturnType<typeof setTimeout> | null = null;
+  let held = false;
+  let downAt: { x: number; y: number } | null = null;
+  function faceMove(e: PointerEvent) {
+    if (!ontouch || !root) return;
+    const r = root.getBoundingClientRect();
+    const now = performance.now();
+    samples.push({ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.width, t: now });
+    if (samples.length > 60) samples.splice(0, samples.length - 60);
+    if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 8 && hold) {
+      clearTimeout(hold);
+      hold = null;
+    }
+    const g = gesture(samples, now);
+    if (g) {
+      samples = [];
+      ontouch(g);
+    }
+  }
+  function faceDown(e: PointerEvent) {
+    held = false;
+    downAt = { x: e.clientX, y: e.clientY };
+    if (!ontouch || e.button > 0) return;
+    hold = setTimeout(() => {
+      hold = null;
+      held = true;
+      ontouch('squish');
+    }, 650);
+  }
+  function faceUp() {
+    if (hold) clearTimeout(hold);
+    hold = null;
+    downAt = null;
+  }
+  function faceClick() {
+    if (held) {
+      held = false;
+      return;
+    }
+    onpoke?.();
+  }
   const eyeColor = $derived(screen?.eye ?? eyes);
   const eyeGlow = $derived(screen ? screen.glow : 1);
   const scan = $derived(screen ? screen.scan : 0.13);
@@ -67,7 +118,7 @@
   let pose = $state<Pose | null>(null);
   let asleep = $state(false);
   const shown = $derived<Pose>(pose ?? { ...rest, ms: 480 });
-  const b = $derived(BEHAVIORS[perf.id]);
+  const b = $derived(ACTS[perf.id]);
   const ledColor = $derived(led === 'feeling' ? moodLed(affect, performing ? perf.id : null) : led);
   const glow = $derived(moodGlow(affect, performing ? perf.id : null));
 
@@ -77,9 +128,9 @@
     timers = [];
   };
 
-  function play(id: BehaviorId) {
+  function play(id: ActId) {
     clear();
-    const beh = BEHAVIORS[id];
+    const beh = ACTS[id];
     asleep = false;
     if (reduced) {
       const last = beh.poses.at(-1)!;
@@ -179,7 +230,7 @@
 >
   {#if bubble && !compact}
     {#key bubble.seq}
-      <button class="bubble" onclick={() => ondismiss?.()} aria-live="polite" title="Click to hide">{bubble.text}</button>
+      <button class="bubble" onclick={() => ondismiss?.()} aria-live="polite" title="Click to talk">{bubble.text}</button>
     {/key}
   {/if}
 
@@ -189,12 +240,16 @@
     style:animation={move}
     aria-label={interactive ? `${label}. Click to say hello, double-click to talk.` : label}
     role={interactive ? undefined : 'img'}
-    onclick={interactive ? () => onpoke?.() : undefined}
+    onclick={interactive ? faceClick : undefined}
     ondblclick={interactive ? () => onopen?.() : undefined}
+    onpointermove={interactive ? faceMove : undefined}
+    onpointerdown={interactive ? faceDown : undefined}
+    onpointerup={interactive ? faceUp : undefined}
+    onpointerleave={interactive ? faceUp : undefined}
   >
     {#if framed}<i class="rim" aria-hidden="true"></i>{/if}
     <div class="eyes">
-      <AlefEyes pose={shown} color={eyeColor} glow={(0.35 + glow * 0.5) * eyeGlow} shadow={screen && !screen.dark ? 'rgba(20, 28, 42, 0.22)' : null} look={follow} {talk} alive={!pose && !asleep} {asleep} {reduced} />
+      <AlefEyes pose={shown} color={eyeColor} glow={(0.35 + glow * 0.5) * eyeGlow} shadow={screen && !screen.dark ? 'rgba(20, 28, 42, 0.22)' : null} look={pose ? null : (attend ?? follow)} {talk} alive={!pose && !asleep} {asleep} {reduced} />
       {#if scan > 0}<i class="scan" aria-hidden="true"></i>{/if}
       {#if overlay}
         {#key `${perf.seq}:${overlay}`}
@@ -591,6 +646,12 @@
     font-size: 14px;
     line-height: 1.35;
     text-align: center;
+    /* Long answers stay short here; the whole of it is in the chat. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
     pointer-events: auto;
     animation: speak 480ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
     transform-origin: 50% 100%;

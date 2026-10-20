@@ -3,7 +3,7 @@
   // not). Tap one to see it on the stage, or play them all.
   import { onDestroy } from 'svelte';
   import { alef, alefFile } from '../../../lib/addons/alef/alef.svelte';
-  import { BEHAVIORS, BY_CORE, CORE_LABEL, lengthOf, type BehaviorId, type CoreState } from '../../../lib/addons/alef/behaviors';
+  import { ACTS, BY_CORE, CORE_LABEL, lengthOf, TRICK_IDS, type ActId, type CoreState } from '../../../lib/addons/alef/behaviors';
   import { chirp } from '../../../lib/addons/alef/chirps';
   import Icon from '../../../lib/Icon.svelte';
   import { settings } from '../../../lib/stores/settings.svelte';
@@ -15,31 +15,31 @@
   const s = $derived(alefFile.value.settings);
   const pal = $derived(alef.screenFor(view.finish));
 
-  let perf = $state<{ id: BehaviorId; seq: number }>({ id: 'happy', seq: 0 });
+  let perf = $state<{ id: ActId; seq: number }>({ id: 'happy', seq: 0 });
   let performing = $state(false);
   let seq = 0;
   let stopAt: ReturnType<typeof setTimeout> | null = null;
   let tour: ReturnType<typeof setTimeout> | null = null;
   let touring = $state(false);
 
-  function show(id: BehaviorId, sound = true) {
+  function show(id: ActId, sound = true) {
     perf = { id, seq: ++seq };
     performing = true;
     if (stopAt) clearTimeout(stopAt);
-    stopAt = setTimeout(() => (performing = false), Math.min(lengthOf(BEHAVIORS[id]), 6000) + 150);
-    if (sound && settings.value.sound && s.voice !== 'off') chirp(BEHAVIORS[id].chirp, { pitch: s.pitch, volume: s.volume });
+    stopAt = setTimeout(() => (performing = false), Math.min(lengthOf(ACTS[id]), 6000) + 150);
+    if (sound && settings.value.sound && s.voice !== 'off') chirp(ACTS[id].chirp, { pitch: s.pitch, volume: s.volume });
   }
 
   function playAll() {
     if (touring) return stopTour();
     touring = true;
-    const all = ORDER.flatMap((c) => BY_CORE[c]);
+    const all: ActId[] = [...ORDER.flatMap((c) => BY_CORE[c]), ...TRICK_IDS];
     let i = 0;
     const next = () => {
       if (i >= all.length) return stopTour();
       const id = all[i++];
       show(id, false);
-      tour = setTimeout(next, Math.min(lengthOf(BEHAVIORS[id]), 2600) + 500);
+      tour = setTimeout(next, Math.min(lengthOf(ACTS[id]), 2600) + 500);
     };
     next();
   }
@@ -58,12 +58,12 @@
 
 <div class="stage-wrap"><div class="stage">
   <div class="face">
-    <AlefFace {perf} {performing} {affect} screen={pal} led={s.led} reduced={view.reducedMotion} posture interactive={false} gaze={false} label={`Alef, ${BEHAVIORS[perf.id].label}`} />
+    <AlefFace {perf} {performing} {affect} screen={pal} led={s.led} reduced={view.reducedMotion} posture interactive={false} gaze={false} label={`Alef, ${ACTS[perf.id].label}`} />
   </div>
   <div class="now">
-    <span class="core">{CORE_LABEL[BEHAVIORS[perf.id].core]}</span>
-    <b>{BEHAVIORS[perf.id].label}</b>
-    <button class="btn btn-soft" onclick={playAll}><Icon name={touring ? 'pause' : 'play'} size={13} /> {touring ? 'Stop' : 'Play all 32'}</button>
+    <span class="core">{CORE_LABEL[ACTS[perf.id].core]}</span>
+    <b>{ACTS[perf.id].label}</b>
+    <button class="btn btn-soft" onclick={playAll}><Icon name={touring ? 'pause' : 'play'} size={13} /> {touring ? 'Stop' : 'Play them all'}</button>
   </div>
 </div></div>
 
@@ -73,14 +73,25 @@
       <h5>{CORE_LABEL[core]}</h5>
       <div class="tiles">
         {#each BY_CORE[core] as id (id)}
-          <button class="tile" class:on={perf.id === id} onclick={() => (stopTour(), show(id))} aria-label={`Show ${BEHAVIORS[id].label}`}>
+          <button class="tile" class:on={perf.id === id} onclick={() => (stopTour(), show(id))} aria-label={`Show ${ACTS[id].label}`}>
             <AlefMini feeling={id} screen={pal} size={52} />
-            <span>{BEHAVIORS[id].label.replace(' (cute)', '')}</span>
+            <span>{ACTS[id].label.replace(' (cute)', '')}</span>
           </button>
         {/each}
       </div>
     </section>
   {/each}
+  <section>
+    <h5>Tricks <span class="hint">pet, tickle or squeeze Alef to see some of these</span></h5>
+    <div class="tiles">
+      {#each TRICK_IDS as id (id)}
+        <button class="tile" class:on={perf.id === id} onclick={() => (stopTour(), show(id))} aria-label={`Show ${ACTS[id].label}`}>
+          <AlefMini feeling={id} screen={pal} size={52} />
+          <span>{ACTS[id].label}</span>
+        </button>
+      {/each}
+    </div>
+  </section>
 </div>
 
 <style>
@@ -123,6 +134,12 @@
   .groups {
     display: grid;
     gap: var(--s-3);
+  }
+  h5 .hint {
+    margin-left: 6px;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
   }
   h5 {
     margin: 0 0 6px;

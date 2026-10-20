@@ -57,7 +57,7 @@
   import AlefPosture from '../components/addons/alef/AlefPosture.svelte';
   import AlefPanel from '../components/addons/alef/AlefPanel.svelte';
   import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
-  import { BEHAVIORS } from '../lib/addons/alef/behaviors';
+  import { ACTS } from '../lib/addons/alef/behaviors';
 
   const alefOnDial = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.onDial);
 
@@ -263,8 +263,9 @@
         reduced={view.reducedMotion}
     bubble={alef.bubble}
     onpoke={() => alef.poke()}
+    ontouch={(k) => alef.touch(k)}
     onopen={() => (view.sheet = { kind: 'alef', tab: 'talk' })}
-    ondismiss={() => alef.dismissBubble()}
+    ondismiss={() => ((view.sheet = { kind: 'alef', tab: 'talk' }), alef.dismissBubble())}
   />
 {/snippet}
 
@@ -316,7 +317,7 @@
           breathStart={view.breatheAt}
           prayers={isOn('waqt') ? prayerMarks(clock.minute) : []}
           prayerBloom={waqt.bloom}
-          lift={alefOnDial && alef.performing ? BEHAVIORS[alef.perf.id].lift : 0}
+          lift={alefOnDial && alef.performing ? ACTS[alef.perf.id].lift : 0}
           screen={alefOnDial ? { led: alef.led, glow: alef.glow, palette: alef.screenFor(view.finish) } : null}
         >
           <Readout

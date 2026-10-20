@@ -67,7 +67,7 @@ export interface Pose {
 export type Overlay = 'hearts' | 'stars' | 'zzz' | 'sweat' | 'question' | 'exclaim' | 'confetti' | 'tear' | 'vein' | 'spark';
 
 export interface Behavior {
-  id: BehaviorId;
+  id: ActId;
   core: CoreState;
   label: string;
   poses: Pose[];
@@ -91,6 +91,7 @@ export type ChirpId =
   | 'blink' | 'peek' | 'yawn' | 'snore'
   | 'delight' | 'pleased' | 'love'
   | 'confused' | 'aww' | 'frustrated' | 'whimper'
+  | 'purr' | 'giggle' | 'squeak' | 'hiccup' | 'sneeze' | 'stretch' | 'hum' | 'dance' | 'welcome' | 'peekaboo'
   | 'none';
 
 // ── Eye helpers ──
@@ -197,6 +198,42 @@ export const BEHAVIORS: Record<BehaviorId, Behavior> = {
 };
 
 export const BEHAVIOR_IDS = Object.keys(BEHAVIORS) as BehaviorId[];
+
+// ── Tricks: what a pet does (petting, tickles, a sneeze…), on top of the 32 feelings ──
+
+export type TrickId = 'purring' | 'giggling' | 'squished' | 'hiccup' | 'sneeze' | 'stretching' | 'daydreaming' | 'dancing' | 'welcome' | 'peekaboo' | 'waking';
+export type ActId = BehaviorId | TrickId;
+
+export const TRICKS: Record<TrickId, Behavior> = {
+  purring: B({ id: 'purring', core: 'pleasant-inactive', label: 'Purring', led: LED.love, glow: 0.8, lift: 4, chirp: 'purr', overlay: 'hearts', posture: { tilt: 0, y: -2, scale: 1.02 },
+    poses: [both({ smile: 0.55, lid: 0.2, sy: 0.92 }, 260, 400), mirror({ smile: 0.6, lid: 0.26, rot: -5, x: -2 }, 520, 420), mirror({ smile: 0.6, lid: 0.26, rot: 5, x: 2 }, 520, 420), both({ smile: 0.55, lid: 0.2 }, 420, 600)] }),
+  giggling: B({ id: 'giggling', core: 'pleasant-active', label: 'Giggling', led: LED.joy, glow: 1, lift: 6, chirp: 'giggle', overlay: 'spark', posture: { tilt: 0, y: -3, scale: 1.02, bounce: true },
+    poses: [both({ smile: 0.66, sy: 0.82 }, 90, 80), both({ smile: 0.66, sy: 0.76, y: -4 }, 80, 70), both({ smile: 0.66, sy: 0.82 }, 80, 70), both({ smile: 0.66, sy: 0.76, y: -4 }, 80, 70), both({ smile: 0.6, sy: 0.84 }, 90, 260), both({ smile: 0.35 }, 220, 200)] }),
+  squished: B({ id: 'squished', core: 'unpleasant-active', label: 'Squished', led: LED.cool, glow: 0.9, lift: -4, chirp: 'squeak', posture: { tilt: 0, y: 4, scale: 0.94 },
+    // Squeezed tight (two slanted slits, "\ /"), then a boing back open.
+    poses: [pair({ sx: 1.12, sy: 0.26, rot: 18, y: 3 }, { sx: 1.12, sy: 0.26, rot: -18, y: 3 }, 70, 560), both({ sx: 0.86, sy: 1.3, y: -5 }, 110, 120), both({ sx: 1.05, sy: 0.95 }, 140, 80), both({}, 200, 100)] }),
+  hiccup: B({ id: 'hiccup', core: 'active', label: 'Hiccup', led: LED.cool, glow: 0.8, lift: 3, chirp: 'hiccup', posture: { tilt: 0, y: -5, scale: 1.02, bounce: true },
+    poses: [both({}, 80, 300), both({ y: -9, sy: 1.16, sx: 0.94 }, 55, 70), both({ y: 1, sy: 0.92 }, 120, 60), both({}, 160, 300), both({ x: -6 }, 200, 200), both({}, 200, 100)] }),
+  sneeze: B({ id: 'sneeze', core: 'active', label: 'Sneeze', led: LED.warm, glow: 0.9, lift: 6, chirp: 'sneeze', overlay: 'sweat', posture: { tilt: 0, y: 0, scale: 1, shake: true },
+    poses: [both({ lid: 0.3, y: -3 }, 220, 160), both({ lid: 0.5, y: -5, sy: 1.04 }, 240, 160), both({ lid: 0.62, y: -7, sy: 1.08 }, 200, 120), both({ sy: 0.14, y: 6, sx: 1.12 }, 60, 260), ...blink(80), both({}, 200, 100)] }),
+  stretching: B({ id: 'stretching', core: 'active', label: 'Stretching', led: LED.calm, glow: 0.8, lift: 8, chirp: 'stretch', posture: { tilt: -6, y: -6, scale: 1.04 },
+    poses: [both({ y: -10, lid: 0.15 }, 360, 300), both({ y: -10, rot: -9, x: -6, lid: 0.3 }, 520, 380), both({ y: -10, rot: 9, x: 6, lid: 0.3 }, 620, 380), both({ smile: 0.35, lid: 0.35 }, 380, 400), both({}, 300, 100)] }),
+  daydreaming: B({ id: 'daydreaming', core: 'pleasant-inactive', label: 'Daydreaming', led: LED.violet, glow: 0.6, lift: 2, chirp: 'hum', overlay: 'stars', posture: { tilt: -4, y: -2, scale: 1 },
+    poses: [both({ x: 10, y: -9, lid: 0.2, sx: 0.95 }, 900, 1800), both({ x: 12, y: -10, lid: 0.25, smile: 0.2 }, 600, 900), ...blink(), both({}, 500, 100)] }),
+  dancing: B({ id: 'dancing', core: 'pleasant-active', label: 'Dancing', led: LED.gold, glow: 1, lift: 14, chirp: 'dance', overlay: 'confetti', posture: { tilt: 0, y: -6, scale: 1.04, bounce: true },
+    poses: [mirror({ smile: 0.5, rot: -10, x: -6, y: -3 }, 150, 110), mirror({ smile: 0.5, rot: 10, x: 6, y: 2 }, 150, 110), mirror({ smile: 0.5, rot: -10, x: -6, y: -3 }, 150, 110), mirror({ smile: 0.5, rot: 10, x: 6, y: 2 }, 150, 110), both({ smile: 0.6, sy: 0.85, y: -6 }, 160, 400), both({ smile: 0.4 }, 240, 200)] }),
+  welcome: B({ id: 'welcome', core: 'pleasant-active', label: 'Welcome back', led: LED.joy, glow: 1, lift: 8, chirp: 'welcome', overlay: 'spark', posture: { tilt: 0, y: -6, scale: 1.03, bounce: true },
+    poses: [both({ sx: 1.16, sy: 1.2, y: -4 }, 110, 380), both({ smile: 0.58, sy: 0.88 }, 180, 700), both({ smile: 0.3 }, 260, 200)] }),
+  peekaboo: B({ id: 'peekaboo', core: 'pleasant-active', label: 'Peekaboo', led: LED.warm, glow: 0.9, lift: 6, chirp: 'peekaboo', posture: { tilt: 0, y: -4, scale: 1.03 },
+    poses: [both({ lid: 0.96 }, 120, 700), both({ sx: 1.22, sy: 1.26, y: -4 }, 90, 380), both({ smile: 0.6, sy: 0.88 }, 180, 600), both({}, 240, 100)] }),
+  waking: B({ id: 'waking', core: 'inactive', label: 'Waking up', led: LED.dim, glow: 0.45, lift: 0, chirp: 'yawn', posture: { tilt: -3, y: 3, scale: 0.99 },
+    poses: [both({ lid: 0.85, y: 6 }, 300, 400), both({ lid: 0.55, y: 4 }, 500, 300), ...blink(110), both({ lid: 0.6, y: 3 }, 300, 260), ...blink(90), both({}, 300, 100)] }),
+};
+
+export const TRICK_IDS = Object.keys(TRICKS) as TrickId[];
+
+/** Every performance, feelings and tricks. */
+export const ACTS: Record<ActId, Behavior> = { ...BEHAVIORS, ...TRICKS };
 
 export const BY_CORE: Record<CoreState, BehaviorId[]> = BEHAVIOR_IDS.reduce(
   (m, id) => {

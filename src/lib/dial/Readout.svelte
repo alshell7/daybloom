@@ -23,6 +23,7 @@
     breath = null,
     onbreathe,
     face,
+    note = null,
   }: {
     state: NowState;
     now: number;
@@ -39,6 +40,8 @@
     onbreathe?: (on: boolean) => void;
     /** A face in place of the big number (Alef), which shows the number on its screen. */
     face?: Snippet<[{ big: string; tone: string }]>;
+    /** A passing line (Alef speaking on the widget) shown for a moment in place of the title. */
+    note?: string | null;
   } = $props();
 
   const breathPhase = $derived(breath ?? null);
@@ -127,10 +130,10 @@
     <div class="face">{@render face({ big: view.big, tone: view.tone })}</div>
   {/if}
   <div class="big tnum"><Rolling text={view.big} {reduced} /></div>
-  {#key view.title}
-    <div class="title" in:fly={{ y: 8, duration: reduced ? 0 : 360, easing: cubicOut }}>
-      {#if view.icon && !compact}<Icon name={view.icon} size={16} stroke={2} />{/if}
-      <span>{view.title}</span>
+  {#key note ?? view.title}
+    <div class="title" class:note={!!note} in:fly={{ y: 8, duration: reduced ? 0 : 360, easing: cubicOut }}>
+      {#if view.icon && !compact && !note}<Icon name={view.icon} size={16} stroke={2} />{/if}
+      <span>{note ?? view.title}</span>
     </div>
   {/key}
   {#if view.sub && !compact}
@@ -209,6 +212,10 @@
   }
   .with-face .title span {
     max-width: 30cqi;
+  }
+  .with-face .title.note {
+    color: var(--alef-eye, currentColor);
+    font-weight: 600;
   }
   .with-face .sub {
     font-size: clamp(9px, 2cqi, 12px);

@@ -2,13 +2,13 @@
 // when the day goes well, heavy lids when tired, a small frown when it's hard). Pure.
 
 import { coreOf, type Affect } from './affect';
-import { BEHAVIORS, type BehaviorId, type CoreState, type Eye } from './behaviors';
+import { ACTS, type ActId, type CoreState, type Eye } from './behaviors';
 
 const E: Eye = { x: 0, y: 0, sx: 1, sy: 1, rot: 0, lid: 0, slant: 0, smile: 0 };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
 /** Behaviours whose last pose stays until the next one (asleep stays asleep). */
-export const STICKY: BehaviorId[] = ['sleeping'];
+export const STICKY: ActId[] = ['sleeping'];
 
 export function restPose(a: Affect): { l: Eye; r: Eye } {
   // At rest the eyes stay round: a good mood lifts and opens them a touch instead of cutting
@@ -36,12 +36,12 @@ const CORE_LED: Record<CoreState, string> = {
 };
 
 /** The mood light: the feeling's colour while performing, the mood's otherwise. */
-export function moodLed(a: Affect, performing: BehaviorId | null): string {
-  return performing ? BEHAVIORS[performing].led : CORE_LED[coreOf(a)];
+export function moodLed(a: Affect, performing: ActId | null): string {
+  return performing ? ACTS[performing].led : CORE_LED[coreOf(a)];
 }
 
 /** How bright the mood light glows (0..1). */
-export function moodGlow(a: Affect, performing: BehaviorId | null): number {
-  if (performing) return BEHAVIORS[performing].glow;
+export function moodGlow(a: Affect, performing: ActId | null): number {
+  if (performing) return ACTS[performing].glow;
   return clamp(0.42 + a.a * 0.22 + a.v * 0.12, 0.18, 0.75);
 }
