@@ -125,6 +125,8 @@
   class:selected
   class:done={block.done}
   class:missed
+  class:past
+  class:full={past || block.done}
   class:live
   class:dragging={drag?.moved}
   class:pouring
@@ -285,8 +287,11 @@
     width: 40px;
     height: var(--h);
     border-radius: 20px;
-    background: var(--c);
-    color: var(--fg);
+    /* Ahead of you: an empty glass in the block's colour. It fills while the block runs and
+       stays full once its time has passed, like stops on a train line. */
+    background: var(--c-soft);
+    color: color-mix(in srgb, var(--c) 80%, var(--ink));
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 55%, transparent);
     overflow: hidden;
     display: grid;
     align-content: start;
@@ -334,6 +339,13 @@
   .live .liquid {
     transform: translateY(calc((1 - var(--p)) * 100%));
   }
+  /* Time passed (or finished early): the glass is full. */
+  .full .liquid {
+    transform: none;
+  }
+  .full .cap-icon {
+    color: var(--fg);
+  }
   .live .cap-icon {
     color: color-mix(in srgb, var(--c) 70%, var(--ink));
   }
@@ -375,31 +387,22 @@
     }
   }
 
-  /* Done: the glass fills to the brim, then settles into its quiet finished look. */
-  .done .liquid {
-    opacity: 0;
-  }
+  /* Done: the glass pours to the brim and stays full, with the lume ring (finished time). */
   .pouring .liquid {
-    animation: pour 1.3s var(--ease-out) forwards;
+    animation: pour 0.9s var(--ease-out) forwards;
   }
   @keyframes pour {
-    0% {
+    from {
       transform: translateY(var(--from, 60%));
-      opacity: 1;
     }
-    45% {
+    to {
       transform: translateY(0);
-      opacity: 1;
-    }
-    100% {
-      transform: translateY(0);
-      opacity: 0;
     }
   }
   .done .capsule {
-    background: var(--c-soft);
-    color: var(--c);
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--lume) 70%, transparent);
+    box-shadow:
+      inset 0 0 0 2px color-mix(in srgb, var(--lume) 75%, transparent),
+      0 0 0 3px color-mix(in srgb, var(--lume) 16%, transparent);
   }
   @keyframes pop {
     0% {
@@ -420,6 +423,12 @@
       var(--c-soft);
     color: color-mix(in srgb, var(--c) 72%, var(--ink));
     box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 72%, transparent);
+  }
+  .event .liquid {
+    background: color-mix(in srgb, var(--c) 38%, transparent);
+  }
+  .event.full .cap-icon {
+    color: color-mix(in srgb, var(--c) 72%, var(--ink));
   }
   .event .title .t {
     font-weight: 400;
@@ -442,11 +451,22 @@
   .prayer .title .t {
     font-weight: 500;
   }
+  /* Its time passed without a tick: full, but in a washed colour, with the dashed edge the
+     dial uses for the same thing. */
   .missed .capsule {
-    background: var(--c-soft);
-    color: color-mix(in srgb, var(--c) 80%, var(--ink));
+    box-shadow: none;
     outline: 2px dashed color-mix(in srgb, var(--c) 50%, transparent);
     outline-offset: -2px;
+  }
+  .missed .liquid {
+    background: color-mix(in srgb, var(--c) 34%, var(--c-soft));
+  }
+  .missed .cap-icon {
+    color: color-mix(in srgb, var(--c) 75%, var(--ink));
+  }
+  /* Behind you: the words step back a little. */
+  .past:not(.selected):not(:hover) .title {
+    color: var(--ink-2);
   }
   .resize {
     position: absolute;

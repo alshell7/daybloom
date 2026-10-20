@@ -152,6 +152,7 @@
         elapsed: (elapsedMs / w.spanMs) * 360,
         lane: lanes.get(b.key) ?? 0,
         current: isToday && !b.done && b.startMs <= minuteNow && b.endMs > minuteNow,
+        past: b.endMs <= minuteNow,
       };
     }),
   );
@@ -617,6 +618,7 @@
         dimmed={!!selectedKey && selectedKey !== a.block.key}
         headsUp={headsUpKey === a.block.key}
         current={a.current}
+        past={a.past}
         handAngle={showNow ? toDeg(handTime) : null}
         {finish}
         {compact}

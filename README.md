@@ -301,6 +301,8 @@ To change the dial type, click **12 h**, **24 h**, **Hour** or **Cycles** below 
 
 - **Clock style:** times show as 12-hour (2:30pm) or 24-hour (14:30), the same as your computer's clock. To change this, open **Settings › Rhythm** and select **12h** or **24h**.
 - **Timeline width:** the timeline on the right uses the space that the dial does not need. To make it wider or narrower, drag its left edge. Double-click the edge to make it fit again.
+- **Timeline:** a block's capsule is empty before it starts, fills while it runs and is full when its time has passed. A full capsule with a dashed edge ended without a tick. The line through the capsules is solid up to now. Free time shows as an empty, dashed capsule; a longer free time is taller.
+- **Filter the timeline:** click the filter button next to **Anytime** (or **Timeline**). Select what to show: your blocks, calendars, addons such as Waqt, finished blocks, free time and kinds of block. The dial does not change.
 
 ### Add a block
 
@@ -340,6 +342,7 @@ To change the dial type, click **12 h**, **24 h**, **Hour** or **Cycles** below 
 - **Edit the details:** click the block. You can change the title, icon, colour, repeat rule, alerts, steps and notes.
 - **Repeating blocks:** when you edit a repeating block, select **Every time** or **Just this day**.
 - **Remove:** select the block and press <kbd>Delete</kbd>.
+- **Pick a day or a time:** click the day or the time. Type it (“fri”, “30 oct”, “+3”, “930”, “2:30pm”, “noon”), click a day in the month, or drag the hand on the small dial. The dial shows your other blocks that day, so free time is easy to see. **Next free** puts the block in the first free time that fits. Without opening it, the arrow keys move the day or the time.
 
 ### Finish a block
 

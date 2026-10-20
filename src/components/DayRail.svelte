@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -16,7 +17,8 @@
   import RhythmChip from './RhythmChip.svelte';
   import Capture from './backlog/Capture.svelte';
   import { dueNow } from '../lib/backlog';
-  import { dragWidth, layout, RAIL_MIN, railDrag, railMax } from '../lib/stores/layout.svelte';
+  import { dragWidth, layout, RAIL_MIN, railDrag, railMax, shows } from '../lib/stores/layout.svelte';
+  import RailFilter from './RailFilter.svelte';
 
   type Row =
     | { kind: 'block'; key: string; block: Block }
@@ -25,7 +27,7 @@
 
   const dayStart = $derived(startOfDayMs(view.date));
 
-  const rows = $derived.by(() => {
+  const allRows = $derived.by(() => {
     const out: Row[] = [];
     const blocks = view.dayBlocks.filter((b) => !b.floating);
     const now = clock.minute;
@@ -47,6 +49,68 @@
     }
     if (!nowPlaced) out.push({ kind: 'now', key: 'now' });
     return out;
+  });
+
+  // The filter only changes what is listed: free time is worked out from everything.
+  const filter = $derived(layout.value.filter);
+  const rows = $derived(allRows.filter((r) => (r.kind === 'block' ? shows(r.block, filter) : r.kind === 'gap' ? !filter.free : true)));
+  const anytime = $derived(view.floating.filter((b) => shows(b, filter)));
+  const dayAll = $derived([...view.dayBlocks.filter((b) => !b.floating && b.date === view.date), ...view.floating]);
+  const hiddenCount = $derived(dayAll.filter((b) => !shows(b, filter)).length);
+
+  /** An empty glass for free time: taller for longer stretches, gently (a square root). */
+  const ghost = (ms: number) => Math.round(Math.min(84, 16 + 10 * Math.sqrt(ms / MINUTE / 15)));
+
+  // ── The track: the line through the capsules fills down to now, like a train's route. ──
+  let tl = $state<HTMLDivElement>();
+  let fill = $state(0);
+  function measure() {
+    if (!tl) return;
+    if (view.date < view.today) return void (fill = 1);
+    if (view.date > view.today) return void (fill = 0);
+    const box = tl.getBoundingClientRect();
+    const top = 14;
+    const span = box.height - 28;
+    if (span <= 0) return;
+    let y: number | null = null;
+    const nowEl = tl.querySelector<HTMLElement>('.now-line');
+    if (nowEl) {
+      const r = nowEl.getBoundingClientRect();
+      y = r.top - box.top + r.height / 2;
+    } else {
+      const now = clock.now;
+      const items = [...tl.querySelectorAll<HTMLElement>('li[data-s]')];
+      for (const li of items) {
+        const s = Number(li.dataset.s);
+        const e = Number(li.dataset.e);
+        if (now >= s && now < e) {
+          const r = li.getBoundingClientRect();
+          y = r.top - box.top + ((now - s) / (e - s)) * r.height;
+          break;
+        }
+      }
+      if (y === null && items.length) y = now >= Number(items[items.length - 1].dataset.e) ? box.height : 0;
+    }
+    fill = Math.min(1, Math.max(0, ((y ?? 0) - top) / span));
+  }
+  $effect(() => {
+    void rows;
+    void clock.minute;
+    void view.date;
+    void railW;
+    let t: ReturnType<typeof setTimeout>;
+    tick().then(() => {
+      measure();
+      // Again once rows have glided into place.
+      t = setTimeout(measure, 380);
+    });
+    return () => clearTimeout(t);
+  });
+  $effect(() => {
+    if (!tl) return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(tl);
+    return () => ro.disconnect();
   });
 
   // The day's tally: what's done and how much time it was worth. Counts up, never down-shames.
@@ -183,11 +247,22 @@
       </header>
     {/if}
 
-    {#if view.floating.length}
+    <!-- The filter sits on the first heading: Anytime, or Timeline when there are no anytime blocks. -->
+    {#snippet head(title: string)}
+      <div class="tl-head">
+        <h2>{title}{#if hiddenCount}<span class="hid">{` · ${hiddenCount} hidden`}</span>{/if}</h2>
+        <RailFilter blocks={dayAll} hidden={hiddenCount} />
+      </div>
+    {/snippet}
+    {#if dayAll.length && !anytime.length}
+      {@render head('Timeline')}
+    {/if}
+
+    {#if anytime.length}
       <section class="anytime" aria-label="Anytime">
-        <h2>Anytime</h2>
+        {@render head('Anytime')}
         <div class="chips">
-          {#each view.floating as b (b.key)}
+          {#each anytime as b (b.key)}
             <div class="any" class:done={b.done} class:event={b.kind === 'event'} style:--c={b.color} title={b.kind === 'event' ? `All day · from your calendar${b.event?.calendarName ? `: ${b.event.calendarName}` : ''}` : undefined}>
               {#if b.kind === 'event'}
                 <span class="cal-mark" aria-hidden="true"><Icon name="calendar" size={12} stroke={2.2} /></span>
@@ -206,16 +281,25 @@
       </section>
     {/if}
 
+    <div class="tl" bind:this={tl}>
+    {#if rows.length}
+      <span class="track" aria-hidden="true"><i style:transform={`scaleY(${fill})`}></i></span>
+    {/if}
     <ol class="timeline">
       {#each rows as row (row.key)}
-        <li animate:flip={{ duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} in:fly={{ y: 8, duration: view.reducedMotion ? 0 : 280 }}>
+        <li
+          animate:flip={{ duration: view.reducedMotion ? 0 : 320, easing: cubicOut }}
+          in:fly={{ y: 8, duration: view.reducedMotion ? 0 : 280 }}
+          data-s={row.kind === 'block' ? row.block.startMs : row.kind === 'gap' ? row.startMs : undefined}
+          data-e={row.kind === 'block' ? row.block.endMs : row.kind === 'gap' ? row.endMs : undefined}
+        >
           {#if row.kind === 'block'}
             <RailBlock block={row.block} />
           {:else if row.kind === 'gap'}
             {@const len = row.endMs - row.startMs}
-            <div class="gap">
+            <div class="gap" class:gone={row.endMs <= clock.minute} style:--gh={`${ghost(len)}px`}>
               <span class="gap-time tnum">{formatTime(row.startMs, view.hour12)}</span>
-              <span class="gap-line" aria-hidden="true"></span>
+              <span class="ghost" aria-hidden="true"></span>
               <span class="gap-label">{formatDuration(len)} free</span>
               <button
                 class="gap-add"
@@ -240,6 +324,7 @@
         </li>
       {/each}
     </ol>
+    </div>
 
     {#if view.dayBlocks.length === 0 && view.floating.length === 0}
       <div class="empty">
@@ -518,16 +603,52 @@
   .cal-mark {
     flex: none;
   }
+  .tl-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 var(--s-2);
+  }
+  .tl-head h2 {
+    margin: 0;
+  }
+  .hid {
+    font-weight: 400;
+  }
+  .tl {
+    position: relative;
+    /* Where the track runs: the middle of the capsule column. */
+    --track-x: 73px;
+  }
   .timeline {
+    position: relative;
     list-style: none;
     margin: 0;
     padding: 0;
+  }
+  /* The track: dotted ahead, a calm solid line for the time already behind you. */
+  .track {
+    position: absolute;
+    left: var(--track-x);
+    top: 14px;
+    bottom: 14px;
+    width: 2px;
+    background: radial-gradient(circle, var(--line-strong) 0 1px, transparent 1.3px) 50% 0 / 2px 6px repeat-y;
+    pointer-events: none;
+  }
+  .track i {
+    position: absolute;
+    inset: 0;
+    border-radius: 1px;
+    background: linear-gradient(color-mix(in srgb, var(--ink) 12%, transparent), color-mix(in srgb, var(--ink) 30%, transparent));
+    transform-origin: top;
+    transition: transform 0.9s var(--ease-out);
   }
   .gap {
     display: grid;
     grid-template-columns: 52px 44px 1fr auto;
     align-items: center;
-    min-height: 34px;
+    min-height: calc(var(--gh) + 10px);
     color: var(--ink-3);
     font-size: var(--t-xs);
   }
@@ -536,12 +657,29 @@
     padding-right: var(--s-2);
     opacity: 0.8;
   }
-  .gap-line {
+  /* Free time is an empty glass on the track: taller for a longer stretch. */
+  .ghost {
     justify-self: center;
-    width: 0;
-    height: 100%;
-    min-height: 34px;
-    border-left: 2px dotted var(--line-strong);
+    width: 22px;
+    height: var(--gh);
+    border-radius: 11px;
+    border: 1.5px dashed color-mix(in srgb, var(--ink) 22%, transparent);
+    transition:
+      background var(--dur-2) var(--ease-out),
+      border-color var(--dur-2) var(--ease-out),
+      transform var(--dur-2) var(--ease-settle);
+  }
+  .gap:hover .ghost {
+    border-color: var(--ink-3);
+    background: color-mix(in srgb, var(--sunken) 70%, transparent);
+    transform: scaleX(1.12);
+  }
+  .gap.gone .ghost {
+    border-color: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+  .gap.gone .gap-label,
+  .gap.gone .gap-time {
+    opacity: 0.6;
   }
   .gap-label {
     padding-left: var(--s-2);
@@ -585,6 +723,8 @@
   }
   .now-rule {
     position: relative;
+    /* Starts on the track, so the now dot sits on it. */
+    margin-left: calc(var(--track-x) - 52px);
     height: 2px;
     border-radius: 2px;
     background: linear-gradient(90deg, var(--signal), color-mix(in srgb, var(--signal) 0%, transparent));
@@ -779,11 +919,17 @@
 
   /* A narrow rail gives the words more room: slimmer time and capsule columns. */
   @container rail (max-width: 359px) {
+    .tl {
+      --track-x: 62px;
+    }
     .gap {
       grid-template-columns: 44px 38px 1fr auto;
     }
     .now-line {
       grid-template-columns: 44px 1fr;
+    }
+    .now-rule {
+      margin-left: calc(var(--track-x) - 44px);
     }
   }
 

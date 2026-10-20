@@ -18,6 +18,7 @@
     dimmed = false,
     headsUp = false,
     current = false,
+    past = false,
     handAngle = null,
     finish,
     compact = false,
@@ -41,6 +42,8 @@
     headsUp?: boolean;
     /** Under the now-hand: gets a small lift when it takes over. */
     current?: boolean;
+    /** Its time is over: it steps back so what's ahead reads first. */
+    past?: boolean;
     /** Where the now-hand crosses the bezel; labels keep clear of it. */
     handAngle?: number | null;
     finish: Finish;
@@ -210,6 +213,7 @@
   class="arc"
   class:selected
   class:dimmed
+  class:past
   class:done={block.done}
   class:event={block.kind === 'event'}
   class:interactive
@@ -334,6 +338,21 @@
   }
   .arc.dimmed {
     opacity: 0.4;
+  }
+  /* Behind you: quieter, so what's ahead reads first. Finished time keeps more of its glow. */
+  .arc.past {
+    opacity: 0.5;
+  }
+  .arc.past.done {
+    opacity: 0.78;
+  }
+  .arc.past.dimmed {
+    opacity: 0.3;
+  }
+  .arc.past:hover,
+  .arc.past.selected,
+  .arc.past:focus-visible {
+    opacity: 1;
   }
   .halo {
     opacity: 0.22;
