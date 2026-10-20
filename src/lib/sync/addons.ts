@@ -385,5 +385,22 @@ export function mergeWaqtFiles(base: WaqtFile | null, local: WaqtFile, remote: W
     version: 1,
     settings: clone(pick(b.settings, local.settings, remote.settings, true, true)),
     prayed: mergeMarks(b.prayed, local.prayed, remote.prayed),
+    detail: mergeDetail(b.detail ?? {}, local.detail ?? {}, remote.detail ?? {}),
   });
+}
+
+/** Per day and prayer: the side that changed it wins; both → the one marked last. */
+function mergeDetail(base: WaqtFile['detail'], local: WaqtFile['detail'], remote: WaqtFile['detail']): WaqtFile['detail'] {
+  const out: WaqtFile['detail'] = {};
+  for (const date of unionKeys(remote, local).sort()) {
+    const day: NonNullable<WaqtFile['detail'][string]> = {};
+    for (const id of PRAYERS) {
+      const [bv, lv, rv] = [base[date]?.[id], local[date]?.[id], remote[date]?.[id]];
+      const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+      const v = same(lv, rv) || same(rv, bv) ? lv : same(lv, bv) ? rv : (rv?.at ?? 0) > (lv?.at ?? 0) ? rv : lv;
+      if (v) day[id] = v;
+    }
+    if (Object.keys(day).length) out[date] = day;
+  }
+  return out;
 }

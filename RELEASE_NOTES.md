@@ -15,6 +15,10 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 - **Move a block to the backlog** — from its hover buttons, from the block editor, or drag it onto the Backlog. Undo is one tap away.
 - **What's new** — updates now say what they bring before you install them.
 
+### Addons
+
+- **Waqt: your salah** — mark each prayer on time, in jamaat or made up late, and qasr while travelling. See a week or a month: how the prayers went, each prayer's streak, and kind notes on what's going well.
+
 ### Fixes
 
 - **Menu bar** — the countdown and the next block stay current while the planner is closed. The menu shows what's now and what's next.

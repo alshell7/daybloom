@@ -412,7 +412,7 @@ export const MCP_TOOLS: McpTool[] = [
           adhan: hmOf(p.at),
           ...(p.jamaat ? { jamaat: hmOf(p.jamaat) } : {}),
           ends: hmOf(p.end),
-          ...(marks[p.id] ? { marked: marks[p.id] } : {}),
+          ...(marks[p.id] ? { marked: waqt.howOf(date, p.id) === 'late' ? 'late' : waqt.howOf(date, p.id) === 'jamaat' ? 'jamaat' : 'on time', ...(waqt.detailOf(date, p.id).qasr ? { qasr: true } : {}) } : {}),
         })),
         ...(next ? { next: { name: next.name, date: isoOf(next.at), adhan: hmOf(next.at) } } : {}),
       };

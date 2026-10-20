@@ -1,6 +1,6 @@
 // Waqt: defaults, and repairing a stored file.
 
-import { PRAYERS, METHODS, type JamaatRule, type Marked, type PrayerId, type WaqtFile, type WaqtSettings } from './types';
+import { PRAYERS, METHODS, QASR, type JamaatRule, type MarkDetail, type Marked, type PrayerId, type WaqtFile, type WaqtSettings } from './types';
 
 const JAMAAT_AFTER: Record<PrayerId, number> = { fajr: 20, dhuhr: 15, asr: 15, maghrib: 5, isha: 15 };
 
@@ -19,6 +19,7 @@ export function defaultWaqtSettings(): WaqtSettings {
     },
     dial: { track: true, blocks: true, minutes: 15 },
     remind: { before: 10, atAdhan: true, beforeJamaat: 10, sound: true },
+    travel: { on: false, until: '' },
   };
 }
 
@@ -58,6 +59,7 @@ export function migrateWaqt(raw: any): WaqtFile {
       beforeJamaat: num(s.remind?.beforeJamaat, d.remind.beforeJamaat, 0, 60),
       sound: s.remind?.sound !== false,
     },
+    travel: { on: s.travel?.on === true, until: typeof s.travel?.until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.travel.until) ? s.travel.until : '' },
   };
   const prayed: WaqtFile['prayed'] = {};
   for (const [date, marks] of Object.entries(raw?.prayed ?? {})) {
@@ -69,5 +71,21 @@ export function migrateWaqt(raw: any): WaqtFile {
     }
     if (Object.keys(m).length) prayed[date] = m;
   }
-  return { version: 1, settings, prayed };
+  // Details only where there is a mark; qasr only on the prayers it applies to.
+  const detail: WaqtFile['detail'] = {};
+  for (const [date, marks] of Object.entries(raw?.detail ?? {})) {
+    if (!prayed[date] || typeof marks !== 'object' || !marks) continue;
+    const d: Partial<Record<PrayerId, MarkDetail>> = {};
+    for (const id of PRAYERS) {
+      const v = (marks as any)[id];
+      if (!prayed[date][id] || !v || typeof v !== 'object') continue;
+      const x: MarkDetail = {};
+      if (v.late === true && prayed[date][id] === 'prayed') x.late = true;
+      if (v.qasr === true && QASR.includes(id)) x.qasr = true;
+      if (Number.isFinite(v.at)) x.at = v.at;
+      if (Object.keys(x).length) d[id] = x;
+    }
+    if (Object.keys(d).length) detail[date] = d;
+  }
+  return { version: 1, settings, prayed, detail };
 }

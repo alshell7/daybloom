@@ -13,6 +13,9 @@
   import { addDays, formatDuration, formatTime, isoOf, MINUTE } from '../../../lib/engine/time';
   import Icon from '../../../lib/Icon.svelte';
   import TimeField from '../../pickers/TimeField.svelte';
+  import DateField from '../../pickers/DateField.svelte';
+  import PrayerChooser from './PrayerChooser.svelte';
+  import SalahStats from './SalahStats.svelte';
   import { sounds } from '../../../lib/sound';
   import { clock } from '../../../lib/stores/clock.svelte';
   import { settings } from '../../../lib/stores/settings.svelte';
@@ -70,11 +73,21 @@
     return { name: 'Waqt', line: '', sub: '' };
   });
 
-  // ---- marking
-  function mark(p: PrayerSlot) {
-    const v = waqt.cycle(today, p.id);
-    if (v && settings.value.sound) sounds.tick();
+  // ---- marking: one tap takes the likely answer (on time while its time lasts, late after),
+  // and a small chooser opens to adjust it (in jamaat, late, qasr).
+  // The last one chosen stays (not reset to null) so the card can fade out with its anchor.
+  let choosing = $state<{ slot: PrayerSlot; el: HTMLElement } | null>(null);
+  let choosingOpen = $state(false);
+  function mark(p: PrayerSlot, e: MouseEvent) {
+    const el = e.currentTarget as HTMLElement;
+    if (!waqt.howOf(today, p.id)) {
+      waqt.markAs(today, p.id, waqt.quickHow(p));
+      if (settings.value.sound) sounds.tick();
+    }
+    choosing = { slot: p, el };
+    choosingOpen = true;
   }
+  const HOW_WORD = { ontime: 'prayed on time', jamaat: 'prayed in jamaat', late: 'made up late' } as const;
   const week = $derived(Array.from({ length: 7 }, (_, i) => addDays(today, i - 6)));
   const wd = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'narrow' });
 
@@ -196,6 +209,7 @@
           {/if}
           <div class="top">
             <button class="place" onclick={change} title="Change your place"><Icon name="pin" size={12} /> {s.place?.name}</button>
+            {#if waqt.travelling(today)}<span class="travel"><Icon name="bus" size={11} /> Travelling · qasr</span>{/if}
             {#if hij}<span class="hijri tnum">{hij.day} {hij.name} {hij.year}</span>{/if}
           </div>
           <div class="now">
@@ -237,6 +251,8 @@
           <ul>
             {#each day.prayers as p, i (p.id)}
               {@const m = marks[p.id]}
+              {@const how = waqt.howOf(today, p.id)}
+              {@const qs = !!waqt.detailOf(today, p.id).qasr}
               {@const past = p.end < now}
               <li class:cur={cur?.id === p.id} class:past in:fly={{ y: 6, duration: rm ? 0 : 280, delay: rm ? 0 : i * 45, easing: cubicOut }}>
                 <span class="ic"><Icon name={PRAYER_ICON[p.id]} size={15} stroke={2} /></span>
@@ -245,16 +261,19 @@
                 <span class="jm tnum">{p.jamaat ? `jamaat ${hm(p.jamaat)}` : ''}</span>
                 <button
                   class="pearl"
-                  class:prayed={m === 'prayed'}
-                  class:jamaat={m === 'jamaat'}
-                  onclick={() => mark(p)}
-                  aria-label={`${p.name}: ${m === 'jamaat' ? 'prayed in jamaat' : m === 'prayed' ? 'prayed' : 'not marked'}. Change`}
-                  title={m === 'jamaat' ? 'Prayed in jamaat · tap to clear' : m === 'prayed' ? 'Prayed · tap again for jamaat' : 'Mark as prayed'}
+                  class:prayed={!!m}
+                  class:jamaat={how === 'jamaat'}
+                  class:late={how === 'late'}
+                  class:qasr={qs}
+                  onclick={(e) => mark(p, e)}
+                  aria-label={`${p.name}: ${how ? HOW_WORD[how] : 'not marked'}${qs ? ', qasr' : ''}. Change`}
+                  title={how ? `${HOW_WORD[how].replace(/^./, (c) => c.toUpperCase())}${qs ? ' · qasr' : ''} · tap to change` : past ? 'Mark it (made up late)' : 'Mark as prayed'}
                 >
-                  {#key m}
-                    {#if m}<span class="fill" in:scale={{ start: 0.2, duration: rm ? 0 : 420, easing: backOut }}></span>{/if}
+                  {#key how}
+                    {#if how}<span class="fill" in:scale={{ start: 0.2, duration: rm ? 0 : 420, easing: backOut }}></span>{/if}
                   {/key}
-                  {#if m === 'jamaat'}<span class="ring" aria-hidden="true"></span>{/if}
+                  {#if how === 'jamaat'}<span class="ring" aria-hidden="true"></span>{/if}
+                  {#if qs}<span class="qmark" aria-hidden="true"></span>{/if}
                 </button>
               </li>
               {#if p.id === 'fajr'}
@@ -270,17 +289,38 @@
           </ul>
           <div class="week" role="img" aria-label="This week’s marked prayers">
             {#each week as d (d)}
-              {@const mk = waqt.marks(d)}
               <div class="col" class:today={d === today}>
-                {#each PRAYERS as id (id)}<i class:prayed={mk[id] === 'prayed'} class:jamaat={mk[id] === 'jamaat'}></i>{/each}
+                {#each PRAYERS as id (id)}{@const h = waqt.howOf(d, id)}<i class:prayed={!!h} class:jamaat={h === 'jamaat'} class:late={h === 'late'}></i>{/each}
                 <span>{wd(d)}</span>
               </div>
             {/each}
           </div>
         </section>
 
+        {#if choosingOpen && choosing}
+          <PrayerChooser anchor={choosing.el} date={today} slot={choosing.slot} onclose={() => (choosingOpen = false)} />
+        {/if}
+
+        <SalahStats />
+
         <!-- settings, folded -->
         <section class="settings">
+          <button class="sec" onclick={() => toggle('travel')} aria-expanded={openSec === 'travel'}>
+            <Icon name="bus" size={15} /> <span>Travelling</span><small>{s.travel.on ? `qasr${s.travel.until ? ` until ${new Date(`${s.travel.until}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : ''}` : 'off'}</small><i class="chev" class:up={openSec === 'travel'}><Icon name="chevron-down" size={14} /></i>
+          </button>
+          {#if openSec === 'travel'}
+            <div class="body" transition:slide={{ duration: rm ? 0 : 220, easing: cubicOut }}>
+              <label class="row"><span>I’m travelling</span><input type="checkbox" class="switch" bind:checked={waqtFile.value.settings.travel.on} /></label>
+              {#if s.travel.on}
+                <div class="row" transition:slide={{ duration: rm ? 0 : 160 }}>
+                  <span>Until</span>
+                  <span class="tslot"><DateField label="Travelling until" bind:value={waqtFile.value.settings.travel.until} clearable placeholder="I turn it off" min={today} /></span>
+                </div>
+              {/if}
+              <p class="hint">While you travel, Dhuhr, Asr and Isha are marked as qasr (shortened). You can change any of them by tapping its pearl.</p>
+            </div>
+          {/if}
+
           <button class="sec" onclick={() => toggle('place')} aria-expanded={openSec === 'place'}>
             <Icon name="globe" size={15} /> <span>Place and method</span><small>{s.place?.name} · {METHODS.find((m) => m.id === s.method)?.label}</small><i class="chev" class:up={openSec === 'place'}><Icon name="chevron-down" size={14} /></i>
           </button>
@@ -768,6 +808,33 @@
     border-radius: 50%;
     border: 1.5px solid color-mix(in srgb, var(--green) 55%, transparent);
   }
+  /* Made up after its time: a softer, warm pearl. */
+  .pearl.late {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--warm) 60%, var(--line));
+  }
+  .pearl.late .fill {
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--warm) 35%, white), color-mix(in srgb, var(--warm) 80%, var(--green)));
+  }
+  /* Qasr: a small square notch. */
+  .qmark {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--raised);
+    box-shadow: inset 0 0 0 2px var(--green);
+  }
+  .travel {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    font-size: 11px;
+    background: rgb(255 255 255 / 0.18);
+  }
   .pearl-space {
     width: 26px;
   }
@@ -797,6 +864,9 @@
   }
   .col i.jamaat {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 30%, transparent);
+  }
+  .col i.late {
+    background: color-mix(in srgb, var(--warm) 75%, var(--surface));
   }
   .col span {
     margin-top: 2px;

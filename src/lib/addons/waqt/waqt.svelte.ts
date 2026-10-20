@@ -14,7 +14,7 @@ import { settings } from '../../stores/settings.svelte';
 import { view } from '../../stores/view.svelte';
 import { migrateWaqt } from './defaults';
 import { currentPrayer, hijri, nextPrayer, waqtDay, type PrayerSlot, type WaqtDay } from './times';
-import { PRAYER_ICON, type Marked, type PrayerId, type WaqtFile } from './types';
+import { PRAYER_ICON, QASR, type MarkDetail, type Marked, type PrayedHow, type PrayerId, type WaqtFile } from './types';
 
 export const waqtFile = persisted<WaqtFile>('addon-waqt', migrateWaqt(null), migrateWaqt);
 
@@ -84,6 +84,49 @@ class Waqt {
     const cutoff = addDays(isoOf(Date.now()), -370);
     for (const k of Object.keys(all)) if (k < cutoff) delete all[k];
     waqtFile.value.prayed = all;
+    if (!v) this.setDetail(date, id, null);
+  }
+
+  detailOf(date: ISODate, id: PrayerId): MarkDetail {
+    return waqtFile.value.detail?.[date]?.[id] ?? {};
+  }
+  private setDetail(date: ISODate, id: PrayerId, d: MarkDetail | null) {
+    const all = { ...(waqtFile.value.detail ?? {}) };
+    const day = { ...(all[date] ?? {}) };
+    if (d && Object.keys(d).length) day[id] = d;
+    else delete day[id];
+    if (Object.keys(day).length) all[date] = day;
+    else delete all[date];
+    const cutoff = addDays(isoOf(Date.now()), -370);
+    for (const k of Object.keys(all)) if (k < cutoff) delete all[k];
+    waqtFile.value.detail = all;
+  }
+
+  /** How a marked prayer went, or null when it isn't marked. */
+  howOf(date: ISODate, id: PrayerId): PrayedHow | null {
+    const m = this.marks(date)[id];
+    if (!m) return null;
+    if (m === 'jamaat') return 'jamaat';
+    return this.detailOf(date, id).late ? 'late' : 'ontime';
+  }
+
+  /** Travelling on that day (qasr for Dhuhr, Asr and Isha). */
+  travelling(date: ISODate): boolean {
+    const t = this.settings.travel;
+    return t.on && (!t.until || date <= t.until);
+  }
+
+  /** Mark how a prayer went; `qasr` defaults to whether you're travelling. null clears it. */
+  markAs(date: ISODate, id: PrayerId, how: PrayedHow | null, qasr?: boolean) {
+    if (!how) return this.mark(date, id, null);
+    this.mark(date, id, how === 'jamaat' ? 'jamaat' : 'prayed');
+    const q = QASR.includes(id) && (qasr ?? (this.detailOf(date, id).qasr || this.travelling(date)));
+    this.setDetail(date, id, { ...(how === 'late' ? { late: true } : {}), ...(q ? { qasr: true } : {}), at: Date.now() });
+  }
+
+  /** One tap: on time while its time lasts, late once it has ended. */
+  quickHow(p: { end: number }, now = clock.now): PrayedHow {
+    return now >= p.end ? 'late' : 'ontime';
   }
 }
 

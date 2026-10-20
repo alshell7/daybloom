@@ -30,9 +30,9 @@
 
   const jamaatIn = $derived(m?.prayer.jamaat && m.prayer.jamaat > clock.now ? m.prayer.jamaat - clock.now : null);
 
-  function prayed() {
+  function prayed(how: 'ontime' | 'jamaat' = 'ontime') {
     if (!m) return;
-    waqt.mark(isoOf(m.prayer.at), m.prayer.id, 'prayed');
+    waqt.markAs(isoOf(m.prayer.at), m.prayer.id, how);
     if (settings.value.sound) sounds.done();
     marked = true;
     setTimeout(() => (waqt.moment = null), rm ? 400 : 1400);
@@ -59,7 +59,8 @@
     </div>
     {#if !marked}
       <div class="acts">
-        <button class="btn btn-primary" onclick={prayed} in:scale={{ start: 0.8, duration: rm ? 0 : 360, delay: rm ? 0 : 500, easing: backOut }}><Icon name="check" size={14} stroke={2.4} /> Prayed</button>
+        <button class="btn btn-primary" onclick={() => prayed()} in:scale={{ start: 0.8, duration: rm ? 0 : 360, delay: rm ? 0 : 500, easing: backOut }}><Icon name="check" size={14} stroke={2.4} /> Prayed</button>
+        {#if m.prayer.jamaat || waqt.settings.jamaat.on}<button class="btn btn-quiet" onclick={() => prayed('jamaat')}><Icon name="users" size={14} /> In jamaat</button>{/if}
         <button class="btn btn-quiet" onclick={() => (waqt.moment = null)}>Later</button>
       </div>
     {/if}

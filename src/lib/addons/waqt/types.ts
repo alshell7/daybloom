@@ -61,16 +61,36 @@ export interface WaqtSettings {
   /** On the dial and in the day. */
   dial: { track: boolean; blocks: boolean; minutes: number };
   remind: { before: number; atAdhan: boolean; beforeJamaat: number; sound: boolean };
+  /** Travelling: Dhuhr, Asr and Isha are marked as qasr (shortened). `until` "YYYY-MM-DD" or "". */
+  travel: { on: boolean; until: string };
 }
 
 export type Marked = 'prayed' | 'jamaat';
+
+/** More about a marked prayer. Kept beside `prayed`, which older versions read as it was. */
+export interface MarkDetail {
+  /** Prayed after its time had ended (made up). */
+  late?: boolean;
+  /** Shortened while travelling. */
+  qasr?: boolean;
+  /** When it was marked (ms). */
+  at?: number;
+}
+
+/** How a prayer went, for marking and for analytics. */
+export type PrayedHow = 'ontime' | 'jamaat' | 'late';
 
 export interface WaqtFile {
   version: 1;
   settings: WaqtSettings;
   /** Prayers you marked, by day. */
   prayed: Record<string, Partial<Record<PrayerId, Marked>>>;
+  /** On time or late, qasr: by day and prayer. */
+  detail: Record<string, Partial<Record<PrayerId, MarkDetail>>>;
 }
+
+/** The prayers that are shortened while travelling. */
+export const QASR: PrayerId[] = ['dhuhr', 'asr', 'isha'];
 
 export const PRAYER_NAME: Record<PrayerId, string> = { fajr: 'Fajr', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' };
 export const PRAYER_ICON: Record<PrayerId, string> = { fajr: 'sunrise', dhuhr: 'sun', asr: 'sun', maghrib: 'sunset', isha: 'moon' };
