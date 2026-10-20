@@ -10,6 +10,7 @@
   import { work } from '../../../lib/addons/work/work.svelte';
   import { atMinutes, formatDuration, formatTime, fromISODate, minutesOfDay, MINUTE, todayISO } from '../../../lib/engine/time';
   import Icon from '../../../lib/Icon.svelte';
+  import TimeField from '../../pickers/TimeField.svelte';
   import { platform } from '../../../lib/platform';
   import { clock } from '../../../lib/stores/clock.svelte';
   import { view } from '../../../lib/stores/view.svelte';
@@ -221,7 +222,7 @@
                 <option value="">Something else</option>
               </select>
               <div class="pair">
-                <input class="field" type="time" bind:value={addS} aria-label="Start" /><span>to</span><input class="field" type="time" bind:value={addE} aria-label="End" />
+                <TimeField label="Start" bind:value={addS} nowChip step={1} /><span>to</span><TimeField label="End" bind:value={addE} nowChip step={1} />
               </div>
               <input class="field" placeholder="Note (optional)" bind:value={addNote} aria-label="Note" />
               {#if addErr}<p class="error">{addErr}</p>{/if}
@@ -236,8 +237,8 @@
                   <span class="t"><b>{targetTitle(e)}</b><small>{targetSub(e) || (e.note ?? '')}</small></span>
                   {#if editId === e.id}
                     <span class="ed">
-                      <input class="field" type="time" bind:value={edS} aria-label="Start" />
-                      {#if e.endMs}<input class="field" type="time" bind:value={edE} aria-label="End" />{/if}
+                      <TimeField label="Start" bind:value={edS} compact step={1} />
+                      {#if e.endMs}<TimeField label="End" bind:value={edE} compact nowChip step={1} />{/if}
                       <button class="icon-btn" onclick={() => saveEdit(e)} aria-label="Save"><Icon name="check" size={14} stroke={2.4} /></button>
                       <button class="icon-btn" onclick={() => (editId = null)} aria-label="Cancel"><Icon name="x" size={14} /></button>
                     </span>
@@ -529,7 +530,7 @@
     align-items: center;
     gap: 4px;
   }
-  .ed .field {
+  .ed :global(.field) {
     width: 96px;
     height: 30px;
   }
@@ -551,7 +552,7 @@
     gap: 6px;
     font-size: var(--t-sm);
   }
-  .pair .field {
+  .pair :global(.field) {
     flex: 1;
   }
   .actions {

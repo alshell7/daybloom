@@ -13,6 +13,8 @@
   import { tasks, uid } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
   import Panel from './Panel.svelte';
+  import DateField from './pickers/DateField.svelte';
+  import TimeField from './pickers/TimeField.svelte';
   import AddonBlockFields from './addons/AddonBlockFields.svelte';
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
   import CrumbFields from './addons/crumbs/CrumbFields.svelte';
@@ -247,14 +249,14 @@
 
     <section class="group">
       <div class="when">
-        <label class="mini">
+        <div class="mini">
           <span>Day</span>
-          <input type="date" class="field" value={task.date ?? ''} onchange={(e) => onDateInput(e.currentTarget.value)} />
-        </label>
-        <label class="mini">
+          <DateField label="Day" value={task.date ?? ''} onchange={onDateInput} busy placeholder="Pick a day" />
+        </div>
+        <div class="mini">
           <span>Starts</span>
-          <input type="time" class="field tnum" value={startStr} disabled={start == null} onchange={(e) => onStartInput(e.currentTarget.value)} step="300" />
-        </label>
+          <TimeField label="Start" value={startStr} disabled={start == null} onchange={onStartInput} date={task.date} length={duration} exclude={sheetKey} accent={color} placeholder="Anytime" />
+        </div>
         <label class="anytime">
           <input type="checkbox" checked={start == null} onchange={(e) => setTime({ start: e.currentTarget.checked ? null : 9 * 60 })} />
           Anytime
@@ -333,7 +335,7 @@
               <button aria-pressed={!!r.count} onclick={() => patchRule({ count: 10, until: undefined })}>After</button>
             </div>
             {#if r.until}
-              <input type="date" class="field" value={r.until} onchange={(e) => patchRule({ until: e.currentTarget.value })} />
+              <DateField label="Repeat until" value={r.until} onchange={(v) => v && patchRule({ until: v })} min={task.date} quick={false} />
             {:else if r.count}
               <input type="number" class="field num tnum" min="1" value={r.count} onchange={(e) => patchRule({ count: Math.max(1, +e.currentTarget.value || 1) })} /> times
             {/if}
@@ -580,7 +582,7 @@
     font-size: var(--t-xs);
     color: var(--ink-3);
   }
-  .mini .field {
+  .mini :global(.field) {
     height: 36px;
     font-size: var(--t-sm);
     color: var(--ink);

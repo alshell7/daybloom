@@ -25,6 +25,8 @@
   import { isOn } from '../../lib/addons/registry';
   import { sounds } from '../../lib/sound';
   import { view } from '../../lib/stores/view.svelte';
+  import DateField from '../pickers/DateField.svelte';
+  import TimeField from '../pickers/TimeField.svelte';
 
   let {
     task,
@@ -58,7 +60,6 @@
   let row: HTMLDivElement | undefined = $state();
   let checkEl: HTMLButtonElement | undefined = $state();
   let titleInput: HTMLInputElement | undefined = $state();
-  let timeInput: HTMLInputElement | undefined = $state();
 
   let editing = $state(false);
   let draft = $state('');
@@ -144,10 +145,6 @@
       time = `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
     }
     tray = kind;
-    if (kind === 'time') {
-      await tick();
-      timeInput?.focus();
-    }
   }
   function trayKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -362,32 +359,11 @@
         {#each dueChoices as c (c.label)}
           <button class="pill" aria-pressed={task.due === c.date} onclick={() => setDue(c.date)}>{c.label}</button>
         {/each}
-        <input
-          class="pill date"
-          type="date"
-          aria-label="Pick a due date"
-          value={task.due ?? ''}
-          min={today}
-          onchange={(e) => e.currentTarget.value && setDue(e.currentTarget.value)}
-        />
+        <DateField pill label="Due date" value={task.due ?? ''} min={today} quick={false} placeholder="Pick a day" onchange={(v) => v && setDue(v)} />
         {#if task.due}<button class="pill quiet" onclick={() => setDue(null)}>Clear</button>{/if}
       {:else if tray === 'time'}
         <span class="lbl">Today at</span>
-        <input
-          bind:this={timeInput}
-          bind:value={time}
-          class="pill time tnum"
-          type="time"
-          step="300"
-          aria-label="Start time today"
-          onkeydown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              e.stopPropagation();
-              placeAt();
-            }
-          }}
-        />
+        <TimeField pill label="Start time today" bind:value={time} date={today} length={task.duration} onenter={placeAt} />
         <span class="lbl tnum">for {durLabel}</span>
         <button class="pill strong" onclick={placeAt}>Place</button>
         {#if time}<span class="lbl until tnum">until {formatMinutes(((Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5)) + task.duration) % 1440), view.hour12)}</span>{/if}

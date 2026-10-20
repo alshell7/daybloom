@@ -18,6 +18,7 @@
   import { view } from '../lib/stores/view.svelte';
   import Panel from './Panel.svelte';
   import Segmented from './Segmented.svelte';
+  import TimeField from './pickers/TimeField.svelte';
   import { checkForUpdates, installUpdate, loadVersion, updates } from '../lib/updater.svelte';
   import { needle, whistle } from '../lib/assistant/engine.svelte';
   import type { VoiceLanguage } from '../lib/stores/settings.svelte';
@@ -243,9 +244,9 @@
           <div class="row">
             <span>Waking day</span>
             <span class="pair">
-              <input type="time" class="field tnum" value={minutesToStr(s.wake)} onchange={(e) => (settings.value.wake = strToMinutes(e.currentTarget.value))} aria-label="Wake" />
+              <TimeField label="Wake" value={minutesToStr(s.wake)} onchange={(v) => v && (settings.value.wake = strToMinutes(v))} step={15} />
               <span class="to">to</span>
-              <input type="time" class="field tnum" value={minutesToStr(s.sleep)} onchange={(e) => (settings.value.sleep = strToMinutes(e.currentTarget.value))} aria-label="Sleep" />
+              <TimeField label="Sleep" value={minutesToStr(s.sleep)} onchange={(v) => v && (settings.value.sleep = strToMinutes(v))} step={15} />
             </span>
           </div>
           <p class="hint">Sleep ({formatMinutes(s.sleep, view.hour12)}–{formatMinutes(s.wake, view.hour12)}) is shaded on the ring.</p>
@@ -300,7 +301,7 @@
           <div class="row">
             <span>Offer a wind-down at</span>
             <span class="pair">
-              <input type="time" class="field tnum" value={s.nudges.windDown < 0 ? '' : minutesToStr(s.nudges.windDown)} disabled={s.nudges.windDown < 0} onchange={(e) => (settings.value.nudges.windDown = strToMinutes(e.currentTarget.value))} aria-label="Wind-down time" />
+              <TimeField label="Wind-down time" value={s.nudges.windDown < 0 ? '' : minutesToStr(s.nudges.windDown)} disabled={s.nudges.windDown < 0} placeholder="Off" onchange={(v) => v && (settings.value.nudges.windDown = strToMinutes(v))} step={15} />
               <input type="checkbox" class="switch" checked={s.nudges.windDown >= 0} onchange={(e) => (settings.value.nudges.windDown = e.currentTarget.checked ? Math.max(0, settings.value.sleep - 60) : -1)} aria-label="Wind-down on" />
             </span>
           </div>
@@ -881,7 +882,7 @@
     align-items: center;
     gap: var(--s-2);
   }
-  .pair .field {
+  .pair :global(.field) {
     width: 110px;
     height: 32px;
   }

@@ -12,6 +12,7 @@
   import { sunProgress, waqt, waqtFile } from '../../../lib/addons/waqt/waqt.svelte';
   import { addDays, formatDuration, formatTime, isoOf, MINUTE } from '../../../lib/engine/time';
   import Icon from '../../../lib/Icon.svelte';
+  import TimeField from '../../pickers/TimeField.svelte';
   import { sounds } from '../../../lib/sound';
   import { clock } from '../../../lib/stores/clock.svelte';
   import { settings } from '../../../lib/stores/settings.svelte';
@@ -324,7 +325,7 @@
                     <span class="tnum">{hm(p.at)}{#if s.adjust[p.id] && !s.manual[p.id]}<small> {s.adjust[p.id] > 0 ? '+' : ''}{s.adjust[p.id]}m</small>{/if}</span>
                     <button class="icon-btn" onclick={() => (waqtFile.value.settings.adjust[p.id] = s.adjust[p.id] + 1)} disabled={!!s.manual[p.id]} aria-label="One minute later">+</button>
                   </span>
-                  <input class="field fixed tnum" type="time" value={s.manual[p.id] ?? ''} onchange={(e) => setManual(p.id, e.currentTarget.value)} aria-label={`${PRAYER_NAME[p.id]} fixed time`} title="Your mosque’s time (clear it to go back to the calculated one)" />
+                  <span class="tslot" title="Your mosque’s time (clear it to go back to the calculated one)"><TimeField label={`${PRAYER_NAME[p.id]} fixed time`} value={s.manual[p.id] ?? ''} onchange={(v) => setManual(p.id, v)} clearable placeholder="Calculated" step={1} /></span>
                 </div>
               {/each}
             </div>
@@ -347,7 +348,7 @@
                     {#if r.mode === 'after'}
                       <span class="mins"><input class="field tnum" type="number" min="0" max="180" value={r.after} onchange={(e) => setRule(id, { after: Math.max(0, +e.currentTarget.value || 0) })} aria-label="Minutes after the adhan" /> min</span>
                     {:else if r.mode === 'at'}
-                      <input class="field tnum" type="time" value={r.at} onchange={(e) => setRule(id, { at: e.currentTarget.value })} aria-label="Jamaat time" />
+                      <span class="tslot"><TimeField label="Jamaat time" value={r.at} onchange={(v) => setRule(id, { at: v })} step={1} /></span>
                     {/if}
                   </div>
                 {/each}
@@ -356,7 +357,7 @@
               {#if s.jamaat.jumuah.on}
                 <div class="jrow" transition:slide={{ duration: rm ? 0 : 160 }}>
                   <span class="an">Jumu’ah</span>
-                  <input class="field tnum" type="time" bind:value={waqtFile.value.settings.jamaat.jumuah.at} aria-label="Jumu’ah time" />
+                  <span class="tslot"><TimeField label="Jumu’ah time" bind:value={waqtFile.value.settings.jamaat.jumuah.at} step={1} /></span>
                   <span class="mins"><input class="field tnum" type="number" min="10" max="120" bind:value={waqtFile.value.settings.jamaat.jumuah.minutes} aria-label="Jumu’ah length" /> min</span>
                 </div>
               {/if}
@@ -892,15 +893,11 @@
   .stepper small {
     color: var(--ink-3);
   }
-  .fixed {
+  .tslot :global(.field) {
     width: 118px;
     height: 32px;
   }
   .jrow select {
-    height: 32px;
-  }
-  .jrow .field[type='time'] {
-    width: 118px;
     height: 32px;
   }
   .mins {

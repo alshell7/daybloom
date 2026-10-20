@@ -6,6 +6,7 @@
   import type { Invoice } from '../../../lib/addons/work/types';
   import { addDays, fromISODate, todayISO } from '../../../lib/engine/time';
   import Icon from '../../../lib/Icon.svelte';
+  import DateField from '../../pickers/DateField.svelte';
   import { platform } from '../../../lib/platform';
   import { view } from '../../../lib/stores/view.svelte';
   import Segmented from '../../Segmented.svelte';
@@ -106,9 +107,9 @@
       </div>
       {#if period === 'custom'}
         <div class="dates">
-          <input class="field" type="date" bind:value={from} aria-label="From" />
+          <DateField label="From" bind:value={from} max={to || null} quick={false} />
           <span>to</span>
-          <input class="field" type="date" bind:value={to} aria-label="To" />
+          <DateField label="To" bind:value={to} min={from || null} quick={false} />
         </div>
       {/if}
       <div class="row">
@@ -268,7 +269,7 @@
     gap: var(--s-2);
     font-size: var(--t-sm);
   }
-  .dates .field,
+  .dates :global(.field),
   .pair > * {
     flex: 1;
     min-width: 0;
