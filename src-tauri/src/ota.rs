@@ -7,14 +7,15 @@
 //! Bundles live in `app_data_dir()/web/`:
 //!
 //!   state.json          the bundle in use, the one before it, the staged one, blocked versions
-//!   <version>/          a verified bundle: its files and daybloom-web.json (version, runtime,
-//!                       notes and the SHA-256 of every file)
+//!   <version>/          a verified bundle: bundle.zip and bundle.zip.sig as downloaded, and
+//!                       files/ unpacked from it
 //!   staging-<version>/  an unpack in progress, renamed to <version>/ once every file verified
 //!
 //! Safety:
-//! - Each zip must carry a valid minisign signature from the updater key (tauri.conf.json)
-//!   before it is opened; each file must match the bundle's SHA-256 list, when it is staged and
-//!   again at every launch.
+//! - A zip must carry a valid minisign signature from the updater key (tauri.conf.json) before
+//!   it is opened. Its daybloom-web.json gives the version, runtime, notes and the SHA-256 of
+//!   every file. Each launch checks the signature and every unpacked file again, so files that
+//!   anything else writes there are never served.
 //! - A bundle is for one RUNTIME (runtime.json: the binary's native API level). Bundles for
 //!   another one are ignored and deleted. The built-in bundle wins when it is as new or newer
 //!   (after an install).
@@ -25,7 +26,7 @@
 //!   ota_status() -> { runtime, embedded, version, active, previous, pending, blocked, reverted, feed }
 //!   ota_stage(url, sig) -> { version, notes }   download, verify, unpack; starts on the next launch
 //!   ota_apply() -> version                      serve the staged bundle now (the caller reloads)
-//!   ota_ready(runtime) -> ()                    the planner started
+//!   ota_ready(runtime, version) -> ()           the planner started (on the page of that version)
 //!   ota_rollback() -> version                   back to the bundle before; blocks this one
 //!
 //! Debug builds also read DAYBLOOM_OTA_FEED and DAYBLOOM_OTA_PUBKEY, to try bundles end to end
@@ -37,7 +38,7 @@ use std::fs;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Duration;
 
 use base64::Engine;
@@ -59,6 +60,10 @@ const FEED: &str = "https://github.com/alshell7/daybloom/releases/latest/downloa
 const SOURCE: &str = "/alshell7/daybloom/releases/download/";
 const MANIFEST: &str = "daybloom-web.json";
 const STATE: &str = "state.json";
+/// In each bundle folder: the zip and its signature as downloaded, and the files from it.
+const ZIP: &str = "bundle.zip";
+const SIG: &str = "bundle.zip.sig";
+const FILES: &str = "files";
 /// How long a new bundle has to call `ota_ready`.
 const TRIAL: Duration = Duration::from_secs(15);
 /// How long an asset request may wait for `setup` (it runs before the event loop, so it
@@ -183,11 +188,10 @@ fn check_manifest(m: &Manifest) -> Result<(), String> {
     Ok(())
 }
 
-/// Reads `<root>/daybloom-web.json` and checks every file against it.
-fn load_bundle(root: &Path, version: &str) -> Result<Bundle, String> {
-    let raw = fs::read(root.join(MANIFEST)).map_err(|e| format!("bundle {version}: {e}"))?;
-    let m: Manifest = serde_json::from_slice(&raw).map_err(|e| format!("bundle {version}: {e}"))?;
-    check_manifest(&m)?;
+/// Checks the bundle's zip against the key again, then every unpacked file against the zip's
+/// manifest.
+fn load_bundle(root: &Path, version: &str, key: &Key) -> Result<Bundle, String> {
+    let m = signed_manifest(root, key)?;
     if m.version != version {
         return Err(format!("bundle {version} says it is {}", m.version));
     }
@@ -196,7 +200,7 @@ fn load_bundle(root: &Path, version: &str) -> Result<Bundle, String> {
     }
     let mut files = HashMap::with_capacity(m.files.len());
     for (name, sha) in &m.files {
-        let path = root.join(asset_path(name).unwrap_or_default());
+        let path = root.join(FILES).join(asset_path(name).unwrap_or_default());
         let bytes = fs::read(&path).map_err(|e| format!("bundle {version}: {name}: {e}"))?;
         if hex(&Sha256::digest(&bytes)) != *sha {
             return Err(format!("bundle {version}: {name} does not match its SHA-256"));
@@ -220,6 +224,42 @@ fn verify(data: &[u8], sig: &str, pubkey: &str) -> Result<Option<String>, String
     key.verify(data, &sig, false).map_err(|_| "the update's signature does not match Daybloom's key".to_string())?;
     // The trusted comment is covered by the signature, so it is safe to read only now.
     Ok(sig.trusted_comment().split('\t').find_map(|f| f.strip_prefix("version:")).map(str::to_string))
+}
+
+/// The key bundles must be signed with.
+enum Key {
+    /// The updater's minisign public key (base64, as in tauri.conf.json).
+    Minisign(String),
+    /// Tests: "ok" is a valid signature, "ok:<version>" one made for that version.
+    #[cfg(test)]
+    Test,
+}
+
+impl Key {
+    fn verify(&self, data: &[u8], sig: &str) -> Result<Option<String>, String> {
+        match self {
+            Key::Minisign(key) => verify(data, sig, key),
+            #[cfg(test)]
+            Key::Test => match sig.strip_prefix("ok") {
+                Some("") => Ok(None),
+                Some(v) => Ok(v.strip_prefix(':').map(str::to_string)),
+                None => Err("the update's signature does not match Daybloom's key".into()),
+            },
+        }
+    }
+}
+
+/// The manifest of the zip kept in `root`, once the zip's signature checks out.
+fn signed_manifest(root: &Path, key: &Key) -> Result<Manifest, String> {
+    let zip = fs::read(root.join(ZIP)).map_err(|e| format!("{}: {e}", root.display()))?;
+    let sig = fs::read_to_string(root.join(SIG)).map_err(|e| format!("{}: {e}", root.display()))?;
+    let signed = key.verify(&zip, &sig)?;
+    let mut archive = ZipArchive::new(Cursor::new(&zip[..])).map_err(|e| format!("damaged bundle: {e}"))?;
+    let (m, _) = read_manifest(&mut archive)?;
+    match signed {
+        Some(s) if s != m.version => Err(format!("the signature is for version {s}, the bundle says {}", m.version)),
+        _ => Ok(m),
+    }
 }
 
 fn read_manifest(archive: &mut ZipArchive<Cursor<&[u8]>>) -> Result<(Manifest, Vec<u8>), String> {
@@ -272,15 +312,16 @@ fn unpack(archive: &mut ZipArchive<Cursor<&[u8]>>, m: &Manifest, to: &Path) -> R
 struct Store {
     dir: PathBuf,
     embedded: Version,
+    key: Key,
     saved: Saved,
     /// Set aside at this launch because the last one never heard from it.
     reverted: Option<String>,
 }
 
 impl Store {
-    fn open(dir: PathBuf, embedded: Version) -> Store {
+    fn open(dir: PathBuf, embedded: Version, key: Key) -> Store {
         let saved = fs::read(dir.join(STATE)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-        Store { dir, embedded, saved, reverted: None }
+        Store { dir, embedded, key, saved, reverted: None }
     }
 
     fn save(&self) -> Result<(), String> {
@@ -303,9 +344,7 @@ impl Store {
     }
 
     fn pending(&self) -> Option<Staged> {
-        let v = self.saved.staged.as_ref()?;
-        let raw = fs::read(self.dir.join(v).join(MANIFEST)).ok()?;
-        let m: Manifest = serde_json::from_slice(&raw).ok()?;
+        let m = signed_manifest(&self.dir.join(self.saved.staged.as_ref()?), &self.key).ok()?;
         Some(Staged { version: m.version, notes: m.notes })
     }
 
@@ -365,7 +404,7 @@ impl Store {
                 self.saved = Saved { staged: s.staged, blocked: s.blocked, confirmed: true, ..Saved::default() };
                 return None;
             }
-            match load_bundle(&self.dir.join(&v), &v) {
+            match load_bundle(&self.dir.join(&v), &v, &self.key) {
                 Ok(b) => return Some(b),
                 // Missing, damaged or for another runtime: not the bundle's fault, so not blocked.
                 Err(_) => self.fall_back(false),
@@ -390,11 +429,13 @@ impl Store {
         self.saved.blocked.retain(|v| parse_version(v).is_some_and(|p| p > *embedded));
     }
 
-    /// Checks a signature-verified zip, unpacks it into `staging-<v>/`, verifies every file, then
-    /// renames it to `<v>/` and records it as staged.
-    fn stage(&mut self, zip: &[u8], signed: Option<&str>) -> Result<Staged, String> {
+    /// Checks a downloaded zip's signature, unpacks it into `staging-<v>/`, verifies every file,
+    /// then renames it to `<v>/` and records it as staged.
+    fn stage(&mut self, zip: &[u8], sig: &str) -> Result<Staged, String> {
+        let signed = self.key.verify(zip, sig)?;
+        let signed = signed.as_deref();
         let mut archive = ZipArchive::new(Cursor::new(zip)).map_err(|e| format!("not a Daybloom bundle: {e}"))?;
-        let (m, raw) = read_manifest(&mut archive)?;
+        let (m, _) = read_manifest(&mut archive)?;
         if signed.is_some_and(|s| s != m.version) {
             return Err(format!("the signature is for version {}, the bundle says {}", signed.unwrap_or_default(), m.version));
         }
@@ -411,7 +452,9 @@ impl Store {
         let tmp = self.dir.join(format!("staging-{}", m.version));
         let _ = fs::remove_dir_all(&tmp);
         fs::create_dir_all(&tmp).map_err(io)?;
-        let unpacked = unpack(&mut archive, &m, &tmp).and_then(|_| fs::write(tmp.join(MANIFEST), &raw).map_err(io));
+        let unpacked = unpack(&mut archive, &m, &tmp.join(FILES))
+            .and_then(|_| fs::write(tmp.join(ZIP), zip).map_err(io))
+            .and_then(|_| fs::write(tmp.join(SIG), sig).map_err(io));
         if let Err(e) = unpacked {
             let _ = fs::remove_dir_all(&tmp);
             return Err(e);
@@ -450,7 +493,6 @@ pub struct Ota {
     inner: Mutex<Inner>,
     live: RwLock<Option<Arc<Bundle>>>,
     gate: (Mutex<Gate>, Condvar),
-    pubkey: OnceLock<String>,
     staging: AtomicBool,
     trials: AtomicU64,
     reverted: Mutex<Option<String>>,
@@ -458,13 +500,12 @@ pub struct Ota {
 
 impl Ota {
     /// Opens the store and picks the bundle to serve. Returns the trial to watch, if any.
-    fn boot(&self, dir: Option<PathBuf>, embedded: Version, pubkey: String) -> Option<u64> {
-        let _ = self.pubkey.set(pubkey);
+    fn boot(&self, dir: Option<PathBuf>, embedded: Version, key: Key) -> Option<u64> {
         let (lock, ready) = &self.gate;
         let mut gate = lock.lock().unwrap();
         let mut inner = self.inner.lock().unwrap();
         if let Some(dir) = dir {
-            let mut store = Store::open(dir, embedded);
+            let mut store = Store::open(dir, embedded, key);
             if !gate.early {
                 let bundle = store.boot();
                 if store.saved.trial {
@@ -547,9 +588,12 @@ impl Ota {
         Ok((version, id))
     }
 
-    /// The planner started: the active bundle is good.
-    fn ready(&self) -> Result<(), String> {
+    /// The planner started on a page of `version`: if that is the active bundle, it is good.
+    fn ready(&self, version: &str) -> Result<(), String> {
         self.with_store(|s, trial| {
+            if s.version() != version {
+                return Err(format!("this page is version {version}, the app runs {}", s.version()));
+            }
             *trial = None;
             if s.saved.active.is_some() && !s.saved.confirmed {
                 s.saved.confirmed = true;
@@ -594,8 +638,8 @@ impl Ota {
         });
     }
 
-    fn stage(&self, zip: &[u8], signed: Option<&str>) -> Result<Staged, String> {
-        self.with_store(|s, _| s.stage(zip, signed))
+    fn stage(&self, zip: &[u8], sig: &str) -> Result<Staged, String> {
+        self.with_store(|s, _| s.stage(zip, sig))
     }
 }
 
@@ -737,7 +781,7 @@ impl<R: Runtime> Assets<R> for OtaAssets<R> {
         self.embedded.setup(app);
         app.manage(self.ota.clone());
         let dir = if tauri::is_dev() { None } else { app.path().app_data_dir().ok().map(|d| d.join("web")) };
-        if let Some(id) = self.ota.boot(dir, app.package_info().version.clone(), updater_key(app.config())) {
+        if let Some(id) = self.ota.boot(dir, app.package_info().version.clone(), Key::Minisign(updater_key(app.config()))) {
             watch_trial(app.handle().clone(), self.ota.clone(), id);
         }
     }
@@ -785,10 +829,8 @@ pub async fn ota_stage(ota: State<'_, Arc<Ota>>, url: String, sig: String) -> Re
     }
     let _busy = Busy(&ota.staging);
     let zip = download(url).await?;
-    let pubkey = ota.pubkey.get().cloned().unwrap_or_default();
-    let signed = verify(&zip, &sig, &pubkey)?;
     let ota = ota.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || ota.stage(&zip, signed.as_deref())).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || ota.stage(&zip, &sig)).await.map_err(|e| e.to_string())?
 }
 
 /// Serves the staged bundle from now on. The calling window reloads itself; the others reload
@@ -801,13 +843,13 @@ pub async fn ota_apply(app: AppHandle, window: tauri::WebviewWindow, ota: State<
     Ok(version)
 }
 
-/// The planner started with this bundle (built for `runtime`).
+/// The planner started on a page built as `version` for `runtime`.
 #[tauri::command]
-pub async fn ota_ready(ota: State<'_, Arc<Ota>>, runtime: u32) -> Result<(), String> {
+pub async fn ota_ready(ota: State<'_, Arc<Ota>>, runtime: u32, version: String) -> Result<(), String> {
     if runtime != RUNTIME {
         return Err(format!("this page was built for runtime {runtime}, the app is {RUNTIME}"));
     }
-    ota.ready()
+    ota.ready(&version)
 }
 
 /// Back to the bundle before the active one (or the built-in one); the active one is not
@@ -930,15 +972,15 @@ mod tests {
     #[test]
     fn stages_then_serves_a_newer_bundle_on_trial() {
         let t = TempDir::new("stage");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s), None);
-        let staged = s.stage(&zip_for("0.2.1"), Some("0.2.1")).unwrap();
+        let staged = s.stage(&zip_for("0.2.1"), "ok:0.2.1").unwrap();
         assert_eq!(staged, Staged { version: "0.2.1".into(), notes: "Notes for 0.2.1".into() });
         assert_eq!(s.pending().unwrap().version, "0.2.1");
         assert!(!t.0.join("staging-0.2.1").exists());
 
         // The next launch starts it, on trial.
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s).as_deref(), Some("<html>0.2.1</html>"));
         assert_eq!(s.saved.active.as_deref(), Some("0.2.1"));
         assert!(s.saved.trial && !s.saved.confirmed);
@@ -948,77 +990,77 @@ mod tests {
     #[test]
     fn refuses_old_blocked_foreign_and_damaged_bundles() {
         let t = TempDir::new("refuse");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        assert!(s.stage(&zip_for("0.2.0"), None).unwrap_err().contains("not newer"));
-        assert!(s.stage(&zip_for("0.1.9"), None).unwrap_err().contains("not newer"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        assert!(s.stage(&zip_for("0.2.0"), "ok").unwrap_err().contains("not newer"));
+        assert!(s.stage(&zip_for("0.1.9"), "ok").unwrap_err().contains("not newer"));
         // The signature names another version than the bundle.
-        assert!(s.stage(&zip_for("0.2.1"), Some("0.2.2")).unwrap_err().contains("signature is for version 0.2.2"));
+        assert!(s.stage(&zip_for("0.2.1"), "ok:0.2.2").unwrap_err().contains("signature is for version 0.2.2"));
         // Built for another runtime.
         let other = bundle_zip("0.2.1", RUNTIME + 1, &[("index.html", "x")], |_| {});
-        assert!(s.stage(&other, None).unwrap_err().contains("newer Daybloom"));
+        assert!(s.stage(&other, "ok").unwrap_err().contains("newer Daybloom"));
         // A file that does not match its hash, an unlisted file, a missing one, an unsafe path.
         let bad_hash = bundle_zip("0.2.1", RUNTIME, &[("index.html", "x")], |m| {
             m.files.insert("index.html".into(), "0".repeat(64));
         });
-        assert!(s.stage(&bad_hash, None).unwrap_err().contains("does not match"));
+        assert!(s.stage(&bad_hash, "ok").unwrap_err().contains("does not match"));
         let unlisted = bundle_zip("0.2.1", RUNTIME, &[("index.html", "x"), ("extra.js", "y")], |m| {
             m.files.remove("extra.js");
         });
-        assert!(s.stage(&unlisted, None).unwrap_err().contains("unlisted"));
+        assert!(s.stage(&unlisted, "ok").unwrap_err().contains("unlisted"));
         let missing = bundle_zip("0.2.1", RUNTIME, &[("index.html", "x")], |m| {
             m.files.insert("gone.js".into(), "a".repeat(64));
         });
-        assert!(s.stage(&missing, None).unwrap_err().contains("missing"));
+        assert!(s.stage(&missing, "ok").unwrap_err().contains("missing"));
         let escape = bundle_zip("0.2.1", RUNTIME, &[("index.html", "x")], |m| {
             m.files.insert("../evil.js".into(), "a".repeat(64));
         });
-        assert!(s.stage(&escape, None).unwrap_err().contains("unsafe path"));
-        assert!(s.stage(b"not a zip", None).is_err());
+        assert!(s.stage(&escape, "ok").unwrap_err().contains("unsafe path"));
+        assert!(s.stage(b"not a zip", "ok").is_err());
         // Nothing was kept from any of them.
         assert_eq!(s.saved.staged, None);
         assert!(!t.0.join("0.2.1").exists() && !t.0.join("staging-0.2.1").exists());
 
         s.saved.blocked.push("0.2.1".into());
-        assert!(s.stage(&zip_for("0.2.1"), None).unwrap_err().contains("set aside"));
+        assert!(s.stage(&zip_for("0.2.1"), "ok").unwrap_err().contains("set aside"));
     }
 
     #[test]
     fn a_bundle_that_never_reports_in_is_rolled_back_and_blocked() {
         let t = TempDir::new("trial");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        s.stage(&zip_for("0.2.1"), None).unwrap();
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s).as_deref(), Some("<html>0.2.1</html>"));
         // It confirmed: 0.2.1 is now the one to go back to.
         s.saved.confirmed = true;
         s.saved.trial = false;
-        s.stage(&zip_for("0.2.2"), None).unwrap();
+        s.stage(&zip_for("0.2.2"), "ok").unwrap();
         s.save().unwrap();
 
         // 0.2.2 starts on trial, then the app stops before `ota_ready` (no clean exit).
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s).as_deref(), Some("<html>0.2.2</html>"));
         assert_eq!(s.saved.previous.as_deref(), Some("0.2.1"));
         // The next launch goes back to 0.2.1 and never takes 0.2.2 again.
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s).as_deref(), Some("<html>0.2.1</html>"));
         assert_eq!(s.reverted.as_deref(), Some("0.2.2"));
         assert!(s.saved.confirmed && !s.saved.trial);
         assert_eq!(s.saved.blocked, vec!["0.2.2".to_string()]);
         assert!(!t.0.join("0.2.2").exists());
-        assert!(s.stage(&zip_for("0.2.2"), None).unwrap_err().contains("set aside"));
+        assert!(s.stage(&zip_for("0.2.2"), "ok").unwrap_err().contains("set aside"));
         // A later version is fine.
-        s.stage(&zip_for("0.2.3"), None).unwrap();
+        s.stage(&zip_for("0.2.3"), "ok").unwrap();
     }
 
     #[test]
     fn a_first_bundle_that_fails_goes_back_to_the_built_in_one() {
         let t = TempDir::new("first");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        s.stage(&zip_for("0.2.1"), None).unwrap();
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert!(serve(&mut s).is_some());
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s), None);
         assert_eq!(s.saved.active, None);
         assert_eq!(s.saved.blocked, vec!["0.2.1".to_string()]);
@@ -1027,23 +1069,23 @@ mod tests {
     #[test]
     fn a_newer_install_wins_and_clears_the_old_bundles() {
         let t = TempDir::new("install");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        s.stage(&zip_for("0.2.1"), None).unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
         s.saved.blocked.push("0.3.5".into());
         s.save().unwrap();
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert!(serve(&mut s).is_some());
         // The app updates to 0.3.0 (its built-in bundle is newer).
-        let mut s = Store::open(t.0.clone(), v("0.3.0"));
+        let mut s = Store::open(t.0.clone(), v("0.3.0"), Key::Test);
         assert_eq!(serve(&mut s), None);
         assert_eq!(s.saved.active, None);
         assert!(!t.0.join("0.2.1").exists());
         assert_eq!(s.saved.blocked, vec!["0.3.5".to_string()]);
         // Same version as the built-in one: the built-in one wins too.
-        let mut s = Store::open(t.0.clone(), v("0.3.0"));
-        assert!(s.stage(&zip_for("0.3.0"), None).is_err());
+        let mut s = Store::open(t.0.clone(), v("0.3.0"), Key::Test);
+        assert!(s.stage(&zip_for("0.3.0"), "ok").is_err());
         // Blocks the built-in bundle has passed are forgotten.
-        let mut s = Store::open(t.0.clone(), v("0.4.0"));
+        let mut s = Store::open(t.0.clone(), v("0.4.0"), Key::Test);
         assert_eq!(serve(&mut s), None);
         assert!(s.saved.blocked.is_empty());
     }
@@ -1051,10 +1093,10 @@ mod tests {
     #[test]
     fn a_damaged_or_foreign_bundle_on_disk_is_not_served() {
         let t = TempDir::new("damaged");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        s.stage(&zip_for("0.2.1"), None).unwrap();
-        fs::write(t.0.join("0.2.1/assets/app.js"), "changed").unwrap();
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
+        fs::write(t.0.join("0.2.1/files/assets/app.js"), "changed").unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s), None);
         assert_eq!(s.saved.active, None);
         // Not its own fault, so not blocked (it may download again).
@@ -1062,14 +1104,39 @@ mod tests {
         assert!(!t.0.join("0.2.1").exists());
 
         // A bundle for another runtime left on disk (say, from before an install) is deleted.
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        s.stage(&zip_for("0.2.1"), None).unwrap();
-        let path = t.0.join("0.2.1").join(MANIFEST);
-        let mut m: Manifest = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        m.runtime = RUNTIME + 1;
-        fs::write(&path, serde_json::to_vec(&m).unwrap()).unwrap();
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
+        let foreign = bundle_zip("0.2.1", RUNTIME + 1, &[("index.html", "<html>0.2.1</html>")], |_| {});
+        fs::write(t.0.join("0.2.1").join(ZIP), foreign).unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(serve(&mut s), None);
+        assert!(!t.0.join("0.2.1").exists());
+    }
+
+    #[test]
+    fn a_bad_signature_is_refused_before_the_zip_is_opened() {
+        let t = TempDir::new("badsig");
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        assert!(s.stage(&zip_for("0.2.1"), "forged").unwrap_err().contains("does not match"));
+        assert!(s.stage(b"not even a zip", "forged").unwrap_err().contains("does not match"));
+        assert_eq!(s.saved.staged, None);
+        assert!(!t.0.join("0.2.1").exists());
+    }
+
+    #[test]
+    fn files_written_there_by_anything_else_are_not_served() {
+        let t = TempDir::new("planted");
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
+        // Something rewrites the bundle and its manifest consistently, but cannot sign it.
+        let planted = bundle_zip("0.2.1", RUNTIME, &[("index.html", "<html>evil</html>"), ("assets/app.js", "evil()")], |_| {});
+        fs::write(t.0.join("0.2.1").join(ZIP), planted).unwrap();
+        fs::write(t.0.join("0.2.1/files/index.html"), "<html>evil</html>").unwrap();
+        fs::write(t.0.join("0.2.1/files/assets/app.js"), "evil()").unwrap();
+        fs::write(t.0.join("0.2.1").join(SIG), "forged").unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        assert_eq!(serve(&mut s), None);
+        assert_eq!(s.saved.active, None);
         assert!(!t.0.join("0.2.1").exists());
     }
 
@@ -1079,7 +1146,7 @@ mod tests {
         fs::create_dir_all(t.0.join("staging-0.2.5/assets")).unwrap();
         fs::create_dir_all(t.0.join("0.1.0")).unwrap();
         fs::write(t.0.join(STATE), "{ not json").unwrap();
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
         assert_eq!(s.saved, Saved::default());
         assert_eq!(serve(&mut s), None);
         assert!(!t.0.join("staging-0.2.5").exists() && !t.0.join("0.1.0").exists());
@@ -1087,7 +1154,7 @@ mod tests {
 
     fn ota_at(dir: &Path, embedded: &str) -> (Ota, Option<u64>) {
         let ota = Ota::default();
-        let trial = ota.boot(Some(dir.to_path_buf()), v(embedded), TEST_KEY.into());
+        let trial = ota.boot(Some(dir.to_path_buf()), v(embedded), Key::Test);
         (ota, trial)
     }
 
@@ -1097,7 +1164,7 @@ mod tests {
         let (ota, trial) = ota_at(&t.0, "0.2.0");
         assert_eq!(trial, None);
         assert_eq!(ota.get("/index.html"), None);
-        ota.stage(&zip_for("0.2.1"), None).unwrap();
+        ota.stage(&zip_for("0.2.1"), "ok").unwrap();
         assert_eq!(ota.status().unwrap().pending.unwrap().version, "0.2.1");
 
         let (version, id) = ota.apply().unwrap();
@@ -1108,13 +1175,15 @@ mod tests {
         let st = ota.status().unwrap();
         assert_eq!((st.version.as_str(), st.embedded.as_str(), st.pending), ("0.2.1", "0.2.0", None));
 
-        // The planner reported in, so the deadline leaves it alone.
-        ota.ready().unwrap();
+        // A page of another version (say, a stale one) does not count; this one's does, so the
+        // deadline leaves it alone.
+        assert!(ota.ready("0.2.0").is_err());
+        ota.ready("0.2.1").unwrap();
         assert_eq!(ota.fall_back(Some(id)).unwrap(), None);
         assert_eq!(ota.get("/index.html").unwrap(), b"<html>0.2.1</html>");
 
         // The next one is applied but never reports in: the deadline goes back to 0.2.1.
-        ota.stage(&zip_for("0.2.2"), None).unwrap();
+        ota.stage(&zip_for("0.2.2"), "ok").unwrap();
         let (_, id) = ota.apply().unwrap();
         assert_eq!(ota.get("/index.html").unwrap(), b"<html>0.2.2</html>");
         assert_eq!(ota.fall_back(Some(id)).unwrap().as_deref(), Some("0.2.1"));
@@ -1134,7 +1203,7 @@ mod tests {
     fn a_clean_exit_during_the_trial_tries_again_next_launch() {
         let t = TempDir::new("exit");
         let (ota, _) = ota_at(&t.0, "0.2.0");
-        ota.stage(&zip_for("0.2.1"), None).unwrap();
+        ota.stage(&zip_for("0.2.1"), "ok").unwrap();
         ota.apply().unwrap();
         ota.exit();
         let (ota, trial) = ota_at(&t.0, "0.2.0");
@@ -1150,22 +1219,22 @@ mod tests {
     #[test]
     fn requests_wait_for_setup() {
         let t = TempDir::new("gate");
-        let mut s = Store::open(t.0.clone(), v("0.2.0"));
-        s.stage(&zip_for("0.2.1"), None).unwrap();
+        let mut s = Store::open(t.0.clone(), v("0.2.0"), Key::Test);
+        s.stage(&zip_for("0.2.1"), "ok").unwrap();
         let ota = Arc::new(Ota::default());
         let early = {
             let ota = ota.clone();
             std::thread::spawn(move || ota.get("/index.html"))
         };
         std::thread::sleep(Duration::from_millis(50));
-        ota.boot(Some(t.0.clone()), v("0.2.0"), TEST_KEY.into());
+        ota.boot(Some(t.0.clone()), v("0.2.0"), Key::Test);
         assert_eq!(early.join().unwrap().unwrap(), b"<html>0.2.1</html>");
     }
 
     #[test]
     fn development_has_no_store() {
         let ota = Ota::default();
-        assert_eq!(ota.boot(None, v("0.2.0"), String::new()), None);
+        assert_eq!(ota.boot(None, v("0.2.0"), Key::Test), None);
         assert_eq!(ota.get("/index.html"), None);
         assert!(ota.status().is_err());
         assert!(ota.apply().is_err());

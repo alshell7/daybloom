@@ -40,13 +40,15 @@ function noInlineScripts(): Plugin {
 
 /** The native API level the app is built for (src-tauri/runtime.json): `import.meta.env.VITE_RUNTIME`. */
 const runtime: number = JSON.parse(readFileSync(new URL('./src-tauri/runtime.json', import.meta.url), 'utf8')).RUNTIME;
+/** This build's version: `import.meta.env.VITE_VERSION` (a web update reports it, ota.svelte.ts). */
+const version: string = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
   plugins: [ortWithoutWasm(), svelte(), noInlineScripts()],
-  define: { 'import.meta.env.VITE_RUNTIME': JSON.stringify(String(runtime)) },
+  define: { 'import.meta.env.VITE_RUNTIME': JSON.stringify(String(runtime)), 'import.meta.env.VITE_VERSION': JSON.stringify(version) },
   worker: { format: 'es', plugins: () => [ortWithoutWasm()] },
   clearScreen: false,
   server: {

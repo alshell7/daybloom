@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import pkg from '../../package.json';
 import runtimeJson from '../../src-tauri/runtime.json';
-import { compareVersions, pickBundle, RUNTIME } from './ota.svelte';
+import { compareVersions, PAGE_VERSION, pickBundle, RUNTIME } from './ota.svelte';
 
 const entry = (version: string, runtime = 1, more: object = {}) => ({ version, runtime, url: `https://github.com/alshell7/daybloom/releases/download/v${version}/web-${version}-r${runtime}.zip`, sig: 'c2ln', files: 60, bytes: 1_400_000, ...more });
 
 describe('web updates', () => {
-  it('builds with the runtime from runtime.json', () => {
+  it('builds with the runtime from runtime.json and the version from package.json', () => {
     expect(RUNTIME).toBe(runtimeJson.RUNTIME);
     expect(Number.isInteger(RUNTIME) && RUNTIME > 0).toBe(true);
+    expect(PAGE_VERSION).toBe(pkg.version);
   });
 
   it('orders versions by number, not as text', () => {

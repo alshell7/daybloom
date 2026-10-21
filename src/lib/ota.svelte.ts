@@ -6,7 +6,7 @@
 //   ota_status()         -> OtaStatus
 //   ota_stage(url, sig)  -> Staged    download, signature, SHA-256 of every file
 //   ota_apply()          -> version   the other windows reload natively; this one reloads here
-//   ota_ready(runtime)   -> void      the planner started, so the new bundle is good
+//   ota_ready(runtime, version) -> void  the planner started, so the new bundle is good
 //   ota_rollback()       -> version   back to the bundle before ('' is the built-in one)
 
 import { platform } from './platform';
@@ -45,6 +45,8 @@ export interface FeedEntry {
 
 /** The native API level this page was built for (src-tauri/runtime.json). */
 export const RUNTIME = Number(import.meta.env.VITE_RUNTIME);
+/** The version this page was built as (package.json). */
+export const PAGE_VERSION = import.meta.env.VITE_VERSION;
 
 /** The web update in use, for Settings › Updates. */
 export const web = $state<{ embedded: string; active: string | null; previous: string | null }>({ embedded: '', active: null, previous: null });
@@ -135,5 +137,5 @@ let reported = false;
 export function reportStarted() {
   if (!platform.isNative || reported) return;
   reported = true;
-  invoke('ota_ready', { runtime: RUNTIME }).catch(() => {});
+  invoke('ota_ready', { runtime: RUNTIME, version: PAGE_VERSION }).catch(() => {});
 }

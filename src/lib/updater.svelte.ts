@@ -60,23 +60,30 @@ export async function checkForUpdates(manual = false) {
   updates.status = 'checking';
   updates.error = '';
   let failed: unknown = null;
+  // Both at once: a slow installer feed does not hold back a web update (it downloads before
+  // it is offered, and is offered as soon as it is ready). A new app still wins when it comes.
+  const web = checkWebUpdate();
+  // Read afresh each time: the web check may offer while the installer feed is still busy.
+  const status = (): Status => updates.status;
+  web.then((w) => w && status() === 'checking' && offer('web', w.version, w.notes)).catch(() => {});
   try {
     const { check } = await import('@tauri-apps/plugin-updater');
     const u = await check();
     if (u) {
       updates.checkedAt = Date.now();
       pending = u as typeof pending;
-      return offer('app', u.version, u.body ?? '');
+      if (status() !== 'installing') offer('app', u.version, u.body ?? '');
+      return;
     }
   } catch (e) {
     failed = e;
   }
-  // No new app: perhaps a web update (it downloads before it is offered).
   try {
-    const w = await checkWebUpdate();
+    const w = await web;
     if (w) {
       updates.checkedAt = Date.now();
-      return offer('web', w.version, w.notes);
+      if (status() === 'checking') offer('web', w.version, w.notes);
+      return;
     }
   } catch (e) {
     failed ??= e;

@@ -6,6 +6,8 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_CLIENT_SECRET?: string;
   /** src-tauri/runtime.json → RUNTIME (vite.config.ts). */
   readonly VITE_RUNTIME: string;
+  /** package.json → version (vite.config.ts). */
+  readonly VITE_VERSION: string;
 }
 
 interface ImportMeta {
