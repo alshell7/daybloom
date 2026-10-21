@@ -5,7 +5,10 @@
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- No cloud backup: secrets are sealed by a Keystore key that a restore can't bring
+         back, and sync (GitHub or Cloudflare D1, encrypted) is how data moves between devices. -->
     <application
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.daybloom"

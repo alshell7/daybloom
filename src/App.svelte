@@ -27,6 +27,7 @@
   import { eventStateFile } from './lib/stores/eventStates.svelte';
   import { followResets } from './lib/reset';
   import { startStarter } from './lib/starter.svelte';
+  import { startDevice } from './lib/native/device.svelte';
 
   const label = windowLabel();
   let ready = $state(false);
@@ -58,6 +59,7 @@
     let stopPrivacy: (() => void) | undefined;
     let stopAddons: (() => void) | undefined;
     let stopStarter: (() => void) | undefined;
+    let stopDevice: (() => void) | undefined;
     // "Auto" clock style: what this computer shows (region and time settings), read before the
     // first paint and again when the window comes back (the setting may have changed).
     const readClockStyle = () =>
@@ -99,6 +101,7 @@
         stopCues = startScreenCues();
         stopAddons = startAddons();
         stopStarter = startStarter();
+        stopDevice = startDevice();
         stopPrivacy = platform.onPrivacyChange((on) => {
           if (settings.value.privacy.on !== on) settings.value.privacy.on = on;
         });
@@ -121,6 +124,7 @@
       stopPrivacy?.();
       stopAddons?.();
       stopStarter?.();
+      stopDevice?.();
     };
   });
 

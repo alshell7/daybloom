@@ -12,12 +12,14 @@ use tauri::{AppHandle, Manager};
 #[cfg(desktop)]
 use crate::widget::{self, Layer};
 
+#[cfg(desktop)]
 const KEYRING_SERVICE: &str = "app.daybloom.desktop";
 
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+#[cfg(desktop)]
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
@@ -84,12 +86,14 @@ pub async fn state_keys(app: AppHandle) -> Result<Vec<String>, String> {
         .collect())
 }
 
-// ---- Secrets: OS keychain / Credential Manager ---------------------------------------
+// ---- Secrets: OS keychain / Credential Manager / Android Keystore -----------------------
 
+#[cfg(desktop)]
 fn entry(account: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, account).map_err(err)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn secret_get(account: String) -> Result<Option<String>, String> {
     blocking(move || match entry(&account)?.get_password() {
@@ -100,11 +104,13 @@ pub async fn secret_get(account: String) -> Result<Option<String>, String> {
     .await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn secret_set(account: String, value: String) -> Result<(), String> {
     blocking(move || entry(&account)?.set_password(&value).map_err(err)).await
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn secret_delete(account: String) -> Result<(), String> {
     blocking(move || match entry(&account)?.delete_credential() {
@@ -112,6 +118,32 @@ pub async fn secret_delete(account: String) -> Result<(), String> {
         Err(e) => Err(err(e)),
     })
     .await
+}
+
+// A phone: the values are sealed by a key in the Android Keystore (see DevicePlugin.kt).
+
+#[cfg(mobile)]
+#[derive(serde::Deserialize)]
+struct SecretValue {
+    value: Option<String>,
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn secret_get(app: AppHandle, account: String) -> Result<Option<String>, String> {
+    Ok(crate::device::call::<_, SecretValue>(&app, "secretGet", serde_json::json!({ "account": account })).await?.value)
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn secret_set(app: AppHandle, account: String, value: String) -> Result<(), String> {
+    crate::device::call::<_, serde_json::Value>(&app, "secretSet", serde_json::json!({ "account": account, "value": value })).await.map(|_| ())
+}
+
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn secret_delete(app: AppHandle, account: String) -> Result<(), String> {
+    crate::device::call::<_, serde_json::Value>(&app, "secretDelete", serde_json::json!({ "account": account })).await.map(|_| ())
 }
 
 // ---- Windows, tray, dock -------------------------------------------------------------

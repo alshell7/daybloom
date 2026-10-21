@@ -27,10 +27,8 @@ serde_json = "1"
 # Needle weights store (src/assistant.rs): the same reqwest/sha2 tauri-plugin-http already builds.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
 sha2 = "0.10"
-# Platform backends are target-gated inside keyring, so enabling all is harmless.
 # MCP addon token (src/mcp.rs). The version tauri already builds.
 getrandom = "0.3"
-keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
 # Desktop only: a phone has no login items, single instance, window geometry or self-updater
 # (Android updates through a new APK; see the Android plugin).
@@ -40,6 +38,9 @@ tauri-plugin-window-state = "2.5"
 tauri-plugin-single-instance = "2.5"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# The OS keychain (a phone uses the Android Keystore instead; see device.rs). Platform backends
+# are target-gated inside keyring, so enabling all is harmless.
+keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
 # Time Tracker activity sensing (src/activity.rs). The versions tauri already builds.
 [target.'cfg(target_os = "macos")'.dependencies]

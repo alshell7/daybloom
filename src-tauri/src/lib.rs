@@ -4,6 +4,8 @@ mod assistant;
 #[cfg(desktop)]
 mod capture;
 mod commands;
+#[cfg(mobile)]
+mod device;
 mod export;
 mod mcp;
 mod mic;
@@ -105,6 +107,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init());
+    #[cfg(mobile)]
+    let builder = builder.plugin(device::init());
     #[cfg(desktop)]
     let builder = builder
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
@@ -211,6 +215,7 @@ pub fn run() {
         commands::secret_set,
         commands::secret_delete,
         commands::privacy_set,
+        device::device_call,
         mcp::mcp_set,
         mcp::mcp_status,
         mcp::mcp_reply,

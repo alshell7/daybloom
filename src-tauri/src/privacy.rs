@@ -34,5 +34,13 @@ pub fn set(app: &AppHandle, on: bool) {
     }
     #[cfg(desktop)]
     crate::tray::sync_privacy(app, on);
+    // A phone: FLAG_SECURE also hides Daybloom from the app switcher's preview.
+    #[cfg(mobile)]
+    {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = crate::device::call::<_, serde_json::Value>(&app, "secure", json!({ "on": on })).await;
+        });
+    }
     let _ = app.emit("daybloom://privacy", json!({ "on": on }));
 }

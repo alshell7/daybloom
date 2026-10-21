@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { platform } from '../lib/platform';
   // The top bar: the day on the left (the clock, the date, the zone), the week, and the actions
   // on the right. It never overlaps or clips. Every item has a group and a priority
   // (topbar/items.ts); a ResizeObserver reports the bar's width and each item's natural width
@@ -54,6 +55,8 @@
     if (id === 'session') return !!timer.active && !view.focus;
     if (id === 'tracker') return !!tracker.running;
     if (id === 'calendars') return connected;
+    // A phone has no desktop to put the widget on (its home-screen widget is set up there).
+    if (id === 'widget') return !platform.isMobile;
     return true;
   }
 

@@ -131,6 +131,24 @@ html.widget-mode {
   height: 100%;
 }
 
+/* A phone draws edge to edge: the native side fills these with the status bar, navigation
+   bar and cut-out sizes (DevicePlugin.kt). The app's own ground shows behind the bars. */
+:root {
+  --safe-top: 0px;
+  --safe-right: 0px;
+  --safe-bottom: 0px;
+  --safe-left: 0px;
+  --keyboard: 0px;
+}
+html[data-device='phone'] #app {
+  padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+}
+html[data-device='phone'] body {
+  /* No rubber-band scroll of the whole page, no grey flash on tap. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--focus-ring) 28%, transparent);
   color: var(--ink);

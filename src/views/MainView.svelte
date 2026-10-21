@@ -456,6 +456,8 @@
       grid-template-columns: 1fr;
       grid-template-rows: auto 1fr;
       overflow-y: auto;
+      /* The last rows scroll clear of a phone's gesture bar. */
+      padding-bottom: var(--safe-bottom);
     }
     .dial-col {
       padding: var(--s-3) var(--s-4) var(--s-4);

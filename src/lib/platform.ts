@@ -214,6 +214,7 @@ export const platform = {
 
   /** Whether this computer shows 12-hour time (its region and time settings), if it can tell. */
   async systemHour12(): Promise<boolean | null> {
+    if (isMobile) return (await invoke<{ value: boolean } | null>('device_call', { method: 'hour12', args: {} }))?.value ?? null;
     if (isTauri) return invoke<boolean | null>('system_hour12');
     return null;
   },
