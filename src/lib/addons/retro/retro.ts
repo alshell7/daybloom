@@ -1,11 +1,14 @@
 // Retrospection: a look back over a week or a month that is honest and kind. What went well
 // first (bright spots), then where things could be easier (patterns, each with a gentle tip
 // and, where it helps, a one-tap fix), then a few small experiments for next time. Pure.
+// What was finished comes from the History tab's list (lib/history.ts), so a calendar event
+// marked done counts here as it does in "Your week".
 
 import { taskBlocks } from '../../engine/blocks';
 import { CATEGORIES } from '../../engine/categories';
 import { addDays, daysBetween, formatDuration, hourOf, MINUTE, minutesOfDay, startOfDayMs } from '../../engine/time';
 import type { Block, CalendarEvent, CategoryId, ISODate, Task } from '../../engine/types';
+import { completedItems, counts, sourcesFor, type DoneItem } from '../../history';
 import { partOfHour, PARTS, type PartOfDay } from '../../insights';
 import { drainOf } from '../landings/landings';
 
@@ -110,6 +113,22 @@ export function analyse(i: RetroInput): Retro {
   let focusMin = 0;
   let longFocus = 0;
 
+  // Finished things, as the history lists them (task blocks by key; events marked done).
+  const finished = new Map<string, DoneItem>();
+  for (const it of completedItems(sourcesFor(i.tasks, i.from, i.to, { events: i.events }), i.from, i.to, i.nowMs)) {
+    if (counts(it) && it.kind !== 'backlog') finished.set(it.key, it);
+  }
+  const markDone = (d: RetroDay, it: DoneItem, c: { plannedMin: number; doneMin: number }, pp: { planned: number; done: number } | null) => {
+    d.done++;
+    if (pp) pp.done++;
+    const spent = it.spentMs / MINUTE;
+    d.doneMin += spent;
+    c.doneMin += spent;
+    if (it.category === 'focus') focusMin += spent;
+    const endMin = it.spentEndMs == null ? null : minutesOfDay(it.spentEndMs);
+    if (endMin != null && i.sleep > i.wake && (endMin > i.sleep || endMin < i.wake - 60)) d.late = true;
+  };
+
   for (const t of i.tasks) {
     if (!t.date) continue;
     for (const b of taskBlocks(t, i.from, i.to)) {
@@ -126,20 +145,29 @@ export function analyse(i: RetroInput): Retro {
       const part = b.floating ? null : partOfHour(hourOf(b.startMs));
       const pp = part ? (parts.get(part) ?? { planned: 0, done: 0 }) : null;
       if (pp && !acked) pp.planned++;
-      if (b.done) {
-        d.done++;
-        if (pp) pp.done++;
-        const spent = b.floating ? 0 : Math.max(0, Math.min(b.endMs, b.doneAt ?? b.endMs) - b.startMs) / MINUTE;
-        d.doneMin += spent;
-        c.doneMin += spent;
-        if (b.category === 'focus') focusMin += spent;
+      const it = finished.get(b.key);
+      if (it) {
+        markDone(d, it, c, pp);
         if (b.category === 'focus' && min >= 120) longFocus++;
-        const endMin = minutesOfDay(Math.min(b.endMs, b.doneAt ?? b.endMs));
-        if (!b.floating && i.sleep > i.wake && (endMin > i.sleep || endMin < i.wake - 60)) d.late = true;
       } else if (acked) d.letGo++;
       else d.open++;
       if (part && pp) parts.set(part, pp);
     }
+  }
+  // A calendar event marked done counts as a plan kept (an unmarked one is never held against you).
+  for (const it of finished.values()) {
+    if (it.source !== 'event') continue;
+    const d = dayOf(it.date);
+    if (!d) continue;
+    d.planned++;
+    const c = cats.get(it.category) ?? { plannedMin: 0, doneMin: 0 };
+    c.plannedMin += it.startMs != null && it.endMs != null ? (it.endMs - it.startMs) / MINUTE : 0;
+    cats.set(it.category, c);
+    const part = it.startMs == null ? null : partOfHour(hourOf(it.startMs));
+    const pp = part ? (parts.get(part) ?? { planned: 0, done: 0 }) : null;
+    if (pp) pp.planned++;
+    markDone(d, it, c, pp);
+    if (part && pp) parts.set(part, pp);
   }
   for (const e of i.events) {
     if (e.allDay || e.provider === 'salah') continue;
@@ -222,7 +250,7 @@ export function analyse(i: RetroInput): Retro {
     patterns.push({ id: 'pushed', icon: 'move-later', title: `“${m.title || 'A block'}” keeps moving`, detail: `Moved ${m.n} times${pushed.length > 1 ? `, and ${pushed.length - 1} more moved 3 times or more` : ''}.`, tip: 'When something keeps moving, it is often too big to start. Break off a two-minute first step.', ...(alive ? { action: { label: 'Make it smaller', do: `smaller:${id}` as const } } : {}), weight: 6 + m.n });
   }
   const lateDays = days.filter((d) => d.late).length;
-  if (lateDays >= 2) patterns.push({ id: 'late', icon: 'moon', title: `${lateDays} days ran past bedtime`, detail: 'Work finished after your sleep time.', tip: 'An evening wind-down an hour before sleep makes stopping easier.', action: { label: 'Offer a wind-down', do: 'winddown' }, weight: 5 + lateDays });
+  if (lateDays >= 2) patterns.push({ id: 'late', icon: 'moon', title: `${lateDays} evenings ran long`, detail: 'Some work carried on past your sleep time. Full days happen.', tip: 'An evening wind-down an hour before sleep makes stopping easier.', action: { label: 'Offer a wind-down', do: 'winddown' }, weight: 5 + lateDays });
   if (longFocus >= 2) patterns.push({ id: 'long', icon: 'timer', title: 'Long stretches without a break', detail: `${longFocus} focus blocks of two hours or more.`, tip: 'Focus in rounds with short breaks: it keeps energy for later in the day.', action: { label: 'Focus in rounds', do: 'cycles' }, weight: 4 });
   if ((i.backlogOpen ?? 0) >= 25) patterns.push({ id: 'backlog', icon: 'inbox', title: 'A full backlog', detail: `${i.backlogOpen} things are waiting.`, tip: 'A short session to clear three small ones, or let go of what no longer matters.', action: { label: 'Open the backlog', do: 'backlog' }, weight: 3 });
   patterns.sort((a, b) => b.weight - a.weight);

@@ -5,7 +5,7 @@
 
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef' | 'views';
 
 export interface AddonMeta {
   id: AddonId;
@@ -21,11 +21,27 @@ export interface AddonMeta {
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
+  /** The gallery group it shows under (see ADDON_GROUPS); none shows under "More". */
+  group?: AddonGroup;
+  /** Uses the AI set up in Settings › AI. */
+  ai?: boolean;
 }
+
+export type AddonGroup = 'plan' | 'time' | 'calm' | 'faith' | 'ai';
+
+/** The gallery's groups, in the order they show. `short` labels the filter chip. */
+export const ADDON_GROUPS: { id: AddonGroup; name: string; short: string }[] = [
+  { id: 'plan', name: 'Plan & focus', short: 'Plan' },
+  { id: 'time', name: 'Time & money', short: 'Time' },
+  { id: 'calm', name: 'Calm & care', short: 'Calm' },
+  { id: 'faith', name: 'Faith', short: 'Faith' },
+  { id: 'ai', name: 'AI & connections', short: 'AI' },
+];
 
 export const ADDONS: AddonMeta[] = [
   {
     id: 'work',
+    group: 'time',
     name: 'Work',
     tagline: 'Every block can earn',
     description: 'Give blocks a project and a rate. See what your time is worth, and turn it into a clean bill in two clicks.',
@@ -40,6 +56,7 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'tracker',
+    group: 'time',
     name: 'Time Tracker',
     tagline: 'Know where the time went',
     description: 'Track time on any block or project with one click. Daybloom notices when you step away, and can note which apps you used.',
@@ -54,6 +71,7 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'crumbs',
+    group: 'plan',
     name: 'Breadcrumbs',
     tagline: 'Pick up where you left off',
     description: 'When you step away from a task, leave yourself one line about where you were. When you come back, it is the first thing you see. Stray thoughts during focus wait in a parking spot.',
@@ -68,6 +86,8 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'smaller',
+    group: 'plan',
+    ai: true,
     name: 'Make it smaller',
     tagline: 'For tasks that feel too big to start',
     description: 'One tap splits a task into a few small, friendly steps. The first one always takes two minutes, so starting is easy.',
@@ -82,6 +102,7 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'reality',
+    group: 'plan',
     name: 'Reality check',
     tagline: 'Plan with the time things really take',
     description: 'Daybloom quietly learns how long your blocks really take, from finished blocks, focus sessions and tracked time. Then it shows you, kindly, and offers a better length when you plan.',
@@ -96,10 +117,11 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'waqt',
+    group: 'faith',
     name: 'Waqt',
     tagline: 'Salah, woven into your day',
     description: 'The five salah times on your dial and in your plans, with adhan, jamaat and Jumu’ah. Gentle reminders, the Hijri date, the Qibla, and a calm way to mark each prayer.',
-    icon: 'moon',
+    icon: 'mihrab',
     accent: '#25976A',
     features: [
       { icon: 'dial', text: 'Each prayer’s time on the dial, with its adhan and jamaat' },
@@ -110,6 +132,7 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'landings',
+    group: 'calm',
     name: 'Soft landings',
     tagline: 'A gentle way back after meetings',
     description: 'After meetings or a long stretch, the next task can feel hard to pick up. Daybloom keeps a few minutes free to land, and when a meeting ends it offers three small stepping stones: a reset for your body, a little spark, and a two-minute first step into what’s next.',
@@ -124,6 +147,7 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'retro',
+    group: 'calm',
     name: 'Retrospection',
     tagline: 'Look back kindly, plan a little better',
     description: 'A look back over your week or month: the story in a few lines, what went well, your days at a glance, and where things could be easier — each with a gentle tip and a fix you can make in one tap.',
@@ -138,6 +162,8 @@ export const ADDONS: AddonMeta[] = [
   },
   {
     id: 'alef',
+    group: 'ai',
+    ai: true,
     name: 'Alef',
     tagline: 'A small robot friend in your dial',
     description: 'Alef lives in the middle of your dial. It keeps you company while you work, feels how the day is going and shows it with its eyes, lights and little chirps. Talk to it to plan: on this device, or with an AI service you choose.',
@@ -151,7 +177,23 @@ export const ADDONS: AddonMeta[] = [
     sheet: 'alef',
   },
   {
+    id: 'views',
+    group: 'plan',
+    name: 'Timeline views',
+    tagline: 'Your day as a board or a Gantt chart',
+    description: 'See the same blocks in new ways. A board moves work from later to today to done with a drag. A Gantt chart lays your days side by side, so you can move and stretch blocks along the hours.',
+    icon: 'columns',
+    accent: '#3D6FE3',
+    features: [
+      { icon: 'columns', text: 'Board: drag blocks between Later, Today, Now and Done' },
+      { icon: 'chart-gantt', text: 'Gantt: a day or a week on one timeline; drag to move or stretch' },
+      { icon: 'shield', text: 'Calendar events and salah stay in place; free time shows between them' },
+    ],
+    where: 'Switch between List, Board and Gantt at the top of the timeline.',
+  },
+  {
     id: 'mcp',
+    group: 'ai',
     name: 'MCP',
     tagline: 'Plan your day with your AI apps',
     description: 'A small, private connection for AI apps that speak MCP, like Claude and Codex. They can read your day, find free time, and add, move or finish blocks. It runs only on this computer, behind a key, and you can undo every change.',

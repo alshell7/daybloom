@@ -419,8 +419,10 @@
   .done {
     background: var(--teal);
   }
+  /* Let go: a quiet outline, no texture. */
   .let {
-    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 22%, transparent) 0 2px, transparent 2px 5px);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 28%, transparent);
   }
   .mtg {
     display: block;
@@ -469,7 +471,7 @@
     background: var(--teal);
   }
   .k.let {
-    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 30%, transparent) 0 2px, transparent 2px 4px);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
     box-shadow: inset 0 0 0 1px var(--line-strong);
   }
   .k.plan {

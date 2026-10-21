@@ -18,6 +18,8 @@ import { timer } from '../stores/timer.svelte';
 import { execute, respond, warmTexts, warmUp, type Route } from './brain';
 import { openCheckIns, type Call, type ToolResult } from './tools';
 import type { EngineStatus, NeedleEngine } from './types';
+import { ai } from '../ai/hub.svelte';
+import { LlmError, providerOf } from '../ai/providers';
 
 export interface Entry {
   id: number;
@@ -32,6 +34,11 @@ export interface Entry {
   undone: boolean;
   /** Asked by voice (the query bubble shows a small mic). */
   spoken?: boolean;
+  /** Answered by an AI service (its name), or why the service couldn't answer this time. */
+  via?: string;
+  note?: string;
+  /** The AI service's generative UI (OpenUI Lang), drawn under the answer. */
+  ui?: string;
 }
 
 export type Status = EngineStatus | 'unavailable';
@@ -177,6 +184,21 @@ class Session {
     this.#remember(text);
     const entry = this.#push(text, !!opts.spoken);
     await this.#settle(entry, async () => {
+      // An AI service chosen in Settings › AI answers first; this device is the fallback.
+      if (ai.ready('assistant', 'think')) {
+        const via = ai.route('assistant', 'think').via;
+        try {
+          const { aiRespond } = await import('./aiAnswer');
+          const r = await aiRespond(text, this.entries.filter((e) => e !== entry), clock.now);
+          if (r) {
+            entry.via = via === 'device' ? undefined : providerOf(via).name;
+            if (r.ui) entry.ui = r.ui;
+            return r;
+          }
+        } catch (e) {
+          entry.note = `${e instanceof LlmError ? e.message : "The AI service couldn't answer."} This answer came from this device.`;
+        }
+      }
       const r = await respond(text, this.#engineIfReady(), clock.now);
       entry.route = r.route;
       return r.result;

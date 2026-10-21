@@ -33,6 +33,12 @@
       "allow": [
         {
           "url": "https://*"
+        },
+        {
+          "url": "ms-settings:privacy-microphone"
+        },
+        {
+          "url": "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
         }
       ]
     },

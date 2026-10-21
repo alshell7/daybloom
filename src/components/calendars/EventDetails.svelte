@@ -11,6 +11,7 @@
   import { platform } from '../../lib/platform';
   import { clock } from '../../lib/stores/clock.svelte';
   import { view } from '../../lib/stores/view.svelte';
+  import { skipEvent, toggleDone } from '../../lib/actions';
 
   let { block }: { block: Block } = $props();
 
@@ -59,6 +60,17 @@
     <span class="state" class:live class:soon>{when}</span>
   </p>
   <p class="cal"><i></i>{ev.calendarName ?? accountLabel(ev.accountId)}</p>
+
+  <!-- What you did with it: kept here, the calendar itself stays as it is. -->
+  <div class="mine">
+    <button class="btn" class:btn-primary={!block.done} class:btn-soft={block.done} onclick={(e) => { const r = e.currentTarget.getBoundingClientRect(); toggleDone(block.key, { x: r.left + r.width / 2, y: r.top + r.height / 2 }); }} disabled={block.skipped}>
+      <Icon name={block.done ? 'undo' : 'check'} size={14} stroke={2.3} /> {block.done ? 'Not done' : 'Done'}
+    </button>
+    <button class="btn btn-quiet" onclick={() => skipEvent(block.key)}>
+      <Icon name={block.skipped ? 'undo' : 'skip'} size={14} /> {block.skipped ? 'Bring it back' : 'Skip it'}
+    </button>
+    <span class="mine-hint">{block.skipped ? 'Skipped · its time is free for plans' : block.done ? 'Done · it counts in your week' : 'Only in Daybloom; your calendar stays as it is'}</span>
+  </div>
 
   {#if meet}
     <div class="join" in:fly={{ y: 6, duration: rm ? 0 : 260, easing: cubicOut }}>
@@ -121,6 +133,17 @@
 </div>
 
 <style>
+  .mine {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .mine-hint {
+    flex-basis: 100%;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
   .ed {
     display: grid;
     gap: var(--s-3);

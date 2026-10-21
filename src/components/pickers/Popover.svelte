@@ -21,6 +21,8 @@
 
   function place() {
     if (!card) return;
+    // What it hangs from went away (the bar refolded): close rather than jump to a corner.
+    if (!anchor.isConnected) return onclose();
     const r = anchor.getBoundingClientRect();
     const h = card.offsetHeight;
     const w = Math.min(width, innerWidth - 16);

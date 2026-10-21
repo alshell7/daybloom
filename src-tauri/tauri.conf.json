@@ -24,7 +24,7 @@
         "hiddenTitle": true,
         "visible": true,
         "backgroundThrottling": "disabled",
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling --autoplay-policy=no-user-gesture-required"
       },
       {
         "label": "widget",
@@ -34,7 +34,7 @@
         "height": 280,
         "minWidth": 180,
         "minHeight": 180,
-        "maxWidth": 560,
+        "maxWidth": 980,
         "maxHeight": 560,
         "transparent": true,
         "decorations": false,
@@ -47,7 +47,7 @@
         "focus": false,
         "acceptFirstMouse": true,
         "create": false,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,IntensiveWakeUpThrottling --autoplay-policy=no-user-gesture-required"
       }
     ],
     "security": {

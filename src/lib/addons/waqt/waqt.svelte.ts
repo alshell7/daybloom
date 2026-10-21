@@ -124,6 +124,23 @@ class Waqt {
     this.setDetail(date, id, { ...(how === 'late' ? { late: true } : {}), ...(q ? { qasr: true } : {}), at: Date.now() });
   }
 
+  /**
+   * Qasr on or off for a marked prayer, keeping how and when it was marked; for one not marked
+   * yet, nothing to change (the chooser remembers it until you mark).
+   */
+  setQasr(date: ISODate, id: PrayerId, on: boolean) {
+    if (!QASR.includes(id) || !this.marks(date)[id]) return;
+    const d = this.detailOf(date, id);
+    const { qasr: _, ...rest } = d;
+    this.setDetail(date, id, on ? { ...rest, qasr: true } : rest);
+  }
+
+  /** Whether a prayer is (or would be, once marked) shortened: its own mark, else travelling. */
+  qasrOf(date: ISODate, id: PrayerId): boolean {
+    if (!QASR.includes(id)) return false;
+    return this.marks(date)[id] ? !!this.detailOf(date, id).qasr : this.travelling(date);
+  }
+
   /** One tap: on time while its time lasts, late once it has ended. */
   quickHow(p: { end: number }, now = clock.now): PrayedHow {
     return now >= p.end ? 'late' : 'ontime';
@@ -134,8 +151,13 @@ export const waqt = new Waqt();
 
 /** Prayer blocks for the day's plans (they make room in free time, and clashes show). */
 export function prayerEvents(from: ISODate, days: number): CalendarEvent[] {
+  return waqt.settings.dial.blocks ? prayerSpans(from, days) : [];
+}
+
+/** Each prayer as an event, shown on the dial or not: planning keeps this time free either way. */
+export function prayerSpans(from: ISODate, days: number): CalendarEvent[] {
   const s = waqt.settings;
-  if (!waqt.ready || !s.dial.blocks) return [];
+  if (!waqt.ready) return [];
   const out: CalendarEvent[] = [];
   for (let i = 0; i < days; i++) {
     const d = waqt.day(addDays(from, i));
@@ -143,7 +165,10 @@ export function prayerEvents(from: ISODate, days: number): CalendarEvent[] {
     for (const p of d.prayers) {
       const start = p.jamaat ?? p.at;
       const len = p.name === 'Jumu’ah' ? s.jamaat.jumuah.minutes : s.dial.minutes;
+      // Marked in Waqt: the block shows done in the timeline and on the dial.
+      const marked = waqt.howOf(d.date, p.id) ? (waqt.detailOf(d.date, p.id).at ?? start) : undefined;
       out.push({
+        ...(marked ? { done: marked } : {}),
         id: `salah:${p.id}:${d.date}`,
         provider: 'salah',
         accountId: 'salah',
@@ -161,6 +186,26 @@ export function prayerEvents(from: ISODate, days: number): CalendarEvent[] {
     }
   }
   return out;
+}
+
+/** The prayer behind a salah block (`salah:<prayer>:<date>`), or null. */
+export function slotOfEvent(ev: Pick<CalendarEvent, 'id' | 'provider'>): { date: ISODate; slot: PrayerSlot } | null {
+  if (ev.provider !== 'salah') return null;
+  const [, id, date] = ev.id.split(':');
+  const slot = waqt.day(date)?.prayers.find((p) => p.id === id);
+  return slot ? { date, slot } : null;
+}
+
+/** A salah block's tick: one tap marks it (on time while its time lasts, late after), another clears it. Returns whether it's marked. */
+export function toggleSalahEvent(ev: Pick<CalendarEvent, 'id' | 'provider'>): boolean {
+  const s = slotOfEvent(ev);
+  if (!s) return false;
+  if (waqt.howOf(s.date, s.slot.id)) {
+    waqt.markAs(s.date, s.slot.id, null);
+    return false;
+  }
+  waqt.markAs(s.date, s.slot.id, waqt.quickHow(s.slot));
+  return true;
 }
 
 /** The dial's prayer track: each prayer's window, with its adhan and jamaat. */
@@ -185,21 +230,30 @@ function chime() {
   sounds.adhan();
 }
 
+/** Prayer blocks on the dial, or (blocks hidden) only kept free in plans; null clears both. */
+function showSalah(spans: CalendarEvent[] | null) {
+  const { salah: _a, ...shown } = view.addonEvents;
+  const { salah: _b, ...kept } = view.busyEvents;
+  const onDial = !!spans && waqt.settings.dial.blocks;
+  view.addonEvents = onDial ? { ...shown, salah: spans } : shown;
+  view.busyEvents = spans && !onDial ? { ...kept, salah: spans } : kept;
+}
+
 /** Other windows (the widget): the prayer blocks only; reminders stay with the planner. */
 export function startWaqtView(): () => void {
   const root = $effect.root(() => {
     $effect(() => {
       const from = addDays(view.today, -1);
       void JSON.stringify(waqt.settings);
+      void waqtFile.value.prayed;
+      void waqtFile.value.detail;
       void clock.zone;
-      const ev = untrack(() => prayerEvents(from, 17));
-      view.addonEvents = { ...view.addonEvents, salah: ev };
+      untrack(() => showSalah(prayerSpans(from, 17)));
     });
   });
   return () => {
     root();
-    const { salah: _, ...rest } = view.addonEvents;
-    view.addonEvents = rest;
+    showSalah(null);
   };
 }
 
@@ -211,9 +265,10 @@ export function startWaqt(): () => void {
     $effect(() => {
       const from = addDays(view.today, -1);
       void JSON.stringify(waqt.settings);
+      void waqtFile.value.prayed;
+      void waqtFile.value.detail;
       void clock.zone;
-      const ev = untrack(() => prayerEvents(from, 17));
-      view.addonEvents = { ...view.addonEvents, salah: ev };
+      untrack(() => showSalah(prayerSpans(from, 17)));
     });
 
     // Reminders, checked each minute (and when the window wakes).
@@ -253,8 +308,7 @@ export function startWaqt(): () => void {
   });
   return () => {
     root();
-    const { salah: _, ...rest } = view.addonEvents;
-    view.addonEvents = rest;
+    showSalah(null);
   };
 }
 

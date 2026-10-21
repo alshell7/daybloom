@@ -23,6 +23,14 @@
   import { drainOf, handoffs, type Handoff } from '../lib/addons/landings/landings';
   import { landings } from '../lib/addons/landings/landings.svelte';
   import { landingsFile } from '../lib/addons/landings/pad.svelte';
+  import { timelineMode } from '../lib/addons/views/views.svelte';
+  import ViewSwitch from './addons/views/ViewSwitch.svelte';
+  import BoardView from './addons/views/BoardView.svelte';
+  import GanttView from './addons/views/GanttView.svelte';
+
+  // Timeline views addon: the list can also show as a board or a Gantt chart.
+  const viewsOn = $derived(isOn('views'));
+  const alt = $derived(timelineMode());
 
   type Row =
     | { kind: 'block'; key: string; block: Block }
@@ -221,6 +229,7 @@
 
 <aside class="rail" aria-label="Day timeline" bind:this={rail} bind:clientWidth={railW}>
   <!-- A focusable window splitter (ARIA separator): drag it, or use the arrow keys. -->
+  {#if alt === 'list'}
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div
     class="grip"
@@ -245,13 +254,20 @@
     <span class="pill" aria-hidden="true"></span>
     <span class="tag" aria-hidden="true">Fit</span>
   </div>
-  <div class="scroll">
+  {/if}
+  <div class="scroll" class:fill={alt !== 'list'}>
+    {#if viewsOn}<ViewSwitch />{/if}
     <div class="quick-wrap"><QuickAdd /></div>
 
+    {#if alt === 'board'}
+      <BoardView />
+    {:else if alt === 'gantt'}
+      <GanttView />
+    {:else}
     {#if view.tally.total}
       <header class="tally" class:all={ratio === 1}>
         <div class="tally-row">
-          <span class="count"><span class="big tnum"><Rolling text={String(view.tally.done)} reduced={view.reducedMotion} /></span> of {view.tally.total} done</span>
+          <button class="count" onclick={() => (view.sheet = { kind: 'insights', tab: 'done', date: view.date })} title="See what you've done" aria-label={`${view.tally.done} of ${view.tally.total} done: see your history`}><span class="big tnum"><Rolling text={String(view.tally.done)} reduced={view.reducedMotion} /></span> of {view.tally.total} done</button>
           {#if doneMs > 0}
             <span class="spent tnum"><Rolling text={formatDuration(doneMs)} reduced={view.reducedMotion} /> well spent</span>
           {/if}
@@ -377,6 +393,7 @@
       </button>
       <div class="capture-wrap"><Capture target="inbox" /></div>
     </section>
+    {/if}
   </div>
 </aside>
 
@@ -501,6 +518,33 @@
   .quick-wrap {
     margin-bottom: var(--s-4);
   }
+  /* Board or Gantt (Timeline views addon): the view fills the rest of the rail and scrolls itself. */
+  .scroll.fill {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    overflow: hidden;
+    padding-bottom: var(--s-4);
+  }
+  .scroll.fill .quick-wrap {
+    width: min(100%, 640px);
+    margin-bottom: var(--s-3);
+  }
+  .tally button.count {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: color var(--dur-2) var(--ease-out);
+  }
+  .tally button.count:hover {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 4px;
+  }
   .tally {
     display: grid;
     gap: 8px;
@@ -577,12 +621,10 @@
   .any.done {
     opacity: 0.6;
   }
-  /* All-day calendar events: the same stripes as calendar blocks, a calendar mark, no tick. */
+  /* All-day calendar events: the same clear glass as calendar blocks, a calendar mark. */
   .any.event {
-    background:
-      repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, transparent) 0 3px, transparent 3px 8px),
-      color-mix(in srgb, var(--c) 8%, var(--raised));
-    border-color: color-mix(in srgb, var(--c) 55%, transparent);
+    background: color-mix(in srgb, var(--c) 6%, var(--raised));
+    border-color: var(--c);
   }
   .cal-mark {
     display: grid;
@@ -1025,6 +1067,10 @@
       display: none;
     }
     .scroll {
+      overflow: visible;
+    }
+    .scroll.fill {
+      display: block;
       overflow: visible;
     }
   }

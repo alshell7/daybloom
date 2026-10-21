@@ -24,7 +24,7 @@
       { id: 'tasks', label: 'My blocks', icon: 'dial' },
       { id: 'calendar', label: 'Calendars', icon: 'calendar' },
     ];
-    if (isOn('waqt') || count('salah')) out.push({ id: 'salah', label: 'Salah · Waqt', icon: 'moon' });
+    if (isOn('waqt') || count('salah')) out.push({ id: 'salah', label: 'Salah · Waqt', icon: 'mihrab' });
     for (const b of blocks) {
       const s = sourceOf(b);
       if (!out.some((o) => o.id === s)) out.push({ id: s, label: s.charAt(0).toUpperCase() + s.slice(1), icon: 'puzzle' });

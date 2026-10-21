@@ -12,6 +12,10 @@
   import { tasks } from '../lib/stores/tasks.svelte';
   import { timer } from '../lib/stores/timer.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { isOn } from '../lib/addons/registry';
+  import { clearSample, keepSample, offerClear } from '../lib/sample';
+  import { starter } from '../lib/starter.svelte';
+  import { settings } from '../lib/stores/settings.svelte';
 
   // A small, kind stack of things worth a moment: check-ins, a nudge to start,
   // something that fits the free time, and the evening wind-down. One at a time.
@@ -38,9 +42,10 @@
     view.say(`“${idea.title}” — go for it. ${formatDuration(idea.duration * MINUTE)} on the clock.`);
   }
 
-  function justStart(title: string, category: string, icon: string) {
-    timer.startCountdown(2, `Just start: ${title}`, category as never, icon);
-    if (nudges.starter) dismiss(`start:${nudges.starter.key}`);
+  function justStart(b: { key: string; taskId?: string; title: string; category: string; icon: string }) {
+    // Aimed at the block, so its end can offer "keep going" and the dial knows what's on.
+    timer.startSession({ minutes: 2, rhythm: 'single', label: b.title || 'Just start', icon: b.icon, category: b.category as never, target: { key: b.key, taskId: b.taskId } });
+    dismiss(`start:${b.key}`);
     sounds.begin();
     view.say('Two minutes. Only the first tiny step — you can stop after.');
   }
@@ -52,8 +57,8 @@
       <header>
         <span class="ico"><Icon name={first.icon} size={16} stroke={2.1} /></span>
         <div class="txt">
-          <p class="q">Did you finish <strong>{first.title || 'this block'}</strong>?</p>
-          <p class="meta tnum">ended {formatDuration(clock.minute - first.endMs) === '0m' ? 'just now' : `${formatDuration(clock.minute - first.endMs)} ago`} · {formatTime(first.startMs, view.hour12)}–{formatTime(first.endMs, view.hour12)}</p>
+          <p class="q">How did <strong>{first.title || 'this block'}</strong> go?</p>
+          <p class="meta tnum">{formatTime(first.startMs, view.hour12)}–{formatTime(first.endMs, view.hour12)} · any answer is fine</p>
         </div>
       </header>
       <div class="actions">
@@ -80,7 +85,33 @@
         {/if}
       {/if}
     </article>
-  {:else if nudges.starter}
+  {:else if starter.offer}
+    <!-- Help me start: one tiny, concrete first step for the block that's on, one tap to begin. -->
+    {@const b = starter.offer}
+    {@const fs = starter.of(b.key)}
+    {@const busy = !!starter.making[b.key]}
+    <article class="card first" style:--c={b.color} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+      <header>
+        <span class="ico"><Icon name="rocket" size={16} stroke={2.1} /></span>
+        <div class="txt">
+          <p class="q"><strong>{b.title}</strong> is on.</p>
+          <p class="meta">{fs ? fs.nudge : 'Finding the tiniest way in…'}</p>
+        </div>
+      </header>
+      {#key fs?.step}
+        <button class="stepchip" class:ghost={!fs} disabled={!fs} onclick={() => starter.start(b)} in:fly={{ y: 6, duration: view.reducedMotion ? 0 : 260, easing: cubicOut }}>
+          <span class="ring tnum">{fs?.minutes ?? 2}<small>m</small></span>
+          <span class="st">{fs ? fs.step : ' '}</span>
+          {#if fs?.via === 'ai'}<Icon name="sparkles" size={12} />{/if}
+        </button>
+      {/key}
+      <div class="actions">
+        <button class="btn btn-primary" disabled={!fs} onclick={() => starter.start(b)}><Icon name="play" size={13} stroke={2.4} /> Start · {fs?.minutes ?? 2} min</button>
+        <button class="btn btn-soft" disabled={busy} onclick={() => void starter.prepare(b, true)} title="A different first step"><Icon name="shuffle" size={13} /> {busy ? 'Thinking…' : 'Another idea'}</button>
+        <button class="btn btn-quiet" onclick={() => starter.dismiss(b)}>Not now</button>
+      </div>
+    </article>
+  {:else if nudges.starter && !settings.value.nudges.firstStep}
     {@const s = nudges.starter}
     <article class="card" style:--c={s.color} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
@@ -91,7 +122,10 @@
         </div>
       </header>
       <div class="actions">
-        <button class="btn btn-primary" onclick={() => justStart(s.title, s.category, s.icon)}><Icon name="timer" size={14} /> Just 2 minutes</button>
+        <button class="btn btn-primary" onclick={() => justStart(s)}><Icon name="timer" size={14} /> Just 2 minutes</button>
+        {#if isOn('smaller') && s.endMs - s.startMs >= 30 * MINUTE}
+          <button class="btn btn-soft" onclick={() => (dismiss(`start:${s.key}`), (view.sheet = { kind: 'edit', key: s.key, smaller: true }))}><Icon name="layers" size={13} /> Make it smaller</button>
+        {/if}
         <button class="btn btn-quiet" onclick={() => dismiss(`start:${s.key}`)}>I'm on it</button>
       </div>
     </article>
@@ -129,6 +163,20 @@
         <button class="btn btn-quiet" onclick={() => dismiss('rhythm')}>Rest tonight</button>
       </div>
     </article>
+  {:else if settings.value.onboarded && offerClear()}
+    <article class="card" in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+      <header>
+        <span class="ico"><Icon name="sparkles" size={16} stroke={2.1} /></span>
+        <div class="txt">
+          <p class="q">Your own day is starting</p>
+          <p class="meta">Clear the sample blocks so only yours are on the dial?</p>
+        </div>
+      </header>
+      <div class="actions">
+        <button class="btn btn-primary" onclick={() => clearSample()}><Icon name="wand-sparkles" size={13} /> Clear the sample</button>
+        <button class="btn btn-quiet" onclick={() => keepSample()}>Keep them</button>
+      </div>
+    </article>
   {:else if nudges.windDown}
     <article class="card evening" in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
@@ -147,6 +195,58 @@
 </div>
 
 <style>
+  /* Help me start: the first step as a chip you can tap to begin. */
+  .stepchip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 2px 0 var(--s-3);
+    padding: 8px 12px 8px 8px;
+    border-radius: var(--r-md);
+    border: 1px solid color-mix(in srgb, var(--c) 35%, var(--line));
+    background: color-mix(in srgb, var(--c) 8%, var(--raised));
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--t-sm);
+    text-align: left;
+    cursor: pointer;
+    transition:
+      transform var(--dur-2) cubic-bezier(0.3, 1.5, 0.5, 1),
+      background var(--dur-2) var(--ease-out);
+  }
+  .stepchip:hover:not(:disabled) {
+    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--c) 14%, var(--raised));
+  }
+  .stepchip.ghost {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .stepchip .ring {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid var(--c);
+    font-weight: 600;
+    font-size: var(--t-sm);
+    line-height: 1;
+  }
+  .stepchip .ring small {
+    font-size: 9px;
+    font-weight: 500;
+  }
+  .stepchip .st {
+    flex: 1;
+    min-width: 0;
+  }
+  .stepchip :global(svg) {
+    flex: none;
+    color: var(--c);
+  }
   .stack {
     position: fixed;
     left: 20px;

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Daybloom · Time you can see</title>
+    <meta name="description" content="Daybloom is a visual day planner and timer for macOS and Windows. Your day is a dial: each block is an arc on the ring, and the hand is now. Private by default, light on your computer." />
+    <meta name="theme-color" content="#eceff3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d121c" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="https://alshell7.github.io/daybloom/" />
+    <link rel="icon" type="image/svg+xml" href="/daybloom/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/daybloom/favicon-64.png" />
+    <link rel="apple-touch-icon" href="/daybloom/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Daybloom" />
+    <meta property="og:title" content="Daybloom · Time you can see" />
+    <meta property="og:description" content="A visual day planner and timer for macOS and Windows. Your day is a dial: each block is an arc, and the hand is now." />
+    <meta property="og:url" content="https://alshell7.github.io/daybloom/" />
+    <meta property="og:image" content="https://alshell7.github.io/daybloom/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Daybloom planner: a dial shows the day as coloured arcs, and a timeline lists the blocks." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Before first paint: the theme (the visitor's choice, else the system's), reduced motion,
+      // and a flag that script runs, so reveals only hide what script will show.
+      (function () {
+        var d = document.documentElement;
+        var t = null;
+        try { t = localStorage.getItem('daybloom-theme'); } catch (e) {}
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        d.dataset.theme = t;
+        d.dataset.motion = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'calm' : 'full';
+        d.classList.add('js');
+      })();
+    </script>
+    <!--app-head-->
+  </head>
+  <body>
+    <!--
+      THESIS: The page is the dial. The first viewport is a live Daybloom dial on the visitor's own clock, one they can plan on; it refuses the feature grid with a pasted screenshot.
+      OWN-WORLD: The app's "Dial on the Desk": Fog or Midnight desk tones, Lexend 300 display with tabular numerals, pills and 20px containers, the seven category colours as bezel inserts, signal orange only for now, lume green only for done, three soft ink shadows.
+      STORY: A visitor sees their own time drawn as arcs, sweeps a block that blooms, meets Alef, learns the app is private and light, and downloads it for their computer.
+      FIRST VIEWPORT: Left, "Time you can see." in thin Lexend at display size, one sentence, the download for their OS as an ink pill with the other OS beside it. Right, the dial at about 620px, hand at now, the reference switcher under it like a crown.
+      FORM: established world (DESIGN.md); structure pinned by the brief, so no seed was rolled.
+      FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+    -->
+    <div id="root"><!--app-html--></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

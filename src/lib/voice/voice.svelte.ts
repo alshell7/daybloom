@@ -10,6 +10,9 @@
 //
 // Listening starts the moment the microphone is open; Whistle warms up alongside (`warming`) and
 // catches up on what was said, so letting go early never throws the sentence away.
+//
+// With a listening service chosen in Settings › AI › Voice input, the clip goes to that service
+// when you stop instead (no live words while you talk); Whistle, when it's here, is the fallback.
 
 import { addDays, isoOf, startOfDayMs } from '../engine/time';
 import { blocksInRange } from '../engine/blocks';
@@ -23,6 +26,9 @@ import type { Entry } from '../assistant/session.svelte';
 import { VoiceActivity, concat, loudness, SPEECH_RATE } from './audio';
 import { MicError, startCapture, type Capture, type MicProblem } from './capture';
 import { normalizeSpoken } from './spoken';
+import { ai } from '../ai/hub.svelte';
+import { transcribe, wavOf } from '../ai/providers';
+import { platform } from '../platform';
 
 export type VoicePhase = 'idle' | 'needs-model' | 'downloading' | 'opening' | 'listening' | 'finishing' | 'thinking' | 'result' | 'error';
 export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd' | 'note' | 'alef';
@@ -68,14 +74,21 @@ export function voiceKeywords(): string[] {
 export function micAdvice(problem: MicProblem, os: string): string {
   if (problem === 'denied') {
     return os === 'mac'
-      ? 'Open System Settings › Privacy & Security › Microphone and turn on Daybloom.'
+      ? 'Turn on Daybloom in System Settings › Privacy & Security › Microphone, then try again.'
       : os === 'windows'
-        ? 'Open Settings › Privacy & security › Microphone and allow desktop apps.'
+        ? 'In Settings › Privacy & security › Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”, then try again.'
         : 'Allow microphone access for Daybloom, then try again.';
   }
   if (problem === 'missing') return 'Connect a microphone, then try again.';
   if (problem === 'busy') return 'Close the other app that uses the microphone, then try again.';
   return 'Voice input is not available in this window.';
+}
+
+/** The system's microphone privacy page, where Daybloom's access is switched on (null: none to open). */
+export function micSettingsUrl(os: string): string | null {
+  if (os === 'mac') return 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
+  if (os === 'windows') return 'ms-settings:privacy-microphone';
+  return null;
 }
 
 const engineLoader = import.meta.glob<{ whistle: SpeechEngine }>('../assistant/engine.svelte.ts');
@@ -146,6 +159,8 @@ class Voice {
   #held = false;
   #listenedMs = 0;
   #closeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** This clip goes to the listening service from Settings › AI. */
+  #cloud = false;
 
   async #engine(): Promise<SpeechEngine> {
     if (this.engine) return this.engine;
@@ -218,18 +233,21 @@ class Voice {
     this.ring = this.#ringData;
     this.level = 0;
 
-    let engine: SpeechEngine;
-    try {
-      engine = await this.#engine();
-      this.installed = await engine.hasWeights();
-    } catch (e) {
-      this.#fail(e);
-      return;
-    }
-    if (run !== this.#run) return;
-    if (!this.installed) {
-      this.phase = 'needs-model';
-      return;
+    this.#cloud = ai.ready('voice', 'listen');
+    let engine: SpeechEngine | null = null;
+    if (!this.#cloud) {
+      try {
+        engine = await this.#engine();
+        this.installed = await engine.hasWeights();
+      } catch (e) {
+        this.#fail(e);
+        return;
+      }
+      if (run !== this.#run) return;
+      if (!this.installed) {
+        this.phase = 'needs-model';
+        return;
+      }
     }
     this.phase = 'opening';
     this.#keywords = voiceKeywords();
@@ -247,8 +265,8 @@ class Voice {
     this.#vad = new VoiceActivity();
     // Whistle loads alongside the microphone; listening doesn't wait for it.
     this.#isReady = false;
-    this.warming = true;
-    this.#ready = engine.ensureReady().then(
+    this.warming = !!engine;
+    this.#ready = !engine ? Promise.resolve() : engine.ensureReady().then(
       () => {
         if (run !== this.#run) return;
         this.#isReady = true;
@@ -322,8 +340,35 @@ class Voice {
     // Commands go to the assistant: wake Needle now (not while you talk, where it would slow
     // the live words down), so it's ready by the time the words are.
     if (this.surface === 'overlay' || this.surface === 'assistant') void sessionLoader().then((m) => m.session.open());
-    const engine = this.engine!;
     let text = '';
+    if (this.#cloud) {
+      const pcm = this.heard ? concat(this.#clip) : !this.handsFree && this.#loudest >= SOUND_FLOOR ? concat(this.#all) : new Float32Array(0);
+      this.#clip = [];
+      this.#all = [];
+      this.#preroll = [];
+      this.#queue = [];
+      this.#queued = 0;
+      if (pcm.length >= SPEECH_RATE * MIN_CLIP_S) {
+        try {
+          text = normalizeSpoken(tidy(await this.#transcribeCloud(pcm)));
+        } catch (e) {
+          if (run !== this.#run) return;
+          // The service couldn't: Whistle tries, if it's on this device.
+          try {
+            const engine = await this.#engine();
+            if (!(await engine.hasWeights())) throw e;
+            await engine.ensureReady();
+            text = normalizeSpoken(tidy((await engine.transcribe(pcm, { language: this.#lang(), keywords: this.#keywords })).text));
+          } catch {
+            if (run === this.#run) this.#fail(e);
+            return;
+          }
+        }
+      }
+      if (run !== this.#run) return;
+      return this.#finish(run, text);
+    }
+    const engine = this.engine!;
     try {
       // Whistle may still be warming up; then let the last live pass land and close the
       // stream, then one careful pass over the clip.
@@ -353,6 +398,18 @@ class Voice {
       return;
     }
     if (run !== this.#run) return;
+    return this.#finish(run, text);
+  }
+
+  /** The clip to the listening service; its words, or a throw when it can't. */
+  async #transcribeCloud(pcm: Float32Array): Promise<string> {
+    const conn = await ai.connection('voice', 'listen');
+    if (!conn) throw new Error('The listening service in Settings › AI is not set up.');
+    return transcribe(conn.config, conn.key, wavOf(pcm, SPEECH_RATE), (u, i) => platform.fetch(u, i), { language: this.#lang(), prompt: this.#keywords.join(', ') });
+  }
+
+  /** The words are in: show them and act on them. */
+  async #finish(run: number, text: string) {
     this.final = text;
     this.pending = '';
     this.#opts.onText?.(text, true);

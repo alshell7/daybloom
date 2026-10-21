@@ -23,8 +23,8 @@ export interface LineCtx {
 /** Which moments Alef speaks up for, by chattiness ('quiet' only answers when spoken to). */
 const SPEAKS: Record<Chattiness, AffectEvent[]> = {
   quiet: [],
-  some: ['greet', 'allDone', 'bigDone', 'checkIn', 'manyMissed', 'focusStart', 'focusEnd', 'prayer', 'landing', 'headsUp'],
-  chatty: ['greet', 'allDone', 'bigDone', 'done', 'checkIn', 'manyMissed', 'focusStart', 'focusEnd', 'prayer', 'landing', 'headsUp', 'blockStart', 'lastMinute', 'poke', 'pokeAgain', 'pokeTooMuch', 'badge'],
+  some: ['greet', 'allDone', 'bigDone', 'checkIn', 'manyMissed', 'focusStart', 'focusEnd', 'prayer', 'landing', 'headsUp', 'blockStart', 'milestone', 'welcomeBack', 'started'],
+  chatty: ['greet', 'allDone', 'bigDone', 'done', 'checkIn', 'manyMissed', 'focusStart', 'focusEnd', 'prayer', 'landing', 'headsUp', 'blockStart', 'lastMinute', 'poke', 'pokeAgain', 'pokeTooMuch', 'badge', 'milestone', 'welcomeBack', 'started', 'planned', 'moved', 'newLook'],
 };
 
 /** Pokes always get a word or two, even from a quiet Alef: you asked for it. */
@@ -50,7 +50,7 @@ const LINES: Partial<Record<AffectEvent, ((c: LineCtx) => string)[]>> = {
   headsUp: [(c) => `${q(c.title)} in ${c.inMin ?? 5} minutes.`, (c) => `Soon: ${q(c.title)}. A good moment to wrap up.`],
   lastMinute: [(c) => `Two minutes left on ${q(c.title)}.`, () => 'Almost there. Two minutes.'],
   checkIn: [(c) => `How did ${q(c.title)} go?`, (c) => `${q(c.title)} has ended. Done, or shall we move it?`, (c) => `Did ${q(c.title)} happen? Either way is okay.`],
-  manyMissed: [() => "A few blocks didn't happen. That's okay. Want to move them to tomorrow?", () => 'Some plans slipped. Shall we pick just one to do now?'],
+  manyMissed: [() => 'Plans moved on without us. That happens. Want a fresh start?', () => "Let's make today lighter. Pick just one thing for now?"],
   focusStart: [() => "Focus time. I'll work right here beside you.", () => "Let's focus together. I'll keep quiet.", () => 'Phones away, one thing at a time. I am with you.'],
   focusEnd: [() => 'Session done! Stretch a little?', () => 'Nice focus. Water, then the next thing?', () => 'Good work. Rest your eyes a moment.'],
   prayer: [(c) => `It's time for ${c.name ?? 'salah'}.`, (c) => `${c.name ?? 'Salah'} now. I'll wait here.`],
@@ -59,6 +59,12 @@ const LINES: Partial<Record<AffectEvent, ((c: LineCtx) => string)[]>> = {
   pokeAgain: [() => 'Hey…', () => 'Yes, still here.', () => 'Hmm?'],
   pokeTooMuch: [() => "Okay, okay! I'm awake!", () => 'Grr! (Just kidding.)', () => 'Too many pokes!'],
   thanks: [() => "You're welcome!", () => 'Any time.', () => 'Happy to help.'],
+  planned: [(c) => `Ooh, ${q(c.title)}. Noted!`, () => 'A new block! I like where this is going.', (c) => `${q(c.title)}${c.at ? ` at ${c.at}` : ''}. Got it.`],
+  moved: [(c) => `${q(c.title)}${c.at ? ` now at ${c.at}` : ' moved'}. Flexible plans are good plans.`, () => 'Moved. Plans are meant to bend.'],
+  newLook: [() => 'Ooh, new look! I like it.', () => 'Wow, look at us now!'],
+  welcomeBack: [(c) => `Welcome back${c.who ? `, ${c.who}` : ''}!${c.title ? ` Next up: ${q(c.title)}.` : ''}`, () => 'There you are! Ready when you are.'],
+  milestone: [(c) => `${c.count ?? 7} days together${c.who ? `, ${c.who}` : ''}. I really like being your dial buddy.`, (c) => `Day ${c.count ?? 7} with you! Thanks for keeping me around.`],
+  started: [(c) => `You started ${q(c.title)}! That's the hardest part, done.`, () => 'And we\'re off! Starting is the big step.'],
 };
 
 /** A line for this moment, or null when Alef stays quiet. */

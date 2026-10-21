@@ -11,6 +11,8 @@
   import Panel from '../Panel.svelte';
   import Card from './Card.svelte';
   import EngineBadge from './EngineBadge.svelte';
+  import { ai } from '../../lib/ai/hub.svelte';
+  import { providerOf } from '../../lib/ai/providers';
   import MicButton from '../voice/MicButton.svelte';
   import { voice } from '../../lib/voice/voice.svelte';
 
@@ -107,6 +109,10 @@
   }
 
   const conf = (n: number) => n.toFixed(2);
+  const aiName = $derived.by(() => {
+    const via = ai.route('assistant', 'think').via;
+    return via === 'device' ? 'Needle' : providerOf(via).name;
+  });
 </script>
 
 {#if open}
@@ -133,11 +139,14 @@
           {#if e.pending}
             {#if e.slow}
               <p class="a-meta thinking" in:fade={{ duration: view.reducedMotion ? 0 : 160 }}>
-                {session.status === 'loading' ? 'Waking Needle…' : 'Thinking…'}
+                {ai.ready('assistant', 'think') ? `Asking ${aiName}…` : session.status === 'loading' ? 'Waking Needle…' : 'Thinking…'}
               </p>
             {/if}
           {:else if e.result}
             <Card entry={e} />
+            {#if e.via || e.note}
+              <p class="a-meta via">{#if e.via}<Icon name="brain-circuit" size={11} /> {e.via}{/if}{#if e.note}<Icon name="info" size={11} /> {e.note}{/if}</p>
+            {/if}
           {/if}
           {#if DEBUG && e.route}
             <p class="debug tnum">
@@ -191,6 +200,12 @@
 {/if}
 
 <style>
+  .via {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
   .ask {
     display: grid;
     gap: var(--s-5);

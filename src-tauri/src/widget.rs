@@ -58,6 +58,8 @@ fn ensure(app: &AppHandle) -> Result<WebviewWindow, String> {
         .map_err(|e| e.to_string())?;
     apply_layer(&w, layer(app))?;
     crate::privacy::apply(app, &w);
+    #[cfg(windows)]
+    crate::mic::forget_block(&w);
     Ok(w)
 }
 

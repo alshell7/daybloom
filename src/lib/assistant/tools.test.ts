@@ -148,7 +148,7 @@ describe('creating', () => {
     const r = await ask('add stretch');
     const [t] = created(before);
     expect(t.start).toBe(11 * 60 + 30);
-    expect(r.say).toContain('next free gap');
+    expect(r.say).toContain('next free time');
   });
 
   it('remember to buy milk sometime → backlog, with undo', async () => {

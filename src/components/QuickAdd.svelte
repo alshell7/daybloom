@@ -90,6 +90,7 @@
       icon: hint?.icon,
       category: hint?.category,
       alerts: [5],
+      ...(parsed.alarm && plan.start != null ? { alarm: {} } : {}),
     });
     sounds.tick();
     const r = input?.getBoundingClientRect();

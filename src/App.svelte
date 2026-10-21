@@ -22,6 +22,11 @@
   import CaptureView from './views/CaptureView.svelte';
   import { cuePreview, startScreenCues } from './lib/screenCues.svelte';
   import { startAddons, startAddonViews } from './lib/addons/runtime.svelte';
+  import { startAi } from './lib/ai/hub.svelte';
+  import { trash, trashFile } from './lib/stores/trash.svelte';
+  import { eventStateFile } from './lib/stores/eventStates.svelte';
+  import { followResets } from './lib/reset';
+  import { startStarter } from './lib/starter.svelte';
 
   const label = windowLabel();
   let ready = $state(false);
@@ -52,6 +57,7 @@
     let stopCues: (() => void) | undefined;
     let stopPrivacy: (() => void) | undefined;
     let stopAddons: (() => void) | undefined;
+    let stopStarter: (() => void) | undefined;
     // "Auto" clock style: what this computer shows (region and time settings), read before the
     // first paint and again when the window comes back (the setting may have changed).
     const readClockStyle = () =>
@@ -65,16 +71,23 @@
         .catch(() => {});
     addEventListener('focus', readClockStyle);
     (async () => {
-      await Promise.all([settings.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load(), layout.load(), readClockStyle()]);
-      if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0) {
+      await Promise.all([settings.load(), eventStateFile.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load(), layout.load(), readClockStyle()]);
+      // A sample day for a first launch only: never again once it was added or anything was deleted.
+      if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0 && !taskFile.value.seeded && !taskFile.value.deleted?.length) {
         seedSampleDay(clock.now);
       }
+      // The Trash lets go of what has waited 30 days.
+      if (label === 'main') void trashFile.load().then(() => trash.purge());
       view.date = view.today;
       ready = true;
+      // Settings › AI (the planner first moves Alef's old brain setup there).
+      void startAi(label === 'main').catch((e) => console.warn('[daybloom] ai', e));
       // The menu bar, sounds and reminders start at once; calendars catch up after.
       if (label === 'main') stopScheduler = startScheduler();
       stopCalendars = await initCalendars(label === 'main');
       if (label === 'widget') stopAddons = startAddonViews();
+      // A reset in the planner: this window starts fresh too.
+      if (label !== 'main') followResets();
       if (label === 'main') {
         if (settings.value.widget.visible) {
           platform.showWidget(true).catch(() => {});
@@ -85,6 +98,7 @@
         stopGitSync = startSync();
         stopCues = startScreenCues();
         stopAddons = startAddons();
+        stopStarter = startStarter();
         stopPrivacy = platform.onPrivacyChange((on) => {
           if (settings.value.privacy.on !== on) settings.value.privacy.on = on;
         });
@@ -106,6 +120,7 @@
       stopCues?.();
       stopPrivacy?.();
       stopAddons?.();
+      stopStarter?.();
     };
   });
 

@@ -9,6 +9,8 @@
   import { ACTS, type ActId, type Eye } from '../../../lib/addons/alef/behaviors';
   import { moodGlow, moodLed, restPose, STICKY } from '../../../lib/addons/alef/face';
   import AlefEyes from './AlefEyes.svelte';
+  import Icon from '../../../lib/Icon.svelte';
+  import { deskGaze, lookToward } from '../../../lib/addons/alef/deskGaze.svelte';
   import type { ScreenPalette } from '../../../lib/addons/alef/palette';
   import { gesture, type Gesture, type Sample } from '../../../lib/addons/alef/pet';
 
@@ -27,6 +29,7 @@
     posture = false,
     gaze = true,
     bubble = null,
+    onoffer,
     onpoke,
     onopen,
     ondismiss,
@@ -54,7 +57,9 @@
     posture?: boolean;
     /** Glance toward the pointer when it's near. */
     gaze?: boolean;
-    bubble?: { text: string; seq: number } | null;
+    bubble?: { text: string; seq: number; offers?: { id: string; label: string; icon: string }[] } | null;
+    /** A button under the bubble (Alef's helping hand). */
+    onoffer?: (seq: number, index: number) => void;
     onpoke?: () => void;
     onopen?: () => void;
     ondismiss?: () => void;
@@ -189,6 +194,15 @@
     });
   }
 
+  // Beyond the window: the pointer anywhere on the desktop (the widget too), from deskGaze.
+  const far = $derived.by(() => {
+    const p = deskGaze.pos;
+    const o = deskGaze.origin;
+    if (!p || !o || !root || reduced || pose || asleep) return null;
+    return lookToward(p, o, root.getBoundingClientRect(), devicePixelRatio || 1);
+  });
+  onMount(() => deskGaze.use());
+
   onMount(() => {
     if (interactive && gaze) addEventListener('pointermove', onMove, { passive: true });
     return () => {
@@ -234,7 +248,16 @@
 >
   {#if bubble && !compact}
     {#key bubble.seq}
-      <button class="bubble" class:long={bubble.text.length > 120} onclick={() => ondismiss?.()} onpointerenter={() => onhold?.(true)} onpointerleave={() => onhold?.(false)} aria-live="polite" title="Click to talk"><span class="say">{bubble.text}</span></button>
+      <div class="bubble" class:long={bubble.text.length > 120} class:offering={!!bubble.offers?.length} role="status" aria-live="polite" onpointerenter={() => onhold?.(true)} onpointerleave={() => onhold?.(false)}>
+        <button class="say" onclick={() => ondismiss?.()} title="Click to talk">{bubble.text}</button>
+        {#if bubble.offers?.length && onoffer}
+          <span class="offers">
+            {#each bubble.offers as o, i (o.id + i)}
+              <button class="offer" style:--i={i} onclick={() => onoffer(bubble.seq, i)}><Icon name={o.icon} size={12} stroke={2.3} /> {o.label}</button>
+            {/each}
+          </span>
+        {/if}
+      </div>
     {/key}
   {/if}
 
@@ -253,7 +276,7 @@
   >
     {#if framed}<i class="rim" aria-hidden="true"></i>{/if}
     <div class="eyes">
-      <AlefEyes pose={shown} color={eyeColor} glow={(0.35 + glow * 0.5) * eyeGlow} shadow={screen && !screen.dark ? 'rgba(20, 28, 42, 0.22)' : null} look={pose ? null : (attend ?? follow)} {talk} alive={!pose && !asleep} {asleep} {reduced} />
+      <AlefEyes pose={shown} color={eyeColor} glow={(0.35 + glow * 0.5) * eyeGlow} shadow={screen && !screen.dark ? 'rgba(20, 28, 42, 0.22)' : null} look={pose ? null : (attend ?? follow ?? far)} {talk} alive={!pose && !asleep} {asleep} {reduced} />
       {#if scan > 0}<i class="scan" aria-hidden="true"></i>{/if}
       {#if overlay}
         {#key `${perf.seq}:${overlay}`}
@@ -660,10 +683,60 @@
   /* The whole line, always; a long one scrolls inside the bubble. */
   .say {
     display: block;
+    width: 100%;
     max-height: min(44vh, 250px);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
+    cursor: pointer;
+  }
+  .bubble.offering {
+    width: min(300px, 190%);
+  }
+  /* Alef's helping hand: a small button or two that spring in under the words. */
+  .offers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .offer {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--focus-ring) 40%, var(--line));
+    background: color-mix(in srgb, var(--focus-ring) 10%, var(--raised));
+    color: var(--ink);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+    animation: offer 420ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+    animation-delay: calc(220ms + var(--i) * 90ms);
+    transition:
+      transform 160ms cubic-bezier(0.3, 1.5, 0.5, 1),
+      background 160ms ease-out;
+  }
+  .offer:hover {
+    transform: translateY(-1px) scale(1.04);
+    background: color-mix(in srgb, var(--focus-ring) 18%, var(--raised));
+  }
+  .offer:active {
+    transform: scale(0.96);
+  }
+  @keyframes offer {
+    0% {
+      opacity: 0;
+      transform: translateY(6px) scale(0.85);
+    }
   }
   .bubble.long {
     width: min(300px, 190%);
@@ -694,6 +767,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .bubble,
+    .offer,
     .g {
       animation: none;
     }

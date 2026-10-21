@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { Spring } from 'svelte/motion';
-  import { mix, onColor } from '../engine/categories';
+  import { inkOn, mix, onColor } from '../engine/categories';
   import type { Block } from '../engine/types';
   import Icon from '../Icon.svelte';
   import type { Finish } from '../presets';
@@ -118,24 +118,50 @@
   const missed = $derived(!block.done && elapsed >= a1 - a0 - 0.01 && block.kind === 'task');
   const isEvent = $derived(block.kind === 'event');
   const isPrayer = $derived(block.event?.provider === 'salah');
-  // From a calendar: a tinted, striped insert with an outline (never solid like your own blocks),
-  // the same language as the rail's capsule.
+  const isGlass = $derived(isEvent && !isPrayer);
+  // Three materials, no texture. Your blocks are solid colour. A calendar event is glass: a pale
+  // wash of its colour inside a crisp edge. A salah is soft light: a lamp lit in its window,
+  // brightest at its heart and feathering out, with no edge. States lay over any of them: done
+  // mutes toward the face and gets the lume rim, missed washes out behind a dashed edge, and a
+  // skipped event leaves only a faint outline over bare bezel (its time is free).
+  // Glass and light are translucent, so what lies under them (sleep hours, the spent film) shows.
+  const glassAlpha = $derived(finish.dark ? 0.28 : 0.2);
+  const lampTint = $derived(block.done ? mix(block.color, finish.face, finish.dark ? 0.42 : 0.5) : block.color);
+  /** The lamp's opacity at its heart, halfway out, and at its rim. */
+  const lampAlpha = $derived(block.done ? [0.9, 0.6, 0.32] : [0.74, 0.42, 0.14]);
+  const glassy = $derived(isGlass && !block.done);
   const baseFill = $derived(
-    block.done
-      ? mix(block.color, finish.face, finish.dark ? 0.42 : 0.5)
-      : missed
-        ? mix(block.color, finish.bezel, 0.68)
-        : isEvent
-          ? mix(block.color, finish.bezel, finish.dark ? 0.62 : 0.66)
-          : block.color,
+    isPrayer
+      ? mix(lampTint, finish.bezel, 1 - lampAlpha[0])
+      : block.done
+        ? mix(block.color, finish.face, finish.dark ? 0.42 : 0.5)
+        : missed
+          ? mix(block.color, finish.bezel, 0.68)
+          : glassy
+            ? mix(block.color, finish.bezel, 1 - glassAlpha)
+            : block.color,
   );
-  const hatchId = `hatch-${Math.random().toString(36).slice(2, 9)}`;
+  const edge = $derived(block.done ? mix(block.color, finish.face, 0.45) : block.color);
+  const lampId = `lamp-${Math.random().toString(36).slice(2, 9)}`;
   const elapsedFill = $derived(mix(block.color, finish.bezel, finish.dark ? 0.6 : 0.55));
-  const ink = $derived(onColor(baseFill));
+  // Lettering on glass and light keeps the block's hue; on solid colour it is white or ink.
+  const ink = $derived(isEvent && !block.done ? inkOn(baseFill, block.color) : onColor(baseFill));
 
   // Labels: icon when there is room for it, title along the arc when there is room for words.
   const rMid = $derived((rOut.current + rIn.current) / 2);
   const thick = $derived(rOut.current - rIn.current);
+  // Glass and missed edges sit just inside the insert, so neighbours keep their gap.
+  const edgeW = $derived(compact ? 5 : block.skipped ? 2.5 : 3);
+  const edgePath = $derived.by(() => {
+    const i = edgeW / 2;
+    const d = degFor(i, rOut.current);
+    return sectorPath(A0 + d, A1 - d, rIn.current + i, rOut.current - i);
+  });
+  // Salah: the lamp is centred in its window, and its light reaches just past the ends.
+  const lamp = $derived.by(() => {
+    const [cx, cy] = polar(rMid, (A0 + A1) / 2);
+    return { cx, cy, r: Math.max(thick / 2, arcLength(rMid, sweep) / 2) * 1.5 };
+  });
   // When the hand crosses this arc, words sit on the stretch still ahead of it.
   const LA0 = $derived.by(() => {
     if (handAngle == null) return A0;
@@ -216,6 +242,7 @@
   class:dimmed
   class:past
   class:done={block.done}
+  class:skipped={block.skipped}
   class:event={block.kind === 'event'}
   class:interactive
   data-key={block.key}
@@ -246,29 +273,37 @@
     <path d={sectorPath(A0 - 0.2, A1 + 0.2, rIn.current - 6, rOut.current + 6)} class="halo" fill={block.color} />
   {/if}
 
-  <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill={baseFill} class="body" />
-
-  {#if E > A0 + 0.05 && !block.done && !missed}
-    <path d={sectorPath(A0, E, rIn.current, rOut.current)} fill={elapsedFill} class="elapsed" />
-  {/if}
-
-  {#if isEvent}
+  {#if isPrayer}
+    <!-- Salah: soft light, brightest at its heart, no edge -->
     <defs>
-      {#if isPrayer}
-        <!-- Salah: a faint eight-point star pattern, not calendar stripes -->
-        <pattern id={hatchId} width="26" height="26" patternUnits="userSpaceOnUse">
-          <path d="M7 7h12v12H7zM13 4.5 21.5 13 13 21.5 4.5 13z" fill={block.color} opacity={finish.dark ? 0.42 : 0.34} />
-        </pattern>
-      {:else}
-        <pattern id={hatchId} width="16" height="16" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <rect width="6" height="16" fill={block.color} opacity={finish.dark ? 0.5 : 0.42} />
-        </pattern>
-      {/if}
+      <radialGradient id={lampId} gradientUnits="userSpaceOnUse" cx={lamp.cx} cy={lamp.cy} r={lamp.r}>
+        <stop offset="0" stop-color={lampTint} stop-opacity={lampAlpha[0]} />
+        <stop offset="0.55" stop-color={lampTint} stop-opacity={lampAlpha[1]} />
+        <stop offset="1" stop-color={lampTint} stop-opacity={lampAlpha[2]} />
+      </radialGradient>
     </defs>
-    <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill={`url(#${hatchId})`} class="hatch" />
-    <path d={sectorPath(A0, A1, rIn.current, rOut.current)} fill="none" stroke={block.color} stroke-width="3.5" stroke-opacity="0.85" class="outline" />
+  {/if}
+  <!-- A skipped event keeps a clear body (still hoverable): the bare bezel shows through. -->
+  <path
+    d={sectorPath(A0, A1, rIn.current, rOut.current)}
+    fill={block.skipped ? 'transparent' : isPrayer ? `url(#${lampId})` : glassy ? block.color : baseFill}
+    fill-opacity={glassy && !block.skipped ? glassAlpha : undefined}
+    class="body"
+  />
+
+  {#if E > A0 + 0.05 && !block.done && !missed && !block.skipped}
+    {#if isEvent}
+      <!-- glass and light: the spent part dims under a film of bezel -->
+      <path d={sectorPath(A0, E, rIn.current, rOut.current)} fill={finish.bezel} opacity="0.5" class="elapsed" />
+    {:else}
+      <path d={sectorPath(A0, E, rIn.current, rOut.current)} fill={elapsedFill} class="elapsed" />
+    {/if}
   {/if}
 
+  {#if isGlass}
+    <!-- Glass: one crisp edge in the event's colour -->
+    <path d={edgePath} fill="none" stroke={edge} stroke-width={edgeW} stroke-linejoin="round" class="edge" />
+  {/if}
 
   {#if block.done}
     <!-- the lume rim: finished time glows -->
@@ -297,13 +332,8 @@
   {/key}
 
   {#if missed}
-    <path
-      d={sectorPath(A0, A1, rIn.current, rOut.current)}
-      fill="none"
-      stroke={mix(block.color, finish.bezel, 0.25)}
-      stroke-width="2.5"
-      stroke-dasharray="7 7"
-    />
+    <!-- Missed: washed out behind a dashed edge, never red -->
+    <path d={edgePath} fill="none" stroke={mix(block.color, finish.bezel, 0.25)} stroke-width={compact ? 4 : 2.5} stroke-dasharray={compact ? '10 9' : '7 7'} class="edge" />
   {/if}
 
   {#if showIcon}
@@ -319,7 +349,7 @@
 
   {#if title}
     <path id={uid} d={textPath} fill="none" stroke="none" />
-    <text class="label" font-size={fontSize} fill={block.done ? finish.ink : ink} opacity={block.done || missed ? 0.72 : 1}>
+    <text class="label" font-size={fontSize} fill={block.done ? finish.ink : ink} opacity={block.done || missed ? (finish.dark ? 0.9 : 0.72) : 1}>
       <textPath href={`#${uid}`}>{title}</textPath>
     </text>
   {/if}
@@ -339,6 +369,10 @@
   }
   .arc.dimmed {
     opacity: 0.4;
+  }
+  /* An event you're skipping: a faint outline of where it was, over bare bezel. */
+  .arc.skipped {
+    opacity: 0.42;
   }
   /* Behind you: quieter, so what's ahead reads first. Finished time keeps more of its glow. */
   .arc.past {
@@ -370,8 +404,7 @@
     pointer-events: none;
     user-select: none;
   }
-  .hatch,
-  .outline {
+  .edge {
     pointer-events: none;
   }
 

@@ -1,0 +1,945 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/lexend/wght.css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* A metric-matched stand-in while Lexend loads, so text does not jump when it arrives. */
+@font-face {
+  font-family: 'Lexend Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Helvetica');
+  size-adjust: 110%;
+  ascent-override: 91%;
+  descent-override: 22.7%;
+  line-gap-override: 0%;
+}
+
+@theme inline {
+  --font-sans: 'Lexend Variable', 'Lexend Fallback', ui-rounded, system-ui, sans-serif;
+
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-signal: var(--signal);
+  --color-lume: var(--lume);
+  --color-focus: var(--focus-ring);
+  --color-c-focus: var(--c-focus);
+  --color-c-care: var(--c-care);
+  --color-c-routine: var(--c-routine);
+  --color-c-people: var(--c-people);
+  --color-c-rest: var(--c-rest);
+  --color-c-learn: var(--c-learn);
+  --color-c-move: var(--c-move);
+  --color-d-face: var(--d-face);
+  --color-d-bezel: var(--d-bezel);
+  --color-d-track: var(--d-track);
+  --color-d-ink: var(--d-ink);
+
+  --shadow-rest: var(--shadow-1);
+  --shadow-float: var(--shadow-2);
+  --shadow-lift: var(--shadow-3);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-orbit: orbit calc(var(--duration) * 1s) linear infinite;
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+  --animate-ripple: ripple var(--duration, 2s) ease calc(var(--i, 0) * 0.2s) infinite;
+  --animate-blink-cursor: blink-cursor 1.2s step-end infinite;
+}
+
+/* Fog desk with the Glacier dial (the app's default light theme). */
+:root {
+  color-scheme: light;
+  --ground: #eceff3;
+  --surface: #f7f8fa;
+  --raised: #ffffff;
+  --sunken: #e2e6ec;
+  --line: rgb(21 28 42 / 0.09);
+  --line-strong: rgb(21 28 42 / 0.16);
+  --ink: #151c2a;
+  --ink-2: #485365;
+  --ink-3: #5f6a7b;
+  --ink-inverse: #f7f8fa;
+  --signal: #f2551d;
+  --lume: #2fae7b;
+  --focus-ring: #3d6fe3;
+  --shadow-1: 0 1px 2px rgb(21 28 42 / 0.06), 0 1px 1px rgb(21 28 42 / 0.04);
+  --shadow-2: 0 2px 6px -1px rgb(21 28 42 / 0.08), 0 10px 24px -8px rgb(21 28 42 / 0.16);
+  --shadow-3: 0 6px 16px -4px rgb(21 28 42 / 0.12), 0 24px 56px -16px rgb(21 28 42 / 0.28);
+  --wash-a: #b9c8f5;
+  --wash-b: #f6d9cc;
+  --wash-c: #bfe5d6;
+
+  --d-face: #f7f8fa;
+  --d-bezel: #e3e8ee;
+  --d-track: #8f9aaa;
+  --d-rim: #cbd3dc;
+  --d-ink: #151c2a;
+  --d-signal: #f2551d;
+  --d-lume: #3fbf8a;
+  --d-film: 0.06;
+  --d-depth: 0.5;
+  --d-done: 50%;
+  --d-past: 55%;
+  --d-lume-major: 0;
+  --c-focus: #3d6fe3;
+  --c-care: #25976a;
+  --c-routine: #d99a06;
+  --c-people: #db4f94;
+  --c-rest: #8670e6;
+  --c-learn: #138fa6;
+  --c-move: #ea6a2a;
+  --on-focus: #ffffff;
+  --on-care: #ffffff;
+  --on-routine: #141b29;
+  --on-people: #ffffff;
+  --on-rest: #ffffff;
+  --on-learn: #ffffff;
+  --on-move: #141b29;
+  --d-sleep: color-mix(in srgb, var(--d-bezel), var(--d-ink) 8%);
+  --d-glass: 0.2;
+  --glass-ink: #0b0f17;
+  /* Text on a solid block: the stricter of white and ink (icons keep the app's --on-*). */
+  --text-on-focus: #ffffff;
+  --text-on-care: #0b0f17;
+  --text-on-routine: #0b0f17;
+  --text-on-people: #0b0f17;
+  --text-on-rest: #0b0f17;
+  --text-on-learn: #0b0f17;
+  --text-on-move: #0b0f17;
+}
+
+/* Midnight desk with the Ink dial (the app's default dark theme). */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --ground: #0d121c;
+  --surface: #131a27;
+  --raised: #1a2232;
+  --sunken: #0a0e16;
+  --line: rgb(233 237 243 / 0.08);
+  --line-strong: rgb(233 237 243 / 0.15);
+  --ink: #e9edf3;
+  --ink-2: #b0b9c7;
+  --ink-3: #8f9aab;
+  --ink-inverse: #0d121c;
+  --signal: #ff7440;
+  --lume: #8ef0c1;
+  --focus-ring: #7598ff;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 1px rgb(0 0 0 / 0.3);
+  --shadow-2: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 10px 24px -8px rgb(0 0 0 / 0.6);
+  --shadow-3: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 24px 56px -16px rgb(0 0 0 / 0.75);
+  --wash-a: #1d2b55;
+  --wash-b: #3a2030;
+  --wash-c: #123a33;
+
+  --d-face: #141b29;
+  --d-bezel: #1d2637;
+  --d-track: #5e6a7e;
+  --d-rim: #2a3447;
+  --d-ink: #e9edf3;
+  --d-signal: #ff7440;
+  --d-lume: #8ef0c1;
+  --d-film: 0.1;
+  --d-depth: 0.05;
+  --d-done: 42%;
+  --d-past: 60%;
+  --d-lume-major: 0.5;
+  --c-focus: #7598ff;
+  --c-care: #4fd39a;
+  --c-routine: #ffc94a;
+  --c-people: #ff86bf;
+  --c-rest: #b4a2ff;
+  --c-learn: #4fd3e6;
+  --c-move: #ff9b5e;
+  --on-focus: #141b29;
+  --on-care: #141b29;
+  --on-routine: #141b29;
+  --on-people: #141b29;
+  --on-rest: #141b29;
+  --on-learn: #141b29;
+  --on-move: #141b29;
+  --d-sleep: color-mix(in srgb, var(--d-bezel), #000 35%);
+  --d-glass: 0.28;
+  --glass-ink: #ffffff;
+  --text-on-focus: #0b0f17;
+  --text-on-care: #0b0f17;
+  --text-on-routine: #0b0f17;
+  --text-on-people: #0b0f17;
+  --text-on-rest: #0b0f17;
+  --text-on-learn: #0b0f17;
+  --text-on-move: #0b0f17;
+}
+
+@layer base {
+  html {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-padding-top: 84px;
+    scrollbar-color: var(--line-strong) transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    html:not([data-motion='calm']) {
+      scroll-behavior: smooth;
+    }
+  }
+  body {
+    background: var(--ground);
+    min-height: 100dvh;
+    overflow-x: clip;
+    font-size: 16px;
+    line-height: 1.55;
+    caret-color: var(--signal);
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--focus-ring) 28%, transparent);
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  a {
+    text-underline-offset: 0.22em;
+    text-decoration-thickness: 1px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+  kbd {
+    font-family: inherit;
+    font-size: 0.8em;
+    font-weight: 500;
+    padding: 0.1em 0.45em;
+    border-radius: 6px;
+    background: var(--sunken);
+    box-shadow: inset 0 -1px 0 var(--line-strong);
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility container-page {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 16px;
+  @media (width >= 640px) {
+    padding-inline: 28px;
+  }
+  @media (width >= 1024px) {
+    padding-inline: 40px;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------
+   Motion. Loops move only transform or opacity, pause off screen (.is-offscreen) and stop
+   under prefers-reduced-motion (data-motion="calm" is set from it before first paint).
+   --------------------------------------------------------------------------------------- */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+@keyframes orbit {
+  0% {
+    transform: rotate(calc(var(--angle) * 1deg)) translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));
+  }
+  100% {
+    transform: rotate(calc(var(--angle) * 1deg + 360deg)) translateY(calc(var(--radius) * 1px)) rotate(calc((var(--angle) * -1deg) - 360deg));
+  }
+}
+@keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+  }
+}
+@keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+  }
+  15%,
+  35% {
+    transform: translateZ(0) rotate(90deg);
+  }
+  65%,
+  85% {
+    transform: translateZ(0) rotate(270deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+@keyframes ripple {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+}
+@keyframes blink-cursor {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+/* The breathing aura: 4 s in, 4 s out, opacity only. */
+@keyframes aura {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Headline words settle in once, from an already-legible state. */
+@keyframes word-in {
+  from {
+    opacity: 0.001;
+    transform: translateY(0.32em);
+    filter: blur(8px);
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0.001;
+    transform: translateY(14px);
+  }
+}
+
+.is-offscreen,
+.is-offscreen * {
+  animation-play-state: paused !important;
+}
+
+html[data-motion='calm'] .motion-loop,
+html[data-motion='calm'] .motion-loop * {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-loop,
+  .motion-loop * {
+    animation: none !important;
+  }
+}
+
+/* Reveals: content is visible without script; with script, chosen elements arrive once. */
+html.js:not([data-motion='calm']) [data-reveal] {
+  transition:
+    opacity 0.9s var(--ease-out),
+    transform 1.1s var(--ease-out),
+    filter 0.9s var(--ease-out);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+html.js:not([data-motion='calm']) [data-reveal='rise']:not([data-in]) {
+  opacity: 0.001;
+  transform: translateY(28px);
+}
+/* A dial arrives the way the app turns in a new day: through a small turn, scaling up. */
+html.js:not([data-motion='calm']) [data-reveal='turn']:not([data-in]) {
+  opacity: 0.001;
+  transform: rotate(-20deg) scale(0.94);
+}
+html.js:not([data-motion='calm']) [data-reveal='blur']:not([data-in]) {
+  opacity: 0.001;
+  filter: blur(10px);
+  transform: translateY(10px);
+}
+
+/* View transitions for the theme change: a circle opens from the button you pressed. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html[data-theme-vt='active']::view-transition-new(root) {
+  clip-path: var(--theme-vt-clip-from);
+}
+
+/* Native <details> accordions open smoothly where the browser can animate to auto. */
+@supports (interpolate-size: allow-keywords) {
+  :root {
+    interpolate-size: allow-keywords;
+  }
+  details.faq::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size 0.38s var(--ease-out),
+      content-visibility 0.38s allow-discrete;
+  }
+  details.faq[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------
+   The dial
+   --------------------------------------------------------------------------------------- */
+
+:root {
+  /* Alef's screen in the dial's own colours: a soft recessed well, inked eyes on light faces. */
+  --s-well: color-mix(in srgb, var(--d-face), #fff 35%);
+  --s-edge: color-mix(in srgb, var(--d-face), var(--d-ink) 6%);
+  --s-bezel: color-mix(in srgb, var(--d-bezel), var(--d-track) 25%);
+  --s-shade-top: color-mix(in srgb, var(--d-ink), var(--d-face) 84%);
+  --s-shade-bottom: rgb(255 255 255 / 0.85);
+  --s-sheen: 0;
+  --s-eye: #214564;
+  --s-glow: 0;
+}
+[data-theme='dark'] {
+  --s-well: color-mix(in srgb, var(--d-face), #000 18%);
+  --s-edge: color-mix(in srgb, var(--d-face), #000 42%);
+  --s-bezel: color-mix(in srgb, var(--d-bezel), var(--d-track) 30%);
+  --s-shade-top: rgb(0 0 0 / 0.4);
+  --s-shade-bottom: rgb(255 255 255 / 0.06);
+  --s-sheen: 0.11;
+  --s-eye: #8ef0c1;
+  --s-glow: 0.85;
+}
+
+.dial-numeral {
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  pointer-events: none;
+}
+.dial-numeral.strong {
+  font-weight: 500;
+}
+.arc-label {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.dial-hand {
+  transform-origin: 500px 500px;
+  transform-box: view-box;
+  transition: transform 0.8s var(--ease-out);
+  pointer-events: none;
+}
+.dial-aura {
+  position: absolute;
+  inset: -4%;
+  border-radius: 50%;
+  pointer-events: none;
+  /* The app's halo, with its two ends feathered so it never reads as a cut wedge. */
+  background: conic-gradient(from calc(var(--a0) - 8deg), transparent 0deg, var(--c) 8deg, var(--c) calc(var(--sweep) + 8deg), transparent calc(var(--sweep) + 16deg), transparent 360deg);
+  -webkit-mask: radial-gradient(closest-side, transparent 78%, #000 87%, #000 90%, transparent 97%);
+  mask: radial-gradient(closest-side, transparent 78%, #000 87%, #000 90%, transparent 97%);
+  opacity: 0.3;
+  will-change: opacity;
+  animation: aura 8s ease-in-out infinite;
+}
+html[data-motion='calm'] .dial-aura {
+  opacity: 0.35;
+}
+.dial-seconds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.28s var(--ease-out);
+}
+.dial-seconds i {
+  position: absolute;
+  left: 50%;
+  top: 14.2%;
+  width: 1%;
+  height: 1%;
+  margin: -0.5% 0 0 -0.5%;
+  border-radius: 50%;
+  background: var(--d-track);
+}
+.dial-tip {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--raised);
+  box-shadow: var(--shadow-2);
+  font-size: 12.5px;
+  pointer-events: none;
+  animation: rise-in 0.16s var(--ease-out);
+}
+.dial-tip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dial-readout {
+  position: absolute;
+  inset: 26%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  pointer-events: none;
+  color: var(--d-ink);
+}
+.dial-readout.on-screen {
+  inset: 22.5%;
+}
+.dial-readout :is(button, a) {
+  pointer-events: auto;
+}
+.arc-charge {
+  pointer-events: none;
+  stroke-dasharray: 0.18 1.4;
+  stroke-dashoffset: 0.18;
+  opacity: 0.85;
+  mix-blend-mode: soft-light;
+  animation: arc-charge 0.95s cubic-bezier(0.3, 0.7, 0.2, 1) forwards;
+}
+@keyframes arc-charge {
+  to {
+    stroke-dashoffset: -1.05;
+    opacity: 0.2;
+  }
+}
+.remain-slice {
+  transform-origin: 500px 500px;
+  transform-box: view-box;
+  animation: refill 0.55s var(--ease-out) both;
+}
+@keyframes refill {
+  from {
+    opacity: 0;
+    transform: scale(0.86) rotate(-12deg);
+  }
+}
+html[data-motion='calm'] :is(.remain-slice, .arc-charge, .dial-tip) {
+  animation: none;
+}
+.readout-clock {
+  display: inline-flex;
+  padding: 0.35em 0.8em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--d-ink) 7%, transparent);
+  font-size: clamp(10px, 3.4cqi, 20px);
+  font-weight: 500;
+  line-height: 1.1;
+}
+.readout-big {
+  font-size: clamp(30px, 13cqi, 84px);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+.readout-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  max-width: 100%;
+  font-size: clamp(11px, 2.9cqi, 18px);
+  font-weight: 500;
+  animation: title-rise 0.36s var(--ease-out);
+}
+.readout-sub {
+  max-width: 100%;
+  margin-top: -0.6cqi;
+  font-size: clamp(10px, 2.3cqi, 14px);
+  opacity: 0.66;
+}
+@keyframes title-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+html[data-motion='calm'] .readout-title {
+  animation: none;
+}
+
+.hero-word {
+  display: inline-block;
+  animation: word-in 0.9s var(--ease-out) both;
+}
+html[data-motion='calm'] .hero-word {
+  animation: none;
+}
+
+/* Magic card light: a radial wash at the pointer, and the same light along the edge. */
+.magic-card::before,
+.magic-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--glow) 11%, transparent), transparent 70%);
+  z-index: -1;
+}
+.magic-card::after {
+  z-index: 5;
+  padding: 1px;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--glow) 70%, transparent), transparent 75%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+@media (hover: hover) and (pointer: fine) {
+  .magic-card:hover::before,
+  .magic-card:hover::after {
+    opacity: 1;
+  }
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.eq-bar {
+  height: 100%;
+  transform-origin: bottom;
+  animation: eq 0.7s ease-in-out infinite;
+}
+.voice-bar {
+  transform-origin: center;
+  transform: scaleY(0.6);
+}
+@media (hover: hover) {
+  .group\/card:hover .voice-bar {
+    animation: eq 0.9s ease-in-out infinite;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------
+   Alef (overlays ported from the app's AlefFace.svelte: one-shot, transform and opacity)
+   --------------------------------------------------------------------------------------- */
+.alef-face {
+  container-type: inline-size;
+  transition: transform 560ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+.alef-face:active > span:first-child {
+  scale: 1.05 0.9;
+  transition: scale 90ms ease-out;
+}
+.alef-led {
+  background: radial-gradient(closest-side, transparent 90%, color-mix(in srgb, var(--led) 14%, transparent) 96%, color-mix(in srgb, var(--led) 42%, transparent) 99.4%, transparent 100%);
+  transition:
+    opacity 800ms ease,
+    background 800ms ease;
+}
+.alef-bubble {
+  animation: bubble-in 0.42s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  transform-origin: 50% 100%;
+}
+.alef-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-radius: 2px;
+  transform: translateX(-50%) rotate(45deg);
+}
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+}
+.alef-hop {
+  animation: alef-hop 700ms cubic-bezier(0.3, 1.5, 0.5, 1) 1;
+}
+.alef-shake {
+  animation: alef-shake 520ms ease-in-out 1;
+}
+@keyframes alef-shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  20%,
+  60% {
+    translate: -2.5cqi 0;
+  }
+  40%,
+  80% {
+    translate: 2.5cqi 0;
+  }
+}
+@keyframes alef-hop {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  30% {
+    translate: 0 -5cqi;
+  }
+  55% {
+    translate: 0 0;
+  }
+  75% {
+    translate: 0 -2cqi;
+  }
+}
+.alef-fx {
+  position: absolute;
+  inset: -12% -6%;
+  pointer-events: none;
+}
+.alef-fx > * {
+  position: absolute;
+  fill: currentColor;
+}
+.fx-heart {
+  width: 13cqi;
+  color: #ff7ab8;
+  right: calc(4cqi + var(--i) * 11cqi);
+  top: 52%;
+  filter: drop-shadow(0 0 1.5cqi rgba(255, 122, 184, 0.6));
+  animation: fx-rise 1700ms calc(var(--i) * 180ms) cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.fx-star {
+  width: 11cqi;
+  color: #ffc21a;
+  left: calc(2cqi + var(--i) * 28cqi);
+  top: calc(4% + mod(var(--i), 2) * 56%);
+  filter: drop-shadow(0 0 1.6cqi rgba(255, 216, 74, 0.7));
+  animation: fx-twinkle 1300ms calc(var(--i) * 140ms) ease-out both;
+}
+.fx-z {
+  right: calc(2cqi + var(--i) * 7cqi);
+  top: calc(10% - var(--i) * 6%);
+  font: 700 calc(9cqi + var(--i) * 3cqi) / 1 var(--font-sans);
+  color: var(--s-eye);
+  opacity: 0;
+  animation: fx-zzz 2400ms calc(var(--i) * 420ms) ease-out both;
+}
+.fx-mark {
+  right: 2cqi;
+  top: 0;
+  font: 800 20cqi / 1 var(--font-sans);
+  color: var(--s-eye);
+  animation: fx-pop 1400ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.fx-bit {
+  width: 3cqi;
+  height: 5cqi;
+  left: 50%;
+  top: 40%;
+  border-radius: 0.7cqi;
+  background: var(--c);
+  animation: fx-burst 1500ms calc(var(--i) * 18ms) cubic-bezier(0.15, 0.7, 0.3, 1) both;
+}
+@keyframes fx-rise {
+  0% {
+    transform: translateY(0) scale(0.4);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-5cqi) scale(1.05);
+  }
+  100% {
+    transform: translateY(-34cqi) scale(0.8);
+    opacity: 0;
+  }
+}
+@keyframes fx-twinkle {
+  0% {
+    transform: scale(0) rotate(-40deg);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.15) rotate(10deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.6) rotate(30deg);
+    opacity: 0;
+  }
+}
+@keyframes fx-zzz {
+  0% {
+    transform: translate(0, 5cqi);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(6cqi, -16cqi);
+    opacity: 0;
+  }
+}
+@keyframes fx-pop {
+  0% {
+    transform: scale(0) rotate(-20deg);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.2) rotate(8deg);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+@keyframes fx-burst {
+  0% {
+    transform: translate(-50%, 0) rotate(0) scale(0.4);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx) * 6cqi), calc(34cqi - (var(--dx) * var(--dx)) * 0.18cqi)) rotate(var(--rot)) scale(1);
+    opacity: 0;
+  }
+}
+html[data-motion='calm'] :is(.alef-bubble, .alef-hop, .alef-shake, .alef-fx *) {
+  animation: none;
+}
+
+/* A band that wears a dark theme of the app on any page theme (its vars are set inline). */
+.screen-dark {
+  color-scheme: dark;
+  --s-well: color-mix(in srgb, var(--d-face), #000 18%);
+  --s-edge: color-mix(in srgb, var(--d-face), #000 42%);
+  --s-bezel: color-mix(in srgb, var(--d-bezel), var(--d-track) 30%);
+  --s-shade-top: rgb(0 0 0 / 0.4);
+  --s-shade-bottom: rgb(255 255 255 / 0.06);
+  --s-sheen: 0.11;
+  --s-eye: var(--d-lume);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 1px rgb(0 0 0 / 0.3);
+  --shadow-2: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 10px 24px -8px rgb(0 0 0 / 0.6);
+  --shadow-3: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 24px 56px -16px rgb(0 0 0 / 0.75);
+}
+.theme-light {
+  color-scheme: light;
+  --shadow-1: 0 1px 2px rgb(21 28 42 / 0.06), 0 1px 1px rgb(21 28 42 / 0.04);
+  --shadow-2: 0 2px 6px -1px rgb(21 28 42 / 0.08), 0 10px 24px -8px rgb(21 28 42 / 0.16);
+  --shadow-3: 0 6px 16px -4px rgb(21 28 42 / 0.12), 0 24px 56px -16px rgb(21 28 42 / 0.28);
+}
+.code {
+  font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.84em;
+  padding: 0.12em 0.42em;
+  border-radius: 6px;
+  background: var(--sunken);
+  overflow-wrap: anywhere;
+}
+
+/* The breathing guide: the sphere swells and settles, the bead goes once round per breath. */
+.breath-orb {
+  animation: breath-orb 16s infinite;
+}
+@keyframes breath-orb {
+  0% {
+    transform: scale(0.62);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  25%,
+  50% {
+    transform: scale(1);
+    animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  }
+  75%,
+  100% {
+    transform: scale(0.62);
+  }
+}
+.breath-bead {
+  animation: breath-bead 16s linear infinite;
+}
+@keyframes breath-bead {
+  from {
+    transform: rotate(225deg);
+  }
+  to {
+    transform: rotate(585deg);
+  }
+}
+
+/* No section may widen the page (orbits, ripples and washes stay inside their band).
+   overflow-x: clip keeps sticky children working, unlike hidden. */
+main section {
+  overflow-x: clip;
+}
+
+/* The shimmer's light moves only while the button is pointed at or focused. */
+.shimmer-spark,
+.shimmer-spark * {
+  animation-play-state: paused;
+}
+.group:hover .shimmer-spark,
+.group:hover .shimmer-spark *,
+.group:focus-visible .shimmer-spark,
+.group:focus-visible .shimmer-spark * {
+  animation-play-state: running;
+}

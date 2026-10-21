@@ -7,13 +7,15 @@ import { DEFAULT_SETTINGS, settings } from '../../stores/settings.svelte';
 import { taskFile } from '../../stores/tasks.svelte';
 import { timerFile } from '../../stores/timer.svelte';
 import { view } from '../../stores/view.svelte';
-import { alef, alefFile, keyAccount, migrateAlef } from './alef.svelte';
+import { alef, alefFile, migrateAlef } from './alef.svelte';
+import { ai, aiFile, DEFAULT_AI } from '../../ai/hub.svelte';
 import { BEHAVIOR_IDS } from './behaviors';
 import { answer, feelingOfResult } from './conversation';
 import { moodGlow, moodLed, restPose } from './face';
 import { eyeColorFor, screenPalette } from './palette';
 import { FINISHES } from '../../presets';
 import { lineFor, speaksFor } from './lines';
+import { helpFor, UNKIND } from './coach';
 import { smallTalk, systemPrompt, FEELINGS } from './persona';
 import { awakeAt, moments, NOTHING_SEEN, signalsOf, type Snapshot } from './signals';
 
@@ -98,15 +100,34 @@ describe('alef: words', () => {
     expect(speaksFor('done', 'quiet')).toBe(false);
     expect(speaksFor('poke', 'quiet')).toBe(true);
     expect(speaksFor('allDone', 'some')).toBe(true);
-    expect(speaksFor('blockStart', 'some')).toBe(false);
-    expect(speaksFor('blockStart', 'chatty')).toBe(true);
+    expect(speaksFor('done', 'some')).toBe(false);
+    expect(speaksFor('blockStart', 'some')).toBe(true);
+    expect(speaksFor('planned', 'some')).toBe(false);
+    expect(speaksFor('planned', 'chatty')).toBe(true);
     const line = lineFor('checkIn', { title: 'Deep work', hour: 11, seed: 0 }, 'some');
     expect(line).toContain('Deep work');
     // Never a scold.
     for (let seed = 0; seed < 6; seed++) {
       const l = lineFor('manyMissed', { hour: 15, seed }, 'some') ?? '';
       expect(l).not.toMatch(/fail|lazy|should have|bad/i);
+      expect(l).not.toMatch(UNKIND);
     }
+  });
+
+  it('offers a hand, never a verdict', () => {
+    const c = { title: 'Write the report', key: 'task:w@2026-10-19', minutes: 60, own: true, smaller: true, crumbs: true, fits: { id: 'b', title: 'Book dentist', minutes: 15 }, freeMin: 30 };
+    for (const ev of ['blockStart', 'checkIn', 'overrun', 'manyMissed', 'stuck', 'headsUp', 'gap', 'focusEnd'] as const) {
+      for (let seed = 0; seed < 4; seed++) {
+        const h = helpFor(ev, { ...c, seed });
+        expect(h, ev).not.toBeNull();
+        expect(h!.line).not.toMatch(UNKIND);
+        expect(h!.offers.length).toBeGreaterThan(0);
+      }
+    }
+    expect(helpFor('blockStart', { ...c, seed: 0 })!.offers.map((o) => o.id)).toEqual(['start2', 'smaller']);
+    expect(helpFor('checkIn', { ...c, seed: 0 })!.offers.map((o) => o.id)).toEqual(['tick', 'more10', 'moveNext']);
+    // Calendar events and salah get no "start" offers.
+    expect(helpFor('blockStart', { ...c, own: false, seed: 0 })).toBeNull();
   });
 
   it('handles small talk itself', () => {
@@ -195,8 +216,19 @@ describe('alef: conversation', () => {
     view.calendarEvents = [];
     taskFile.value.tasks = [task({ id: 'deep', title: 'Deep work', start: 11 * 60, duration: 60 }), task({ id: 'lunch', title: 'Lunch', category: 'care', start: 12 * 60 + 30, duration: 40 })];
     alefFile.value = migrateAlef(null);
+    aiFile.value = structuredClone(DEFAULT_AI);
+    ai.keys = {};
   });
   afterEach(() => vi.restoreAllMocks());
+
+  /** Alef thinks with a service from Settings › AI. */
+  async function useAi(provider: 'openai' | 'anthropic', model: string) {
+    aiFile.value.services = { [provider]: { model, consent: Date.now() } };
+    aiFile.value.use.alef.think = { via: provider };
+    // No keychain in tests: the key is "saved".
+    vi.spyOn(platform.secrets, 'get').mockResolvedValue('sk-test');
+    ai.keys = { [provider]: true };
+  }
 
   it('answers on this device with the planner when no AI is set up', async () => {
     const a = await answer("what's next", { history: [], aiReady: false });
@@ -207,10 +239,7 @@ describe('alef: conversation', () => {
   });
 
   it('uses the AI brain with the planner tools, and its feeling tag', async () => {
-    alefFile.value.settings.brain = 'openai';
-    alefFile.value.settings.configs = { openai: { model: 'gpt-5.4-mini' } };
-    alefFile.value.settings.consent = { openai: Date.now() };
-    await platform.secrets.set(keyAccount('openai'), 'sk-test');
+    await useAi('openai', 'gpt-5.4-mini');
     const bodies: any[] = [];
     const replies = [
       { choices: [{ message: { content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'create_block', arguments: JSON.stringify({ title: 'Walk', date: 'today', start: '15:00', minutes: 30 }) } }] } }] },
@@ -223,16 +252,15 @@ describe('alef: conversation', () => {
     const a = await answer('add a walk at 3pm', { history: [], aiReady: true });
     expect(a).toMatchObject({ via: 'ai', feeling: 'happy', text: 'Done! A walk at 3pm.', tools: ['create_block'] });
     expect(taskFile.value.tasks.some((t) => t.title === 'Walk' && t.start === 15 * 60)).toBe(true);
-    // The system prompt carries today's plan; the key goes in the header, not the body.
+    // The system prompt carries today's plan and its free time; the key goes in the header, not the body.
     expect(bodies[0].messages[0].content).toContain('Deep work');
+    expect(bodies[0].messages[0].content).toMatch(/Free: /);
     expect(JSON.stringify(bodies)).not.toContain('sk-test');
     expect(bodies[0].tools.some((t: any) => t.function.name === 'create_block')).toBe(true);
   });
 
   it("falls back to this device, and says why, when the AI can't be reached", async () => {
-    alefFile.value.settings.brain = 'anthropic';
-    alefFile.value.settings.configs = { anthropic: { model: 'claude-haiku-5-5' } };
-    alefFile.value.settings.consent = { anthropic: Date.now() };
+    await useAi('anthropic', 'claude-haiku-5-5');
     vi.spyOn(platform, 'fetch').mockResolvedValue(new Response('{"error":{"message":"bad key"}}', { status: 401 }));
     const a = await answer("what's next", { history: [], aiReady: true });
     expect(a.via).toBe('device');
@@ -240,14 +268,19 @@ describe('alef: conversation', () => {
   });
 
   it('only shares with an AI brain after you agree', async () => {
-    alefFile.value.settings.brain = 'openai';
-    alefFile.value.settings.configs = { openai: { model: 'gpt-5.4-mini' } };
-    alef.hasKey = true;
+    aiFile.value.services = { openai: { model: 'gpt-5.4-mini' } };
+    aiFile.value.use.alef.think = { via: 'openai' };
+    ai.keys = { openai: true };
     expect(alef.aiReady).toBe(false);
-    alefFile.value.settings.consent = { openai: Date.now() };
+    ai.agree('openai', true);
     expect(alef.aiReady).toBe(true);
-    alefFile.value.settings.configs = { openai: { model: '' } };
+    ai.configure('openai', { model: '' });
     expect(alef.aiReady).toBe(false);
+  });
+
+  it('meets “I’m stuck” with a two-minute start', async () => {
+    const a = await answer("I'm stuck", { history: [], aiReady: false });
+    expect(a.offers?.map((o) => o.id)).toEqual(['start2', 'smaller']);
   });
 
   it('feels its answers', () => {

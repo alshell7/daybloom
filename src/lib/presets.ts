@@ -94,7 +94,28 @@ export const PRESETS: Record<PresetId, Preset> = {
 
 export const PRESET_ORDER: PresetId[] = ['field12', 'gmt24', 'timer60', 'chrono'];
 
-export type FinishId = 'auto' | 'glacier' | 'ink' | 'onyx' | 'salmon' | 'mint' | 'slate' | 'moss' | 'plum' | 'tropic';
+export type FinishId =
+  | 'auto'
+  | 'glacier'
+  | 'ink'
+  | 'onyx'
+  | 'salmon'
+  | 'mint'
+  | 'slate'
+  | 'moss'
+  | 'plum'
+  | 'tropic'
+  | 'ceramic'
+  | 'lilac'
+  | 'blossom'
+  | 'sandstone'
+  | 'azure'
+  | 'champagne'
+  | 'twilight'
+  | 'lagoon'
+  | 'copper'
+  | 'sunray'
+  | 'claret';
 
 export interface Finish {
   id: Exclude<FinishId, 'auto'>;
@@ -198,7 +219,7 @@ export const FINISHES: Record<Finish['id'], Finish> = {
     ink: '#11281F',
     track: '#5E8C78',
     signal: '#E2482E',
-    lume: '#1C7A55',
+    lume: '#0F5A3E',
     rim: '#9CCFB7',
   },
   slate: {
@@ -225,7 +246,150 @@ export const FINISHES: Record<Finish['id'], Finish> = {
     lume: '#E9F59A',
     rim: '#55392A',
   },
+  ceramic: {
+    id: 'ceramic',
+    name: 'Ceramic',
+    dark: false,
+    face: '#F6F2EA',
+    bezel: '#E9E3D7',
+    ink: '#151311',
+    track: '#9A9184',
+    signal: '#D8461B',
+    lume: '#2B9A6B',
+    rim: '#D3CBBB',
+  },
+  lilac: {
+    id: 'lilac',
+    name: 'Lilac',
+    dark: false,
+    face: '#E8E1F3',
+    bezel: '#DBD1EC',
+    ink: '#221A33',
+    track: '#8B7DA7',
+    signal: '#D0481F',
+    lume: '#23875F',
+    rim: '#C6B9DF',
+  },
+  blossom: {
+    id: 'blossom',
+    name: 'Blossom',
+    dark: false,
+    face: '#F8E0E5',
+    bezel: '#F1D2DA',
+    ink: '#2D1720',
+    track: '#A57886',
+    signal: '#C73D1F',
+    lume: '#22855D',
+    rim: '#E0B8C3',
+  },
+  sandstone: {
+    id: 'sandstone',
+    name: 'Sandstone',
+    dark: false,
+    face: '#EDDFC5',
+    bezel: '#E3D0AE',
+    ink: '#291D11',
+    track: '#97805F',
+    signal: '#B03C16',
+    lume: '#1E7350',
+    rim: '#CFB78F',
+  },
+  azure: {
+    id: 'azure',
+    name: 'Azure',
+    dark: false,
+    face: '#DAE8F6',
+    bezel: '#C6DAEF',
+    ink: '#0E1B32',
+    track: '#6F87A7',
+    signal: '#D9491A',
+    lume: '#1E875D',
+    rim: '#ADC6E3',
+  },
+  champagne: {
+    id: 'champagne',
+    name: 'Champagne',
+    dark: false,
+    face: '#F0E6C8',
+    bezel: '#E4D6AE',
+    ink: '#272011',
+    track: '#9F8C5F',
+    signal: '#1E46A3',
+    lume: '#24855B',
+    rim: '#CFBD8C',
+  },
+  twilight: {
+    id: 'twilight',
+    name: 'Twilight',
+    dark: true,
+    face: '#211E3E',
+    bezel: '#2A264D',
+    ink: '#EEEAFB',
+    track: '#7B75A8',
+    signal: '#FF9466',
+    lume: '#A3F2CD',
+    rim: '#38336A',
+  },
+  lagoon: {
+    id: 'lagoon',
+    name: 'Lagoon',
+    dark: true,
+    face: '#0F2D33',
+    bezel: '#14383F',
+    ink: '#E4F3F2',
+    track: '#5E8B8F',
+    signal: '#FF7D5C',
+    lume: '#B4F5BE',
+    rim: '#1D4A51',
+  },
+  copper: {
+    id: 'copper',
+    name: 'Copper',
+    dark: true,
+    face: '#5A3423',
+    bezel: '#352119',
+    ink: '#F8EDE4',
+    track: '#B08A74',
+    signal: '#FFA04D',
+    lume: '#A9F2C6',
+    rim: '#7A4A30',
+  },
+  sunray: {
+    id: 'sunray',
+    name: 'Sunray',
+    dark: true,
+    face: '#1D3B76',
+    bezel: '#162F5E',
+    ink: '#F2F5FC',
+    track: '#8098C7',
+    signal: '#FFB547',
+    lume: '#A9F5D2',
+    rim: '#2B4C8A',
+  },
+  claret: {
+    id: 'claret',
+    name: 'Claret',
+    dark: true,
+    face: '#3A1622',
+    bezel: '#2C1019',
+    ink: '#F8E9ED',
+    track: '#9C6A77',
+    signal: '#FFBF66',
+    lume: '#B6F2CF',
+    rim: '#52202E',
+  },
 };
+
+/** Finishes as the pickers show them: light, then dark, each in hue order. */
+export const FINISH_ORDER: Finish['id'][] = [
+  'ceramic', 'glacier', 'azure', 'lilac', 'blossom', 'salmon', 'sandstone', 'champagne', 'mint',
+  'onyx', 'slate', 'ink', 'sunray', 'twilight', 'plum', 'claret', 'copper', 'tropic', 'moss', 'lagoon',
+];
+
+/** The light or the dark finishes, in picker order. */
+export function finishesOf(dark: boolean): Finish[] {
+  return FINISH_ORDER.map((id) => FINISHES[id]).filter((f) => f.dark === dark);
+}
 
 /** 'auto' means "match the app theme". */
 export function resolveFinish(id: FinishId, theme: { finish: Exclude<FinishId, 'auto'> }): Finish {

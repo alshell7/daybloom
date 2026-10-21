@@ -88,3 +88,16 @@ describe.runIf(process.env.ALEF_LIVE === '1')('alef: live providers', () => {
     }
   }, 90_000);
 });
+
+describe('alef: feelings as a reply goes', async () => {
+  const { beatsOf } = await import('./llm');
+  it('finds each feeling and where it starts', () => {
+    const r = beatsOf('[curious] Let me look… [happy] Found a free hour at 3pm!', ['curious', 'happy']);
+    expect(r.text).toBe('Let me look… Found a free hour at 3pm!');
+    expect(r.beats.map((b) => b.feeling)).toEqual(['curious', 'happy']);
+    expect(r.beats[0].at).toBe(0);
+    expect(r.beats[1].at).toBeGreaterThan(0.25);
+    expect(beatsOf('No tags here.', ['happy'])).toEqual({ text: 'No tags here.', beats: [] });
+    expect(beatsOf('[happy] Sure [nope] thing', ['happy']).text).toBe('Sure [nope] thing');
+  });
+});

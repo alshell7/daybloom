@@ -11,13 +11,16 @@
     wake,
     sleep,
     nowMin = null,
+    small = false,
   }: {
-    day: DayStat;
+    day: Pick<DayStat, 'arcs' | 'done' | 'backlog'>;
     finish: Finish;
     wake: number;
     sleep: number;
     /** Minutes into today, when this dial is today (draws the now-hand). */
     nowMin?: number | null;
+    /** Drawn at icon size (the History's day headers): a bolder count. */
+    small?: boolean;
   } = $props();
 
   const C = 50;
@@ -78,7 +81,7 @@
   const hand = $derived(nowMin == null ? null : [polar(R_FACE - 3, deg(nowMin)), polar(R_OUT + 1.5, deg(nowMin))]);
 </script>
 
-<svg viewBox="0 0 100 100" class="dial" class:glow={finish.dark} style:--fl={finish.lume} aria-hidden="true">
+<svg viewBox="0 0 100 100" class="dial" class:glow={finish.dark} class:small style:--fl={finish.lume} aria-hidden="true">
   <circle cx={C} cy={C} r={R_OUT + 1.5} fill={finish.bezel} stroke={finish.track} stroke-opacity={finish.dark ? 0.45 : 0.25} stroke-width="1" />
   <path d={night} fill={mix(finish.bezel, finish.dark ? '#000000' : finish.ink, finish.dark ? 0.28 : 0.05)} />
   <circle cx={C} cy={C} r={R_FACE} fill={finish.face} stroke={finish.track} stroke-opacity={finish.dark ? 0.35 : 0.18} stroke-width="0.8" />
@@ -124,5 +127,9 @@
     font-weight: 300;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
+  }
+  .small .count {
+    font-size: 31px;
+    font-weight: 500;
   }
 </style>

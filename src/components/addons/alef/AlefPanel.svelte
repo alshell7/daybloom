@@ -4,6 +4,7 @@
   import { alef, alefFile } from '../../../lib/addons/alef/alef.svelte';
   import { ACTS } from '../../../lib/addons/alef/behaviors';
   import { providerOf } from '../../../lib/addons/alef/llm';
+  import { ai } from '../../../lib/ai/hub.svelte';
   import { view } from '../../../lib/stores/view.svelte';
   import Icon from '../../../lib/Icon.svelte';
   import Panel from '../../Panel.svelte';
@@ -23,13 +24,13 @@
 
   const s = $derived(alefFile.value.settings);
   const bond = $derived(alefFile.value.bond);
-  const brainLine = $derived(
-    s.brain === 'local'
-      ? 'Thinks on this device'
-      : alef.aiReady
-        ? `Thinks with ${providerOf(s.brain).name}${s.configs[s.brain]?.model ? ` · ${s.configs[s.brain]!.model}` : ''}`
-        : `${providerOf(s.brain).name} isn't set up yet · thinks on this device`,
-  );
+  const brainLine = $derived.by(() => {
+    const r = ai.route('alef', 'think');
+    if (r.via === 'device') return 'Thinks on this device';
+    if (!alef.aiReady) return `${providerOf(r.via).name} isn't set up yet · thinks on this device`;
+    const model = r.model || ai.service(r.via)?.model;
+    return `Thinks with ${providerOf(r.via).name}${model ? ` · ${model}` : ''}`;
+  });
   const feelingLine = $derived(alef.thinking ? 'Thinking…' : alef.talk ? 'Talking' : `Feeling ${ACTS[alef.perf.id].label.toLowerCase().replace(' (cute)', '')}`);
 </script>
 

@@ -1,6 +1,8 @@
 <script lang="ts">
   // "Too big?" A task that feels like a boulder breaks into a few pebbles: small steps you can
   // change, remove or add to. The first always takes about two minutes and can start right away.
+  // The built-in ideas show at once; with an AI service chosen in Settings › AI, its steps for
+  // this exact task replace them when they arrive.
   import { tick } from 'svelte';
   import { backOut, cubicOut } from 'svelte/easing';
   import { fade, fly, slide } from 'svelte/transition';
@@ -13,6 +15,7 @@
   import { settings } from '../../../lib/stores/settings.svelte';
   import { timer } from '../../../lib/stores/timer.svelte';
   import { view } from '../../../lib/stores/view.svelte';
+  import { ai } from '../../../lib/ai/hub.svelte';
 
   let {
     task,
@@ -23,15 +26,56 @@
   }: { task: Task; blockKey?: string | null; minutes?: number; open?: boolean; tone?: 'panel' | 'focus' } = $props();
 
   let variant = $state(0);
-  let steps = $state<{ id: number; title: string; minutes: number }[]>([]);
+  let steps = $state<{ id: number; title: string; minutes: number; doneWhen?: string }[]>([]);
+  /** The AI's one practical tip for this task. */
+  let tip = $state<string | null>(null);
+  /** The step being split again (its id). */
+  let splitting = $state<number | null>(null);
   let seq = 0;
   let kept = $state(0);
   const rm = $derived(view.reducedMotion);
   const color = $derived(categoryColor(task.category, view.finish.dark));
   const variants = $derived(variantsOf(task.title, task.category));
 
+  const aiOn = $derived(ai.ready('smaller', 'think'));
+  let thinking = $state(false);
+  let asked = 0;
   function generate(v = variant) {
+    const shown = steps.map((s) => s.title);
     steps = makeSmaller(task.title, { category: task.category, minutes, variant: v }).map((s) => ({ ...s, id: ++seq }));
+    tip = null;
+    if (aiOn) void askAi(v ? shown : []);
+  }
+  /** Steps from the AI service; kept only if you haven't changed the built-in ones meanwhile. */
+  async function askAi(avoid: string[]) {
+    const mine = ++asked;
+    const before = JSON.stringify(steps.map((s) => s.title));
+    thinking = true;
+    try {
+      const { aiSteps } = await import('../../../lib/addons/smaller/aiSplit');
+      const got = await aiSteps({ task, blockKey, minutes, avoid });
+      if (got && mine === asked && open && JSON.stringify(steps.map((s) => s.title)) === before) {
+        steps = got.steps.map((s) => ({ ...s, id: ++seq }));
+        tip = got.tip ?? null;
+      }
+    } finally {
+      if (mine === asked) thinking = false;
+    }
+  }
+  /** Split one step again: its smaller steps take its place. */
+  async function smallerStep(id: number) {
+    const s = steps.find((x) => x.id === id);
+    if (!s || splitting) return;
+    splitting = id;
+    try {
+      const { aiSplitStep } = await import('../../../lib/addons/smaller/aiSplit');
+      const got = await aiSplitStep({ task, step: s });
+      const i = steps.findIndex((x) => x.id === id);
+      if (got && i >= 0) steps = [...steps.slice(0, i), ...got.map((g) => ({ ...g, id: ++seq })), ...steps.slice(i + 1)];
+      if (settings.value.sound) sounds.tick();
+    } finally {
+      splitting = null;
+    }
   }
   async function expand() {
     open = true;
@@ -41,7 +85,7 @@
     await tick();
   }
   function other() {
-    variant = (variant + 1) % Math.max(1, variants);
+    variant = (variant + 1) % Math.max(1, aiOn ? 99 : variants);
     generate(variant);
   }
   function add() {
@@ -95,16 +139,23 @@
             <span class="n tnum">{i + 1}</span>
             <input class="title" data-pebble={s.id} bind:value={s.title} placeholder="A small step" aria-label={`Step ${i + 1}`} title={s.title} />
             <span class="mins tnum">{s.minutes}m</span>
+            {#if aiOn && s.minutes >= 6}
+              <button class="rm sm" class:busy={splitting === s.id} onclick={() => void smallerStep(s.id)} disabled={!!splitting} aria-label="Make this step smaller" title="Make this step smaller"><Icon name="layers" size={12} /></button>
+            {/if}
             <button class="rm" onclick={() => (steps = steps.filter((x) => x.id !== s.id))} aria-label="Remove this step"><Icon name="x" size={12} /></button>
             {#if i === 0}<span class="here">Start here</span>{/if}
+            {#if s.doneWhen}<span class="when">Done when: {s.doneWhen}</span>{/if}
           </li>
         {/each}
       </ol>
     {/key}
 
+    {#if tip}<p class="tip" in:fly={{ y: 4, duration: rm ? 0 : 260 }}><Icon name="lightbulb" size={13} /> {tip}</p>{/if}
+
     <div class="tools">
       <button class="link" onclick={add}><Icon name="plus" size={13} /> Add a step</button>
-      {#if variants > 1}<button class="link" onclick={other}><Icon name="shuffle" size={13} /> Other ideas</button>{/if}
+      {#if variants > 1 || aiOn}<button class="link" onclick={other} disabled={thinking}><Icon name="shuffle" size={13} /> Other ideas</button>{/if}
+      {#if thinking}<span class="thinking" in:fade={{ duration: rm ? 0 : 200 }}><Icon name="sparkles" size={12} /> Finding steps for this task…</span>{/if}
     </div>
 
     <div class="actions">
@@ -120,6 +171,42 @@
 {/if}
 
 <style>
+  /* The step's finish line, under its title. */
+  .when {
+    flex-basis: 100%;
+    margin-top: -6px;
+    padding: 0 0 7px 30px;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: var(--s-2) 0 0;
+    padding: 8px 10px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--c) 8%, var(--sunken));
+    font-size: var(--t-xs);
+    line-height: 1.45;
+    color: var(--ink-2);
+  }
+  .tip :global(svg) {
+    flex: none;
+    margin-top: 1px;
+    color: var(--c);
+  }
+  .rm.sm.busy {
+    opacity: 0.5;
+  }
+  .thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
   .closed {
     display: flex;
     align-items: center;
@@ -220,6 +307,7 @@
   .pebbles li {
     position: relative;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     min-height: 40px;

@@ -4,6 +4,7 @@ mod capture;
 mod commands;
 mod export;
 mod mcp;
+mod mic;
 mod oauth;
 mod overlay;
 mod privacy;
@@ -109,8 +110,13 @@ pub fn run() {
         .manage(widget::LayerState::default())
         .manage(privacy::Privacy::default())
         .manage(mcp::Mcp::default())
+        .on_permission_request(|_, kind| mic::answer(kind))
         .setup(|app| {
             tray::create(app.handle())?;
+            #[cfg(windows)]
+            if let Some(w) = app.get_webview_window(MAIN) {
+                mic::forget_block(&w);
+            }
             Ok(())
         })
         .on_window_event(|window, event| match event {
@@ -145,11 +151,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::state_load,
             commands::state_save,
+            commands::state_delete,
+            commands::state_keys,
             commands::secret_get,
             commands::secret_set,
             commands::secret_delete,
             commands::widget_show,
             commands::widget_set_layer,
+            commands::widget_frame,
             commands::overlay_show,
             commands::overlay_metrics,
             commands::capture_show,

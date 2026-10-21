@@ -18,6 +18,8 @@
   import RhythmChip from '../RhythmChip.svelte';
   import { rhythm, routineStreaks } from '../../lib/streaks';
 
+  let { onhistory }: { /** Show what was finished on a day (the Done tab). */ onhistory?: (date: ISODate) => void } = $props();
+
   let span = $state<Span>(7);
 
   const stats = $derived.by(() => {
@@ -130,7 +132,12 @@
         {/each}
       </div>
     {/key}
-    <p class="readout tnum" aria-live="polite"><span class="when">{dayName(readDay.date)}</span> · {readout}</p>
+    <p class="readout tnum" aria-live="polite">
+      <span class="when">{dayName(readDay.date)}</span> · {readout}
+      {#if onhistory && readDay.done + readDay.backlog > 0}
+        <button class="see" onclick={() => onhistory(readDay.date)} onpointerenter={() => (hovered = readDay.date)}>See them <Icon name="chevron-right" size={12} stroke={2.2} /></button>
+      {/if}
+    </p>
   </section>
 
   <ul class="lines">
@@ -298,6 +305,22 @@
   .readout .when {
     color: var(--ink-2);
     font-weight: 500;
+  }
+  .see {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    margin-left: 4px;
+    padding: 2px 6px 2px 8px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-xs);
+    font-weight: 500;
+    color: var(--ink-2);
+    transition: background var(--dur-1) var(--ease-out);
+  }
+  .see:hover {
+    background: var(--sunken);
+    color: var(--ink);
   }
 
   .lines {

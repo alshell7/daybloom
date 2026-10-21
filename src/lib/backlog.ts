@@ -16,7 +16,8 @@ import { clock } from './stores/clock.svelte';
 import { settings } from './stores/settings.svelte';
 import { taskFile, tasks } from './stores/tasks.svelte';
 import { view } from './stores/view.svelte';
-import { landingPad } from './addons/landings/pad.svelte';
+import { busyBetween } from './busy';
+import { trash, trashTask } from './stores/trash.svelte';
 
 export type Level = 1 | 2 | 3;
 export type ListId = BacklogList | 'done';
@@ -647,8 +648,8 @@ export function windowFor(date: ISODate = view.today, nowMs = clock.now) {
 
 /** Every timed block (tasks + calendar) that could collide with a plan for `date`. */
 export function busyFor(date: ISODate = view.today): Span[] {
-  // Soft landings: meetings count as busy a few minutes longer, so plans leave room to land.
-  return landingPad(blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), startOfDayMs(addDays(date, 2)), view.finish.dark));
+  // Blocks, calendar events and salah; with Soft landings, meetings run a few minutes longer.
+  return busyBetween(startOfDayMs(date), startOfDayMs(addDays(date, 2)));
 }
 
 export const backlog = {
@@ -716,10 +717,10 @@ export const backlog = {
     const t = find(id);
     if (!t) return;
     const snap = snapshot(t);
-    tasks.remove(id);
-    view.say(`Removed “${snap.title || 'item'}”`, {
+    const kept = trashTask(id);
+    view.say(`Removed “${snap.title || 'item'}” · in the Trash for 30 days`, {
       label: 'Undo',
-      run: () => tasks.restore(snap),
+      run: () => (tasks.restore(snap), trash.drop(kept)),
     });
   },
 
@@ -727,10 +728,10 @@ export const backlog = {
   clearDone() {
     const done = itemsIn(taskFile.value.tasks, 'done').map(snapshot);
     if (!done.length) return;
-    for (const t of done) tasks.remove(t.id);
-    view.say(`Cleared ${done.length} finished ${done.length === 1 ? 'item' : 'items'}`, {
+    const kept = done.map((t) => trashTask(t.id));
+    view.say(`Cleared ${done.length} finished ${done.length === 1 ? 'item' : 'items'} · in the Trash for 30 days`, {
       label: 'Undo',
-      run: () => done.forEach((t) => tasks.restore(t)),
+      run: () => (done.forEach((t) => tasks.restore(t)), kept.forEach((k) => trash.drop(k))),
     });
   },
 

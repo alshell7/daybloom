@@ -5,6 +5,7 @@
 
 import { suggest } from '../../actions';
 import { blockFor, dayBlocksOf, firstFree, placeOccurrence, removeTarget } from '../../assistant/tools';
+import { busyBetween, freeSlot } from '../../busy';
 import { backlog, itemsIn, openItems, PRIORITY_LABEL, type ListId } from '../../backlog';
 import { blockKey, blocksInRange, freeGaps, parseBlockKey } from '../../engine/blocks';
 import { CATEGORIES, CATEGORY_BY_ID } from '../../engine/categories';
@@ -170,8 +171,7 @@ function freeOn(date: ISODate, now: number, minMinutes: number, fromMin = settin
   let e = atMinutes(toMin <= fromMin ? addDays(date, 1) : date, toMin);
   const from = date === isoOf(now) ? Math.max(s, Math.ceil(now / (5 * MINUTE)) * 5 * MINUTE) : s;
   if (e <= from) return [];
-  const busy = blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), e, dark());
-  return freeGaps(busy, from, e, minMinutes * MINUTE).map((g) => ({ start: hmOf(g.startMs), end: hmOf(g.endMs), minutes: Math.round((g.endMs - g.startMs) / MINUTE) }));
+  return freeGaps(busyBetween(startOfDayMs(date), e), from, e, minMinutes * MINUTE).map((g) => ({ start: hmOf(g.startMs), end: hmOf(g.endMs), minutes: Math.round((g.endMs - g.startMs) / MINUTE) }));
 }
 
 function taskOf(key: unknown): { task: Task; date: ISODate; key: string } {
@@ -426,7 +426,7 @@ export const MCP_TOOLS: McpTool[] = [
     icon: 'plus',
     writes: true,
     description:
-      'Add a task to a day. Without `start` it goes into the first free stretch that fits (from now on today); use start "anytime" for a task with no set time. Category and icon are guessed from the title when left out. Returns the new block and anything it overlaps.',
+      'Add a task to a day. Leave out `start` to put it in the first free time that fits, within waking hours (from now on today; calendar events, prayers and other blocks are busy; a full day moves it to the next free day). Prefer that over choosing a time yourself unless the person said a time. Use start "anytime" for a task with no set time. Category and icon are guessed from the title when left out. Returns the new block, where it went, and anything it overlaps.',
     inputSchema: obj(
       {
         title: { type: 'string', description: 'Short, plain title, e.g. "Write the report".' },
@@ -453,10 +453,12 @@ export const MCP_TOOLS: McpTool[] = [
     run(a, { now, changed }) {
       const today = isoOf(now);
       const title = text(a.title, 'title', TITLE_MAX);
-      const date = dayArg(a.date, today);
+      const asked = dayArg(a.date, today);
       const minutes = a.minutes === undefined ? 30 : minutesArg(a.minutes);
       const anytime = String(a.start ?? '').toLowerCase() === 'anytime';
-      const start = anytime ? null : a.start ? timeArg(a.start) : firstFree(date, minutes, now);
+      const slot = !anytime && !a.start && !a.repeat ? freeSlot(asked, minutes, now) : null;
+      const date = slot?.date ?? asked;
+      const start = anytime ? null : a.start ? timeArg(a.start) : (slot?.start ?? firstFree(date, minutes, now));
       const guess = suggest(title);
       const category = a.category ? categoryArg(a.category) : (guess?.category ?? 'focus');
       const icon = guess && guess.category === category ? guess.icon : CATEGORY_BY_ID[category].icon;
@@ -479,7 +481,8 @@ export const MCP_TOOLS: McpTool[] = [
       const b = blockFor(key);
       changed(`added ${quote(title)}${start === null ? '' : ` at ${hm(start)}`}`, undo);
       const clash = b && !b.floating ? overlaps(date, b.startMs, b.endMs, key) : [];
-      return { created: b ? blockOut(b, true) : { key }, ...(clash.length ? { overlaps: clash } : {}) };
+      const placed = slot ? (slot.moved ? `${asked} had no free time that fits, so it went to the first free time on ${date}` : 'the first free time that fits') : undefined;
+      return { created: b ? blockOut(b, true) : { key }, ...(placed ? { placed } : {}), ...(clash.length ? { overlaps: clash } : {}) };
     },
   },
   {
@@ -641,13 +644,15 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Plan a backlog task',
     icon: 'calendar-plus',
     writes: true,
-    description: 'Give a backlog task a day and a time. Without `start` it goes into the first free stretch that fits its length.',
+    description: 'Give a backlog task a day and a time. Without `start` it goes into the first free time that fits its length (calendar events and prayers are busy; a full day moves it to the next free day).',
     inputSchema: obj({ id: { type: 'string', description: 'Backlog item id from list_backlog.' }, date: DATE, start: TIME }, ['id']),
     run(a, { now, changed }) {
       const t = tasks.get(String(a.id ?? ''));
       if (!t || t.date) throw new ToolError(`No backlog item with id "${a.id}". Use list_backlog.`);
-      const date = dayArg(a.date, isoOf(now));
-      const start = a.start ? timeArg(a.start) : firstFree(date, t.duration, now);
+      const asked = dayArg(a.date, isoOf(now));
+      const slot = a.start ? null : freeSlot(asked, t.duration, now);
+      const date = slot?.date ?? asked;
+      const start = a.start ? timeArg(a.start) : (slot?.start ?? firstFree(date, t.duration, now));
       const undo = undoable([t.id], () => tasks.update(t.id, { date, start, doneAt: null }));
       changed(`planned ${quote(t.title)} at ${hm(start)}`, undo);
       const key = blockKey(t.id, date);

@@ -8,12 +8,18 @@ interface TaskFile {
   tasks: Task[];
   /** Tombstones, so a deletion on one device survives a sync with another. */
   deleted?: { id: string; at: number }[];
+  /** The sample day was added once; it never comes back by itself after you clear it. */
+  seeded?: boolean;
+  /** You chose to keep the sample blocks (Daybloom stops offering to clear them). */
+  sampleKept?: boolean;
 }
 
 export const taskFile = persisted<TaskFile>('tasks', { version: 1, tasks: [] }, (raw) => ({
   version: 1,
   tasks: Array.isArray(raw?.tasks) ? raw.tasks.map(normalize) : [],
   deleted: Array.isArray(raw?.deleted) ? raw.deleted : [],
+  ...(raw?.seeded ? { seeded: true } : {}),
+  ...(raw?.sampleKept ? { sampleKept: true } : {}),
 }));
 
 function normalize(t: Partial<Task>): Task {
@@ -43,6 +49,8 @@ function normalize(t: Partial<Task>): Task {
     order: t.order ?? now,
     doneAt: t.doneAt ?? null,
     acks: t.acks ?? [],
+    ...(t.alarm ? { alarm: { ...(typeof t.alarm.tone === 'string' ? { tone: t.alarm.tone } : {}) } } : {}),
+    ...(t.sample ? { sample: true } : {}),
   };
 }
 
@@ -154,6 +162,7 @@ export const tasks = {
 
 /** A believable first day so the dial is alive on first launch. Every block is editable. */
 export function seedSampleDay(now = Date.now()) {
+  taskFile.value.seeded = true;
   const today = todayISO(now);
   const m = snap(minutesOfDay(now), 5);
   const at = (offset: number) => Math.max(0, Math.min(1435, m + offset));
@@ -171,8 +180,9 @@ export function seedSampleDay(now = Date.now()) {
     { title: 'Wind down', icon: 'moon', category: 'rest', start: 22 * 60, duration: 45, recurrence: { freq: 'daily', interval: 1 } },
     { title: 'Water the plants', icon: 'plant', category: 'routine', start: null, duration: 10 },
   ] as Partial<Task>[];
-  for (const b of base) tasks.create({ ...b, date: today, alerts: [5] });
-  tasks.create({ title: 'Book dentist', icon: 'stethoscope', category: 'care', date: null, start: null, duration: 15 });
-  tasks.create({ title: 'Return the parcel', icon: 'package', category: 'routine', date: null, start: null, duration: 20 });
+  for (const b of base) tasks.create({ ...b, date: today, alerts: [5], sample: true });
+  tasks.create({ title: 'Book dentist', icon: 'stethoscope', category: 'care', date: null, start: null, duration: 15, sample: true });
+  tasks.create({ title: 'Return the parcel', icon: 'package', category: 'routine', date: null, start: null, duration: 20, sample: true });
+  taskFile.value.sampleKept = false;
   return addDays(today, 0);
 }

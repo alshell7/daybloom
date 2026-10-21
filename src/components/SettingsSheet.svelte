@@ -11,16 +11,17 @@
   import { formatMinutes } from '../lib/engine/time';
   import Icon from '../lib/Icon.svelte';
   import { platform } from '../lib/platform';
-  import { FINISHES, PRESET_ORDER, PRESETS, type FinishId } from '../lib/presets';
+  import { PRESET_ORDER, PRESETS } from '../lib/presets';
   import { sounds } from '../lib/sound';
   import { settings } from '../lib/stores/settings.svelte';
-  import { seedSampleDay, taskFile } from '../lib/stores/tasks.svelte';
+  import { seedSampleDay, taskFile, tasks } from '../lib/stores/tasks.svelte';
+  import { trash, trashAll, trashFile } from '../lib/stores/trash.svelte';
+  import { clearSample, sampleTasks } from '../lib/sample';
   import { view } from '../lib/stores/view.svelte';
   import Panel from './Panel.svelte';
   import Segmented from './Segmented.svelte';
   import TimeField from './pickers/TimeField.svelte';
   import { checkForUpdates, installUpdate, loadVersion, updates } from '../lib/updater.svelte';
-  import { needle, whistle } from '../lib/assistant/engine.svelte';
   import type { VoiceLanguage } from '../lib/stores/settings.svelte';
 
   // Screen-cue colours: the task's own category colour, or one fixed calm colour.
@@ -44,11 +45,19 @@
     { value: 'nl', label: 'Nederlands' },
     { value: 'pl', label: 'Polski' },
   ];
+  import FinishPicker from './FinishPicker.svelte';
   import ThemeGallery from './ThemeGallery.svelte';
   import SyncSettings from './SyncSettings.svelte';
   import ScreenPicker from './ScreenPicker.svelte';
+  import AlarmSettings from './settings/AlarmSettings.svelte';
+  import BreathSettings from './settings/BreathSettings.svelte';
+  import ZoneSettings from './settings/ZoneSettings.svelte';
+  import AiSettings from './settings/AiSettings.svelte';
+  import TopBarSettings from './settings/TopBarSettings.svelte';
+  import WidgetWingSettings from './settings/WidgetWingSettings.svelte';
   import { ADDONS, isOn, setOn } from '../lib/addons/registry';
 
+  const sampleCount = $derived(sampleTasks().length);
   const s = $derived(settings.value);
   const open = $derived(view.sheet?.kind === 'settings');
   const rm = $derived(view.reducedMotion);
@@ -58,9 +67,9 @@
   // every one of them at once.
   const tabs = [
     { id: 'look', label: 'Look', icon: 'palette', blurb: 'Theme, dial and reading comfort', sections: ['theme', 'dial', 'comfort'] },
-    { id: 'rhythm', label: 'Rhythm', icon: 'clock', blurb: 'Your waking day, alerts and gentle nudges', sections: ['time', 'transitions', 'support'] },
-    { id: 'screen', label: 'Screen', icon: 'monitor', blurb: 'Screen cues, the desktop widget and privacy', sections: ['cues', 'widget', 'privacy'] },
-    { id: 'voice', label: 'Voice', icon: 'mic', blurb: 'The on-device assistant and speech', sections: ['assistant'] },
+    { id: 'rhythm', label: 'Rhythm', icon: 'clock', blurb: 'Your waking day, world clock, alerts, alarms and gentle nudges', sections: ['time', 'world', 'transitions', 'alarm', 'breathe', 'support'] },
+    { id: 'screen', label: 'Screen', icon: 'monitor', blurb: 'The top bar, screen cues, the desktop widget and privacy', sections: ['topbar', 'cues', 'widget', 'privacy'] },
+    { id: 'ai', label: 'AI', icon: 'brain-circuit', blurb: 'Set up AI once, then choose what each part of Daybloom uses', sections: ['ai', 'assistant'] },
     { id: 'connect', label: 'Connect', icon: 'link', blurb: 'Calendars, sync and addons', sections: ['calendars', 'sync', 'addons'] },
     { id: 'app', label: 'App', icon: 'settings', blurb: 'Updates, your data and keys', sections: ['updates', 'data'] },
   ];
@@ -69,17 +78,22 @@
     dial: 'dial face preset finish seconds bead watch',
     comfort: 'comfort motion animation calm reduce font reading atkinson lexend accessibility',
     time: 'time clock 12 24 hour waking day wake sleep',
+    topbar: 'top bar toolbar buttons icons hide show menu overflow header',
+    world: 'world clock time zones zone compare cities travel day night',
+    breathe: 'breathe breathing box breath calm relax rounds inhale exhale hold',
+    alarm: 'alarm alarms tone ring snooze wake up loud ringtone',
+    ai: 'ai brain openai anthropic gemini openrouter cloudflare custom model key provider llm voice tts speech stt transcription alef assistant smaller services consent needle whistle download on this device who uses what thinks listens speaks',
     transitions: 'transitions heads-up alerts notifications notify sound volume chime',
-    support: 'gentle support nudges check-in overrun gap ideas anchors hourly wind down',
+    support: 'gentle support nudges check-in overrun gap ideas anchors hourly wind down start starting first step stuck two minutes',
     cues: 'screen cues glow edge bar hud focus colour color',
-    widget: 'desktop widget layer top float menu bar timer launch login startup',
+    widget: 'desktop widget layer top float menu bar timer launch login startup wing long titles slide marquee typing replies',
     privacy: 'privacy screenshots screen recording hide names secret',
-    assistant: 'assistant needle model download ask ai voice whistle speech microphone mic language hotkey dictation tones',
+    assistant: 'voice input talk speech microphone mic language hotkey hold v dictation tones assistant',
     calendars: 'calendars google ics link events',
     sync: 'sync github backup devices token repository',
     addons: 'addons work time tracker billing invoices extensions',
     updates: 'updates version restart auto update',
-    data: 'your data export import sample clear reset keys shortcuts keyboard',
+    data: 'your data export import sample clear reset start over factory erase trash keys shortcuts keyboard',
   };
 
   let query = $state('');
@@ -150,9 +164,16 @@
   }
 
   function clearAll() {
+    // Each one into the Trash (and marked deleted, so sync doesn't bring them back).
     const snapshot = $state.snapshot(taskFile.value.tasks);
-    taskFile.value.tasks = [];
-    view.say('Cleared every block', { label: 'Undo', run: () => (taskFile.value.tasks = snapshot) }, 8000);
+    const kept = trashAll();
+    view.say('Cleared every block · in the Trash for 30 days', {
+      label: 'Undo',
+      run: () => {
+        for (const t of snapshot) tasks.restore(t);
+        kept.forEach((k) => trash.drop(k));
+      },
+    }, 8000);
   }
 </script>
 
@@ -201,16 +222,7 @@
             {/each}
           </div>
           <p class="label">Finish</p>
-          <div class="finishes">
-            <button class="finish auto" class:on={s.finish === 'auto'} onclick={() => (settings.value.finish = 'auto')} aria-label="Same as the planner" title="Same as the planner">
-              <span style:background={FINISHES[view.theme.finish].face}></span><span style:background={FINISHES[view.theme.finish].bezel}></span>
-            </button>
-            {#each Object.values(FINISHES) as f (f.id)}
-              <button class="finish" class:on={s.finish === f.id} style:--face={f.face} style:--bezel={f.bezel} style:--signal={f.signal} onclick={() => (settings.value.finish = f.id as FinishId)} aria-label={f.name} title={f.name}>
-                <i></i>
-              </button>
-            {/each}
-          </div>
+          <FinishPicker value={s.finish} onpick={(id) => (settings.value.finish = id)} />
           <label class="row">
             <span>Seconds bead</span>
             <input type="checkbox" class="switch" bind:checked={settings.value.showSeconds} />
@@ -252,6 +264,9 @@
           <p class="hint">Sleep ({formatMinutes(s.sleep, view.hour12)}–{formatMinutes(s.wake, view.hour12)}) is shaded on the ring.</p>
         </section>
         {/if}
+        {#if shows('world')}
+        <ZoneSettings />
+        {/if}
         {#if shows('transitions')}
         <section>
           <h3>Transitions</h3>
@@ -279,6 +294,12 @@
           {/if}
         </section>
         {/if}
+        {#if shows('alarm')}
+        <AlarmSettings />
+        {/if}
+        {#if shows('breathe')}
+        <BreathSettings />
+        {/if}
         {#if shows('support')}
         <section>
           <h3>Gentle support</h3>
@@ -289,6 +310,10 @@
           <label class="row">
             <span>Speak up when a block runs into the next</span>
             <input type="checkbox" class="switch" bind:checked={settings.value.nudges.overrun} />
+          </label>
+          <label class="row">
+            <span>Help me start: a tiny first step when a block begins</span>
+            <input type="checkbox" class="switch" bind:checked={settings.value.nudges.firstStep} />
           </label>
           <label class="row">
             <span>Suggest backlog items that fit free time</span>
@@ -309,6 +334,9 @@
         </section>
         {/if}
         {#if query && tabMatches('screen')}<p class="grp">Screen</p>{/if}
+        {#if shows('topbar')}
+        <TopBarSettings />
+        {/if}
         {#if shows('cues')}
         <section>
           <h3>Screen cues</h3>
@@ -431,17 +459,8 @@
               {/each}
             </div>
           </div>
-          <div class="row">
-            <span>Finish</span>
-            <div class="finishes small">
-              <button class="finish auto" class:on={s.widget.finish === 'auto'} onclick={() => (settings.value.widget.finish = 'auto')} aria-label="Match the theme" title="Match the theme">
-                <span style:background={FINISHES[view.theme.finish].face}></span><span style:background={FINISHES[view.theme.finish].bezel}></span>
-              </button>
-              {#each Object.values(FINISHES) as f (f.id)}
-                <button class="finish" class:on={s.widget.finish === f.id} style:--face={f.face} style:--bezel={f.bezel} style:--signal={f.signal} onclick={() => (settings.value.widget.finish = f.id as FinishId)} aria-label={f.name}><i></i></button>
-              {/each}
-            </div>
-          </div>
+          <p class="label">Finish</p>
+          <FinishPicker value={s.widget.finish} onpick={(id) => (settings.value.widget.finish = id)} auto="Same as the planner" matches={view.finish} compact />
           {#if platform.os === 'mac'}
             <label class="row">
               <span>Countdown in the menu bar</span>
@@ -452,6 +471,7 @@
             <span>Open at login</span>
             <input type="checkbox" class="switch" bind:checked={settings.value.launchAtLogin} onchange={(e) => platform.setLaunchAtLogin(e.currentTarget.checked)} />
           </label>
+          <WidgetWingSettings />
         </section>
         {/if}
         {#if shows('privacy')}
@@ -468,47 +488,13 @@
           <p class="hint">{platform.os === 'windows' ? 'Windows leaves protected windows out of captures (they show as empty).' : 'macOS leaves protected windows out of screenshots. Some screen recorders can still capture them, so also hide block names when you share your screen.'} You can also switch it from the {platform.os === 'mac' ? 'menu bar' : 'tray'} icon.</p>
         </section>
         {/if}
-        {#if query && tabMatches('voice')}<p class="grp">Voice</p>{/if}
+        {#if query && tabMatches('ai')}<p class="grp">AI</p>{/if}
+        {#if shows('ai')}
+        <AiSettings />
+        {/if}
         {#if shows('assistant')}
         <section>
-          <h3>Assistant</h3>
-          <div class="row">
-            <span>
-              {#if needle.status === 'ready'}On this device{needle.loaded ? ` · ${Math.round(needle.memory / 1048576)} MB in use` : ' · sleeping'}
-              {:else if needle.status === 'downloading'}Downloading… {Math.round(needle.progress * 100)}%
-              {:else if needle.status === 'loading'}Waking up…
-              {:else if needle.status === 'error'}Couldn't set up: {needle.error}
-              {:else}Not downloaded yet{/if}
-            </span>
-            {#if needle.status === 'ready'}
-              <button class="btn btn-quiet" onclick={() => needle.forget()}>Remove</button>
-            {:else if needle.status !== 'downloading' && needle.status !== 'loading'}
-              <button class="btn btn-soft" onclick={() => needle.ensureReady().catch(() => {})}>{needle.status === 'error' ? 'Try again' : 'Download (35 MB)'}</button>
-            {/if}
-          </div>
-          {#if needle.status === 'downloading'}
-            <span class="dl" aria-hidden="true"><i style:transform={`scaleX(${needle.progress})`}></i></span>
-          {/if}
-          <p class="hint">“Ask Daybloom” (⌘K) runs Needle by Cactus Compute (Apache-2.0) entirely on your computer — downloaded once, SHA-256 verified, then offline. Without it the assistant still works in basic mode.</p>
-
-          <h4>Voice</h4>
-          <div class="row">
-            <span>
-              {#if whistle.status === 'ready'}Whistle is on this device{whistle.loaded ? ` · ${Math.round(whistle.memory / 1048576)} MB in use` : ''}
-              {:else if whistle.status === 'downloading'}Downloading Whistle… {Math.round(whistle.progress * 100)}%
-              {:else if whistle.status === 'loading'}Waking up…
-              {:else if whistle.status === 'error'}Couldn't set up: {whistle.error}
-              {:else}Speech recognition is not downloaded yet{/if}
-            </span>
-            {#if whistle.status === 'ready'}
-              <button class="btn btn-quiet" onclick={() => whistle.forget()}>Remove</button>
-            {:else if whistle.status !== 'downloading' && whistle.status !== 'loading'}
-              <button class="btn btn-soft" onclick={() => whistle.ensureReady().catch(() => {})}>{whistle.status === 'error' ? 'Try again' : 'Download (17 MB)'}</button>
-            {/if}
-          </div>
-          {#if whistle.status === 'downloading'}
-            <span class="dl" aria-hidden="true"><i style:transform={`scaleX(${whistle.progress})`}></i></span>
-          {/if}
+          <h3>Voice input</h3>
           <div class="row">
             <span>Language</span>
             <select class="field compact" bind:value={settings.value.voice.language} aria-label="Voice language">
@@ -523,7 +509,7 @@
             <span>Soft tones when listening</span>
             <input type="checkbox" class="switch" bind:checked={settings.value.voice.chimes} />
           </label>
-          <p class="hint">Hold V and talk, or tap V and speak — it stops when you pause. Whistle by Cactus Compute (Apache-2.0) turns speech into text on this computer; the microphone is on only while you talk. Commands are understood in English.</p>
+          <p class="hint">Hold V and talk, or tap V and speak — it stops when you pause. The microphone is on only while you talk. Choose what turns your voice into words under Who uses what. Commands are understood in English.</p>
         </section>
         {/if}
         {#if query && tabMatches('connect')}<p class="grp">Connect</p>{/if}
@@ -604,10 +590,21 @@
           <div class="cal-actions">
             <button class="btn btn-soft" onclick={exportData}>Export</button>
             <label class="btn btn-soft">Import<input type="file" accept="application/json" onchange={importData} hidden /></label>
-            <button class="btn btn-quiet" onclick={() => seedSampleDay()}>Add sample day</button>
-            <button class="btn btn-danger" onclick={clearAll}>Clear all</button>
+            {#if sampleCount}
+              <button class="btn btn-quiet" onclick={() => clearSample()} title="Remove the sample blocks (renamed ones stay)">Clear sample day ({sampleCount})</button>
+            {:else}
+              <button class="btn btn-quiet" onclick={() => seedSampleDay()}>Add sample day</button>
+            {/if}
+            <button class="btn btn-danger" onclick={clearAll}>Clear all blocks</button>
+            <button class="btn btn-quiet" onclick={() => (view.sheet = { kind: 'reset' })}>Reset Daybloom…</button>
           </div>
-          <p class="hint keys">Keys: <kbd>N</kbd> new · <kbd>←</kbd><kbd>→</kbd> days · <kbd>T</kbd> today · <kbd>1</kbd>–<kbd>4</kbd> dials · <kbd>F</kbd> focus · <kbd>W</kbd> widget · <kbd>Space</kbd> done</p>
+          <button class="trash-link" onclick={() => (view.sheet = { kind: 'trash' })}>
+            <Icon name="trash-ui" size={14} />
+            <span>Trash</span>
+            <small>{trashFile.value.items.length ? `${trashFile.value.items.length} ${trashFile.value.items.length === 1 ? 'item' : 'items'} · kept 30 days` : 'Empty · deleted blocks wait here for 30 days'}</small>
+            <Icon name="chevron-right" size={14} />
+          </button>
+          <p class="hint keys">Keys: <kbd>N</kbd> new · <kbd>←</kbd><kbd>→</kbd> days · <kbd>T</kbd> today · <kbd>M</kbd> month · <kbd>1</kbd>–<kbd>4</kbd> dials · <kbd>F</kbd> focus · <kbd>W</kbd> widget · <kbd>Space</kbd> done</p>
         </section>
         {/if}
         {#if query && !matches.length}<p class="empty">Nothing matches “{query}”. Try “sound”, “widget” or “calendar”.</p>{/if}
@@ -618,6 +615,31 @@
 {/if}
 
 <style>
+  .trash-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: var(--s-3);
+    padding: 10px 12px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--line);
+    background: var(--sunken);
+    color: var(--ink);
+    font-size: var(--t-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--dur-2) var(--ease-out);
+  }
+  .trash-link:hover {
+    border-color: var(--line-strong);
+  }
+  .trash-link small {
+    flex: 1;
+    min-width: 0;
+    color: var(--ink-3);
+    font-size: var(--t-xs);
+  }
   .find {
     position: relative;
     display: flex;
@@ -773,13 +795,6 @@
   .hint.top {
     margin: -6px 0 var(--s-3);
   }
-  h4 {
-    margin: var(--s-5) 0 var(--s-2);
-    font-family: var(--font-ui);
-    font-size: var(--t-sm);
-    font-weight: 500;
-    color: var(--ink-2);
-  }
   .field.compact {
     width: auto;
     height: 32px;
@@ -820,59 +835,6 @@
     font-size: var(--t-xs);
     color: var(--ink-3);
   }
-  .finishes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-2);
-  }
-  .finish {
-    position: relative;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: var(--bezel);
-    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
-    display: grid;
-    place-items: center;
-    transition: transform var(--dur-2) var(--ease-settle);
-  }
-  .finishes.small .finish {
-    width: 26px;
-    height: 26px;
-  }
-  .finish i {
-    width: 70%;
-    height: 70%;
-    border-radius: 50%;
-    background: var(--face);
-    position: relative;
-  }
-  .finish i::after {
-    content: '';
-    position: absolute;
-    left: calc(50% - 1px);
-    top: 8%;
-    width: 2px;
-    height: 42%;
-    border-radius: 2px;
-    background: var(--signal);
-  }
-  .finish.auto {
-    overflow: hidden;
-    display: flex;
-    background: none;
-  }
-  .finish.auto span {
-    flex: 1;
-    height: 100%;
-  }
-  .finish:hover {
-    transform: scale(1.08);
-  }
-  .finish.on {
-    outline: 2px solid var(--ink);
-    outline-offset: 2px;
-  }
   .row {
     display: flex;
     align-items: center;
@@ -911,22 +873,6 @@
     font-size: var(--t-xs);
     color: var(--ink-3);
     line-height: 1.5;
-  }
-  .dl {
-    display: block;
-    position: relative;
-    height: 4px;
-    margin-top: 4px;
-    border-radius: 2px;
-    background: var(--line);
-    overflow: hidden;
-  }
-  .dl i {
-    position: absolute;
-    inset: 0;
-    background: var(--focus-ring);
-    transform-origin: left;
-    transition: transform 0.2s linear;
   }
   input[type='range'] {
     accent-color: var(--ink);

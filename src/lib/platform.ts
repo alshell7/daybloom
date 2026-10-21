@@ -96,6 +96,29 @@ export const platform = {
     }
   },
 
+  /** Delete a saved state file (a reset); other windows reload it as empty. */
+  async remove(key: string): Promise<void> {
+    if (isTauri) {
+      await invoke('state_delete', { key });
+      return;
+    }
+    try {
+      localStorage.removeItem(`daybloom:${key}`);
+    } catch {
+      /* nothing saved */
+    }
+  },
+
+  /** Every saved state key (for a full reset). */
+  async keys(): Promise<string[]> {
+    if (isTauri) return invoke<string[]>('state_keys');
+    try {
+      return Object.keys(localStorage).filter((k) => k.startsWith('daybloom:')).map((k) => k.slice('daybloom:'.length));
+    } catch {
+      return [];
+    }
+  },
+
   async save(key: string, value: string): Promise<void> {
     if (isTauri) {
       await invoke('state_save', { key, value });

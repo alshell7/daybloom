@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { adjust, duplicateBlock, moveToNextGap, moveToTomorrow, removeBlock, toBacklog, toggleDone } from '../lib/actions';
+  import { adjust, duplicateBlock, moveToNextGap, moveToTomorrow, removeBlock, skipEvent, toBacklog, toggleDone } from '../lib/actions';
+  import { slotOfEvent, waqt } from '../lib/addons/waqt/waqt.svelte';
+  import PrayerChooser from './addons/waqt/PrayerChooser.svelte';
   import { categoryColor, inkOn, mix, onColor } from '../lib/engine/categories';
   import { formatDuration, formatTime, MINUTE } from '../lib/engine/time';
   import type { Block } from '../lib/engine/types';
@@ -13,6 +15,7 @@
   import { crumbs } from '../lib/addons/crumbs/crumbs.svelte';
   import { meetingOf } from '../lib/calendar/meeting';
   import { platform } from '../lib/platform';
+  import { alarms } from '../lib/alarms.svelte';
 
   let { block }: { block: Block } = $props();
 
@@ -148,8 +151,39 @@
 
   function check(e: MouseEvent) {
     e.stopPropagation();
+    if (held) {
+      held = false;
+      return;
+    }
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     toggleDone(block.key, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  }
+
+  // Calendar events and salah tick right here too (events stay read-only; Daybloom keeps the tick).
+  const tickable = $derived(block.kind === 'task' || (!!block.event && !block.skipped));
+  // A salah: one tap marks it; a long press or right-click asks how it went (on time, jamaat, late).
+  const salah = $derived(block.event ? slotOfEvent(block.event) : null);
+  const how = $derived(salah ? waqt.howOf(salah.date, salah.slot.id) : null);
+  const HOW_WORD = { ontime: 'On time', jamaat: 'In jamaat', late: 'Made up' } as const;
+  let chooser = $state<HTMLElement | null>(null);
+  let held = false;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  function checkDown(e: PointerEvent) {
+    if (!salah || e.button !== 0) return;
+    const el = e.currentTarget as HTMLElement;
+    holdTimer = setTimeout(() => {
+      held = true;
+      chooser = el;
+    }, 480);
+  }
+  function checkUp() {
+    if (holdTimer) clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  function checkMenu(e: MouseEvent) {
+    if (!salah) return;
+    e.preventDefault();
+    chooser = e.currentTarget as HTMLElement;
   }
   // Breadcrumbs addon: the last note left on this task.
   const crumb = $derived(isOn('crumbs') && block.taskId ? crumbs.latest(block.taskId) : null);
@@ -168,6 +202,7 @@
   class:pouring
   style:--from={pourFrom}
   class:event={block.kind === 'event'}
+  class:skipped={block.skipped}
   class:prayer={block.event?.provider === 'salah'}
   style:--c={color}
   style:--c-soft={soft}
@@ -227,6 +262,7 @@
       <span class="dot">·</span>
       {live && !drag ? `${formatDuration(block.endMs - clock.now)} left` : formatDuration(len)}
       {#if block.recurring}<span class="glyph" title="Repeats"><Icon name="repeat" size={12} /></span>{/if}
+      {#if task?.alarm}<span class="glyph alarm" class:ringing={alarms.ringing?.key === block.key} title="Rings as an alarm"><Icon name={alarms.ringing?.key === block.key ? 'bell-ring' : 'alarm'} size={12} stroke={2.1} /></span>{/if}
       {#if crumb}<span class="glyph crumb" title={`Where you left off: ${crumb.text}`}><Icon name="pin" size={12} /></span>{/if}
     </span>
     {#if missed && !acked}
@@ -234,7 +270,7 @@
     {/if}
     {#if block.event}
       <span class="src" title={block.event.provider === 'salah' ? 'Salah · from Waqt' : `From your calendar${block.event.calendarName ? `: ${block.event.calendarName}` : ''} · read-only`}>
-        <Icon name={block.event.provider === 'salah' ? 'moon' : 'calendar'} size={11} stroke={2.2} />
+        <Icon name={block.event.provider === 'salah' ? 'mihrab' : 'calendar'} size={11} stroke={2.2} />
         <span>{block.event.calendarName ?? accountLabel(block.event.accountId)}</span>
         {#if block.event.alsoIn?.length}<span class="also">+{block.event.alsoIn.length}</span>{/if}
       </span>
@@ -277,12 +313,35 @@
         <Icon name="video" size={14} stroke={2.2} />{#if joinSoon}<span>Join</span>{/if}
       </button>
     {/if}
-    {#if block.kind === 'task'}
-      <button class="check" onclick={check} aria-pressed={block.done} aria-label={block.done ? `Mark ${block.title} not done` : `Mark ${block.title} done`}>
+    {#if block.event && block.event.provider !== 'salah' && !drag}
+      <!-- Calendar events: skip one (its time becomes free), or bring it back. -->
+      <div class="tools ev">
+        <button class="icon-btn" onclick={(e) => (e.stopPropagation(), skipEvent(block.key))} title={block.skipped ? 'Bring it back' : "Skip it — its time is free for plans"} aria-label={block.skipped ? `Bring back ${block.title}` : `Skip ${block.title}`}>
+          <Icon name={block.skipped ? 'undo' : 'skip'} size={15} />
+        </button>
+      </div>
+    {/if}
+    {#if tickable}
+      <button
+        class="check"
+        class:salah={!!salah}
+        data-how={how}
+        onclick={check}
+        onpointerdown={checkDown}
+        onpointerup={checkUp}
+        onpointerleave={checkUp}
+        oncontextmenu={checkMenu}
+        aria-pressed={block.done}
+        aria-label={salah ? (how ? `${block.title}: ${HOW_WORD[how].toLowerCase()}. Press to unmark, hold to change` : `Mark ${block.title} prayed. Hold to choose how`) : block.done ? `Mark ${block.title} not done` : `Mark ${block.title} done`}
+        title={salah ? (how ? `${HOW_WORD[how]} · hold or right-click to change` : 'Prayed · hold or right-click for jamaat or late') : undefined}
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6.5 12.5l3.6 3.6 7.4-7.6" />
         </svg>
       </button>
+    {/if}
+    {#if chooser && salah}
+      <PrayerChooser anchor={chooser} date={salah.date} slot={salah.slot} onclose={() => (chooser = null)} />
     {/if}
   </div>
 </div>
@@ -461,17 +520,20 @@
       transform: scale(1);
     }
   }
-  /* From a calendar: a striped glass with an outline, never a solid fill like your own blocks,
-     so the two read apart at a glance (stripes mean "from a calendar, read-only"). */
+  /* From a calendar: clear glass with one crisp edge in its colour, never a solid fill like
+     your own blocks, so the two read apart at a glance. It is see-through (the row shows
+     behind it), and as its time passes it fills only with a light wash, never solid colour. */
   .event .capsule {
-    background:
-      repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 42%, transparent) 0 3px, transparent 3px 8px),
-      var(--c-soft);
+    background: color-mix(in srgb, var(--c) 8%, var(--row-bg));
     color: var(--ink-event);
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 72%, transparent);
+    box-shadow: inset 0 0 0 1.5px var(--c);
   }
   .event .liquid {
-    background: color-mix(in srgb, var(--c) 38%, transparent);
+    --wash: color-mix(in srgb, var(--c) 16%, transparent);
+    background: var(--wash);
+  }
+  .event .wave {
+    background-image: radial-gradient(circle at 10px 0, transparent 8px, var(--wash) 8.5px);
   }
   .event.full .cap-icon {
     color: var(--ink-event);
@@ -479,30 +541,48 @@
   .event .title .t {
     font-weight: 400;
   }
-  /* Salah (Waqt addon): a calm glass with a faint eight-point star pattern, not calendar stripes. */
+  /* Salah (Waqt addon): soft light, not glass. A glow brightest near the top (where its time
+     begins) that feathers out, with no edge at all. */
   .prayer .capsule {
-    background: var(--c-soft);
-    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent);
+    background: radial-gradient(
+      ellipse 95% 70% at 50% 30%,
+      color-mix(in srgb, var(--c) 46%, transparent),
+      color-mix(in srgb, var(--c) 22%, transparent) 62%,
+      color-mix(in srgb, var(--c) 10%, transparent)
+    ),
+    var(--row-bg);
+    box-shadow: none;
   }
-  .prayer .capsule::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--c);
-    opacity: 0.3;
-    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M4 4h6v6H4zM7 2.8 11.2 7 7 11.2 2.8 7z'/%3E%3C/svg%3E") 0 0 / 14px 14px repeat;
-    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M4 4h6v6H4zM7 2.8 11.2 7 7 11.2 2.8 7z'/%3E%3C/svg%3E") 0 0 / 14px 14px repeat;
-    pointer-events: none;
+  .prayer .liquid {
+    --wash: color-mix(in srgb, var(--c) 14%, transparent);
+  }
+  .prayer .cap-icon,
+  .prayer.full .cap-icon {
+    color: var(--ink-washed);
   }
   .prayer .title .t {
     font-weight: 500;
+  }
+  /* Done, from a calendar or Waqt: the same lume ring as your own finished blocks. */
+  .done.event .capsule {
+    box-shadow:
+      inset 0 0 0 2px color-mix(in srgb, var(--lume) 75%, transparent),
+      0 0 0 3px color-mix(in srgb, var(--lume) 16%, transparent);
   }
   /* Its time passed without a tick: full, but in a washed colour, with the dashed edge the
      dial uses for the same thing. */
   .missed .capsule {
     box-shadow: none;
-    outline: 2px dashed color-mix(in srgb, var(--c) 50%, transparent);
-    outline-offset: -2px;
+  }
+  /* Drawn over the liquid (an outline would sit under it). */
+  .missed .capsule::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    border: 1.5px dashed color-mix(in srgb, var(--c) 70%, transparent);
+    pointer-events: none;
   }
   .missed .liquid {
     background: color-mix(in srgb, var(--c) 34%, var(--c-soft));
@@ -595,6 +675,36 @@
   }
   .glyph.crumb {
     color: #b07e06;
+  }
+  .glyph.alarm {
+    color: var(--ink-2);
+  }
+  /* Its alarm is ringing: the little bell rocks (only while it rings). */
+  .glyph.alarm.ringing {
+    color: var(--ink);
+    animation: alarm-rock 1.9s var(--ease-out) infinite;
+  }
+  @keyframes alarm-rock {
+    0%,
+    48%,
+    100% {
+      transform: rotate(0);
+    }
+    8% {
+      transform: rotate(-16deg);
+    }
+    18% {
+      transform: rotate(13deg);
+    }
+    28% {
+      transform: rotate(-7deg);
+    }
+    38% {
+      transform: rotate(3deg);
+    }
+  }
+  :global([data-motion='calm']) .glyph.alarm.ringing {
+    animation: none;
   }
   :global([data-theme='dark']) .glyph.crumb {
     color: #e2b44a;
@@ -871,6 +981,35 @@
   }
   .done .check svg {
     stroke-dashoffset: 0;
+  }
+  /* A salah: a softer, rounder tick; jamaat shows a ring of company, made up a dashed edge. */
+  .check.salah {
+    border-style: solid;
+  }
+  .done .check.salah[data-how='jamaat'] {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 26%, transparent);
+  }
+  .done .check.salah[data-how='late'] {
+    border-style: dashed;
+  }
+  .done .check.salah[data-how='late']::before {
+    opacity: 0.72;
+  }
+  /* An event you're skipping: only a faint outline of where it was, its words crossed through. */
+  .skipped .capsule {
+    background: var(--row-bg);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c) 40%, transparent);
+  }
+  .skipped .liquid {
+    visibility: hidden;
+  }
+  .skipped .cap-icon {
+    opacity: 0.45;
+  }
+  .skipped :global(.title) {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--ink-3) 70%, transparent);
+    color: var(--ink-3);
   }
   @media (prefers-reduced-motion: reduce) {
     .wave {

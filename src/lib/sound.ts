@@ -139,14 +139,7 @@ export const sounds = {
     bell(1174.66, 0, 0.35, 0.06);
     bell(880, 0.07, 0.5, 0.06);
   },
-  /** Breathing guide: a soft, low swell as the in-breath begins… */
-  breatheIn() {
-    bell(392, 0, 3.2, 0.05);
-  },
-  /** …and a lower one as the long out-breath begins. */
-  breatheOut() {
-    bell(293.66, 0, 4.2, 0.045);
-  },
+  // The breathing guide's breaths and chimes live in breathSound.ts (rendered, through audioOut()).
   /** The adhan's time: three soft, low bells rising, unhurried. */
   adhan() {
     bell(293.66, 0, 3.2, 0.07);

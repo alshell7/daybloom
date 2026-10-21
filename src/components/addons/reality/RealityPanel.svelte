@@ -13,8 +13,70 @@
   import { view } from '../../../lib/stores/view.svelte';
   import Panel from '../../Panel.svelte';
   import Segmented from '../../Segmented.svelte';
+  import { untrack } from 'svelte';
+  import { ai } from '../../../lib/ai/hub.svelte';
+  import { aiTips, type PlanLine, type TipAction, type Tips } from '../../../lib/addons/reality/aiReality';
+  import { estimate, kindKey } from '../../../lib/addons/reality/reality';
+  import { moveToTomorrow } from '../../../lib/actions';
+  import { busyBetween, wakingSpan } from '../../../lib/busy';
+  import { freeGaps } from '../../../lib/engine/blocks';
+  import { formatTime } from '../../../lib/engine/time';
+  import { clock } from '../../../lib/stores/clock.svelte';
+  import { taskFile, tasks } from '../../../lib/stores/tasks.svelte';
 
   const open = $derived(view.sheet?.kind === 'reality');
+
+  // ── Practical tips (with an AI service for Reality check) ──
+  const aiOn = $derived(ai.ready('reality', 'think'));
+  let tips = $state<Tips | null>(null);
+  let asking = $state(false);
+  let failed = $state(false);
+  let applied = $state<Record<number, boolean>>({});
+  /** Today's blocks still ahead, with what blocks like them usually take. */
+  function todayPlan(): PlanLine[] {
+    const now = clock.now;
+    return view.todayBlocks
+      .filter((b) => b.kind === 'task' && !b.floating && !b.done && b.endMs > now && b.date === view.today)
+      .slice(0, 14)
+      .map((b) => {
+        const planned = Math.round((b.endMs - b.startMs) / MINUTE);
+        const est = estimate(realityFile.value.samples, { title: b.title, category: b.category });
+        const usual = est ? Math.round(est.typical ?? planned * est.ratio) : undefined;
+        return { key: b.key, title: b.title, start: formatTime(b.startMs, false), planned, ...(usual && Math.abs(usual - planned) >= 5 ? { usual } : {}) };
+      });
+  }
+  async function askTips() {
+    if (asking) return;
+    asking = true;
+    failed = false;
+    applied = {};
+    try {
+      const now = clock.now;
+      const span = wakingSpan(view.today);
+      const from = Math.max(now, span.fromMs);
+      const freeMin = from < span.toMs ? Math.round(freeGaps(busyBetween(from, span.toMs), from, span.toMs, 5 * MINUTE).reduce((a, g) => a + g.endMs - g.startMs, 0) / MINUTE) : 0;
+      const recurring = [...new Set(taskFile.value.tasks.filter((t) => t.recurrence && t.title.trim()).map((t) => t.title.trim()))];
+      tips = await aiTips({ samples: realityFile.value.samples, today: todayPlan(), freeMin, recurring });
+      failed = !tips;
+    } finally {
+      asking = false;
+    }
+  }
+  $effect(() => {
+    if (open && aiOn && !tips && !asking) untrack(() => void askTips());
+  });
+  function apply(i: number, a: TipAction) {
+    if (a.type === 'tomorrow') {
+      moveToTomorrow(a.key);
+    } else {
+      const k = kindKey(a.task);
+      const hit = taskFile.value.tasks.filter((t) => t.recurrence && kindKey(t.title) === k);
+      const before = hit.map((t) => [t.id, t.duration] as const);
+      for (const t of hit) tasks.update(t.id, { duration: a.minutes });
+      view.say(`“${a.task}” is ${formatDuration(a.minutes * MINUTE)} from now on`, { label: 'Undo', run: () => before.forEach(([id, d]) => tasks.update(id, { duration: d })) }, 7000);
+    }
+    applied = { ...applied, [i]: true };
+  }
   const rm = $derived(view.reducedMotion);
   const sum = $derived(summarize(realityFile.value.samples));
   let by = $state<'title' | 'category'>('title');
@@ -33,6 +95,40 @@
 {#if open}
   <Panel title="Reality check" onclose={() => (view.sheet = null)} accent="#8670E6">
     <div class="rc">
+      {#if aiOn}
+        <section class="tips" in:fly={{ y: 6, duration: rm ? 0 : 280, easing: cubicOut }}>
+          <div class="sh">
+            <h3><Icon name="sparkles" size={15} /> Practical tips</h3>
+            <button class="link" onclick={() => void askTips()} disabled={asking} title="Ask again"><Icon name="refresh" size={13} /> {asking ? 'Thinking…' : 'Refresh'}</button>
+          </div>
+          {#if asking && !tips}
+            <div class="ghosts" aria-label="Looking at your record and today"><i></i><i></i><i></i></div>
+          {:else if tips}
+            <p class="tipline">{tips.headline}</p>
+            <ul class="tiplist">
+              {#each tips.tips as t, i (t.title)}
+                <li in:fly={{ y: 6, duration: rm ? 0 : 260, delay: rm ? 0 : i * 60, easing: cubicOut }}>
+                  <p class="tt">{t.title}</p>
+                  <p class="td">{t.detail}</p>
+                  {#if t.action}
+                    {#if applied[i]}
+                      <span class="done"><Icon name="check" size={13} stroke={2.4} /> Done</span>
+                    {:else}
+                      <button class="btn btn-soft sm" onclick={() => apply(i, t.action!)}>
+                        {t.action.type === 'length' ? `Make it ${formatDuration(t.action.minutes * MINUTE)}` : 'Move to tomorrow'}
+                      </button>
+                    {/if}
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {:else if failed}
+            <p class="hint">No tips this time — the AI service didn't answer. Try Refresh in a moment.</p>
+          {/if}
+        </section>
+      {:else}
+        <p class="hint ai-off"><Icon name="sparkles" size={13} /> For practical tips and realistic lengths from your own record, choose an AI service for Reality check in <button class="link" onclick={() => (view.sheet = { kind: 'settings', section: 'ai' })}>Settings › AI</button>.</p>
+      {/if}
       {#if sum.n === 0}
         <div class="empty">
           <div class="pair" aria-hidden="true">
@@ -95,6 +191,97 @@
 {/if}
 
 <style>
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: var(--t-xs);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  .link:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .tips h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tips h3 :global(svg) {
+    color: var(--lilac);
+  }
+  .tipline {
+    margin: var(--s-2) 0 var(--s-3);
+    font-size: var(--t-sm);
+    color: var(--ink-2);
+  }
+  .tiplist {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .tiplist li {
+    display: grid;
+    gap: 4px;
+    justify-items: start;
+    padding: 12px 14px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--lilac) 7%, var(--raised));
+    border: 1px solid color-mix(in srgb, var(--lilac) 22%, var(--line));
+  }
+  .tt {
+    margin: 0;
+    font-size: var(--t-sm);
+    font-weight: 600;
+  }
+  .td {
+    margin: 0;
+    font-size: var(--t-sm);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  .tiplist .sm {
+    height: 28px;
+    margin-top: 4px;
+    padding: 0 12px;
+    font-size: var(--t-xs);
+  }
+  .tiplist .done {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    font-size: var(--t-xs);
+    color: var(--ink-2);
+  }
+  .ghosts {
+    display: grid;
+    gap: 8px;
+    margin-top: var(--s-3);
+  }
+  .ghosts i {
+    display: block;
+    height: 58px;
+    border-radius: var(--r-md);
+    background: var(--sunken);
+    opacity: 0.7;
+  }
+  .ai-off {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0 0 var(--s-3);
+  }
   .rc {
     --lilac: #8670e6;
   }

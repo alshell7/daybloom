@@ -74,9 +74,14 @@ export const SHARED_SETTINGS = [
   'focus',
   'privacy',
   'addons',
+  'worldClock',
+  'alarm',
+  'topBar',
+  'breathe',
   'widget.own',
   'widget.preset',
   'widget.finish',
+  'widget.wing',
 ] as const satisfies readonly SettingsPath[];
 
 /** Settings that belong to one computer (documented so every key is a conscious choice). */

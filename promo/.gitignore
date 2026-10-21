@@ -1,0 +1,10 @@
+# Heavy or generated: rebuild with `npm run audio` and `npm run render`.
+node_modules/
+out/
+.framefields/
+.cache/
+*.log
+assets/audio/*.wav
+assets/audio/*.mp3
+assets/audio/*.ogg
+assets/audio/*.flac

@@ -60,7 +60,9 @@ export function eventBlock(ev: CalendarEvent, dark = false): Block {
     startMs: ev.startMs,
     endMs: ev.endMs,
     floating: ev.allDay,
-    done: false,
+    done: !!ev.done,
+    ...(ev.done ? { doneAt: ev.done } : {}),
+    ...(ev.skipped ? { skipped: true } : {}),
     recurring: !!ev.series && ev.series !== ev.id.slice(ev.calendarId.length + 1),
     readOnly: true,
   };
@@ -136,11 +138,11 @@ export function nowState(blocks: Block[], now: number): NowState {
   const timed = blocks.filter((b) => !b.floating);
   // The unfinished block under the hand; if several overlap, the one ending soonest.
   // A block finished early stops being "now" — the time left over is free.
-  const live = timed.filter((b) => b.startMs <= now && b.endMs > now && !b.done);
+  const live = timed.filter((b) => b.startMs <= now && b.endMs > now && !b.done && !b.skipped);
   // Your own blocks lead; calendar events lead only when nothing of yours is running.
   const current = live.sort((a, b) => (a.kind === 'task' ? 0 : 1) - (b.kind === 'task' ? 0 : 1) || a.endMs - b.endMs)[0] ?? null;
   const alongside = live.filter((b) => b.key !== current?.key);
-  const next = timed.filter((b) => b.startMs > now && b.key !== current?.key)[0] ?? null;
+  const next = timed.filter((b) => b.startMs > now && b.key !== current?.key && !b.skipped)[0] ?? null;
   if (current) {
     const span = current.endMs - current.startMs;
     return {

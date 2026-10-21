@@ -1,0 +1,21 @@
+{
+  "tag": "v0.1.13",
+  "version": "0.1.13",
+  "publishedAt": "2026-10-20T18:57:36Z",
+  "page": "https://github.com/alshell7/daybloom/releases/tag/v0.1.13",
+  "mac": {
+    "name": "Daybloom_0.1.13_universal.dmg",
+    "size": 9275709,
+    "url": "https://github.com/alshell7/daybloom/releases/latest/download/Daybloom_0.1.13_universal.dmg"
+  },
+  "win": {
+    "name": "Daybloom_0.1.13_x64-setup.exe",
+    "size": 3571902,
+    "url": "https://github.com/alshell7/daybloom/releases/latest/download/Daybloom_0.1.13_x64-setup.exe"
+  },
+  "msi": {
+    "name": "Daybloom_0.1.13_x64_en-US.msi",
+    "size": 4636672,
+    "url": "https://github.com/alshell7/daybloom/releases/latest/download/Daybloom_0.1.13_x64_en-US.msi"
+  }
+}

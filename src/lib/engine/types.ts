@@ -84,6 +84,16 @@ export interface Task {
   doneAt?: number | null;
   /** Occurrence dates the user acknowledged as "not done, and that's ok" — nudges stop. */
   acks?: ISODate[];
+  /** Ring like an alarm when the block starts (null/absent = a normal block). */
+  alarm?: TaskAlarm | null;
+  /** Part of the sample day a first launch adds (cleared with one tap). */
+  sample?: boolean;
+}
+
+/** A block that rings like an alarm. The tone and snooze come from Settings unless set here. */
+export interface TaskAlarm {
+  /** A tone id from lib/alarm.ts; absent = the tone chosen in Settings. */
+  tone?: string;
 }
 
 export type BacklogList = 'inbox' | 'next' | 'someday';
@@ -132,6 +142,10 @@ export interface CalendarEvent {
   category?: CategoryId;
   /** Its own icon (addon events, e.g. a prayer); calendar events show the calendar glyph. */
   icon?: string;
+  /** You marked it done (ms): set from Daybloom's own record (events stay read-only), or a marked salah. */
+  done?: number;
+  /** You're skipping it: shown softly, and its time is free for plans. */
+  skipped?: boolean;
 }
 
 /**
@@ -157,6 +171,8 @@ export interface Block {
   done: boolean;
   /** When it was ticked, if known. */
   doneAt?: number;
+  /** A calendar event you're skipping (its time is free). */
+  skipped?: boolean;
   recurring: boolean;
   readOnly: boolean;
 }

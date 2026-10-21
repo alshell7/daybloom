@@ -3,7 +3,8 @@
   "private": true,
   "version": "0.1.13",
   "type": "module",
-  "description": "Daybloom — a visual, sectograph-style day planner and timer for brains that see time differently.",
+  "description": "Daybloom \u2014 a visual, sectograph-style day planner and timer for brains that see time differently.",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -16,6 +17,8 @@
   "dependencies": {
     "@fontsource-variable/lexend": "^5.3.0",
     "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@openuidev/lang-core": "0.4.1",
+    "@openuidev/svelte-lang": "0.4.2",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-autostart": "^2.5.0",
     "@tauri-apps/plugin-http": "^2.8.3",
@@ -25,7 +28,8 @@
     "@tauri-apps/plugin-updater": "^2.14.0",
     "@tauri-apps/plugin-window-state": "^2.5.0",
     "adhan": "^4.4.6",
-    "onnxruntime-web": "1.29.0"
+    "onnxruntime-web": "1.29.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

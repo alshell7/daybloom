@@ -61,6 +61,7 @@ describe('parseQuick — the headline examples', () => {
       duration: null,
       recurrence: null,
       anytime: false,
+      alarm: false,
       tokens: [],
     });
   });
@@ -284,5 +285,51 @@ describe('tokens and title', () => {
     expect(p('')).toMatchObject({ title: '', date: TODAY, start: null, tokens: [] });
     expect(p('@@@ 99:99 at')).toMatchObject({ start: null, duration: null });
     expect(parseQuick(undefined as unknown as string, NOW, 640).title).toBe('');
+  });
+});
+
+describe('parseQuick — alarms', () => {
+  // NOW is Monday 10:40.
+  const TOMORROW = '2026-10-20';
+
+  it('alarm at 7am: a block that rings, tomorrow because 7am has gone', () => {
+    expect(p('alarm at 7am')).toMatchObject({ title: 'Alarm', date: TOMORROW, start: 7 * 60, alarm: true });
+  });
+
+  it('wake me at 6:30: a wake-up is in the morning', () => {
+    expect(p('wake me at 6:30')).toMatchObject({ title: 'Wake up', date: TOMORROW, start: 6 * 60 + 30, alarm: true });
+    expect(p('Wake me up at 6 tomorrow')).toMatchObject({ title: 'Wake up', date: TOMORROW, start: 6 * 60, alarm: true });
+  });
+
+  it('a bare hour is the next one that comes', () => {
+    expect(p('Alarm at 7')).toMatchObject({ date: TODAY, start: 19 * 60, alarm: true });
+    expect(p('Alarm at 11')).toMatchObject({ date: TODAY, start: 11 * 60, alarm: true });
+    expect(p('Alarm at 10')).toMatchObject({ date: TODAY, start: 22 * 60, alarm: true });
+  });
+
+  it('a time still ahead stays today', () => {
+    expect(p('set an alarm for 11:15 stretch')).toMatchObject({ title: 'Stretch', date: TODAY, start: 11 * 60 + 15, alarm: true });
+    expect(p('Gym 6pm with an alarm')).toMatchObject({ title: 'Gym', date: TODAY, start: 18 * 60, alarm: true });
+  });
+
+  it('repeats keep their rule', () => {
+    expect(p('Wake me every weekday at 6:30')).toMatchObject({ title: 'Wake up', start: 6 * 60 + 30, alarm: true, recurrence: { freq: 'weekly', interval: 1, byWeekday: [1, 2, 3, 4, 5] } });
+  });
+
+  it('needs a time to ring', () => {
+    expect(p('alarm tomorrow')).toMatchObject({ title: 'Alarm', date: TOMORROW, start: null, alarm: false });
+  });
+
+  it('"alarm" inside a title is just a word', () => {
+    expect(p('Check smoke alarm batteries 5pm')).toMatchObject({ title: 'Check smoke alarm batteries', start: 17 * 60, alarm: false });
+    expect(p('Gym 5pm 45m').alarm).toBe(false);
+  });
+
+  it('marks the words it understood', () => {
+    const text = 'set an alarm for 6:30 run';
+    expect(p(text).tokens.map(([a, b, k]) => [text.slice(a, b), k])).toEqual([
+      ['set an alarm for', 'alarm'],
+      ['6:30', 'time'],
+    ]);
   });
 });

@@ -1,14 +1,19 @@
-// "Your week": gentle, specific insights and badges drawn from the user's own tasks.
-// Pure (no Svelte): every function takes the task list and a fixed `now`, so the
-// panel, the celebration hook and the tests all agree. Calendar events never count.
+// "Your week": gentle, specific insights and badges drawn from what you finished.
+// Pure (no Svelte): every function takes the task list (or full sources) and a fixed `now`,
+// so the panel, the celebration hook and the tests all agree. What counts as finished comes
+// from lib/history.ts, the same list the History tab shows: ticked blocks, backlog items and
+// calendar events you marked done.
 //
 // Rules of the voice: name real progress, never count failures out loud, and let
 // time that is still to come stay out of every denominator.
 
 import { taskBlocks } from './engine/blocks';
 import { CATEGORIES, CATEGORY_BY_ID } from './engine/categories';
-import { addDays, daysBetween, DAY, formatDuration, hourOf, isoOf, MINUTE, minutesOfDay, startOfDayMs } from './engine/time';
+import { addDays, daysBetween, formatDuration, hourOf, isoOf, MINUTE, minutesOfDay, startOfDayMs } from './engine/time';
 import type { Block, CategoryId, ISODate, Task } from './engine/types';
+import { arcOf, completedItems, counts, sourcesFor, type DayArc, type DoneItem, type DoneSources } from './history';
+
+export { itemFromBlock, type DayArc, type DoneItem } from './history';
 
 export type Span = 7 | 28;
 
@@ -30,38 +35,9 @@ export function partOfHour(h: number): PartOfDay {
   return 'night';
 }
 
-/** One finished thing: a timed block, an anytime block, or a backlog item. */
-export interface DoneItem {
-  key: string;
-  taskId: string;
-  /** The day it counts on. */
-  date: ISODate;
-  title: string;
-  icon: string;
-  category: CategoryId;
-  kind: 'timed' | 'anytime' | 'backlog';
-  /** Timed only: block start. */
-  startMs: number | null;
-  /** Timed only: where the spent part ends (the tick, if it landed inside the block). */
-  spentEndMs: number | null;
-  spentMs: number;
-  /** When it happened: a timed block's start, otherwise when it was ticked (if known). */
-  atMs: number | null;
-  recurring: boolean;
-}
-
-export interface DayArc {
-  key: string;
-  /** Minutes after that day's midnight; `end` may run past 1440 for a block that spills over. */
-  start: number;
-  end: number;
-  category: CategoryId;
-  title: string;
-}
-
 export interface DayStat {
   date: ISODate;
-  /** Finished blocks (timed + anytime). */
+  /** Finished blocks (timed + anytime, and calendar events marked done). */
   done: number;
   /** Blocks that were due: finished, or their time has fully passed. */
   planned: number;
@@ -127,45 +103,12 @@ function isDue(b: Block, task: Task, nowMs: number): boolean {
   return b.endMs <= nowMs;
 }
 
-/** A finished block as an item. Spent = min(end, tick) − start; a tick before the start counts the whole block (done early). */
-export function itemFromBlock(b: Block): DoneItem {
-  const base = {
-    key: b.key,
-    taskId: b.taskId ?? '',
-    date: b.date,
-    title: b.title,
-    icon: b.icon,
-    category: b.category,
-    recurring: b.recurring,
-  };
-  if (b.floating) {
-    return { ...base, kind: 'anytime', startMs: null, spentEndMs: null, spentMs: 0, atMs: b.doneAt ?? null };
-  }
-  const end = b.doneAt && b.doneAt > b.startMs && b.doneAt < b.endMs ? b.doneAt : b.endMs;
-  return { ...base, kind: 'timed', startMs: b.startMs, spentEndMs: end, spentMs: Math.max(0, end - b.startMs), atMs: b.startMs };
-}
-
-function backlogItem(t: Task): DoneItem {
-  return {
-    key: `backlog:${t.id}`,
-    taskId: t.id,
-    date: isoOf(t.doneAt!),
-    title: t.title,
-    icon: t.icon,
-    category: t.category,
-    kind: 'backlog',
-    startMs: null,
-    spentEndMs: null,
-    spentMs: 0,
-    atMs: t.doneAt!,
-    recurring: false,
-  };
-}
-
-const isBacklogDone = (t: Task, nowMs: number) => t.date === null && t.doneAt != null && t.doneAt <= nowMs;
-
-/** Stats for the days [from, to] inclusive, as of `nowMs`. */
-export function periodStats(tasks: Task[], from: ISODate, to: ISODate, nowMs: number): PeriodStats {
+/**
+ * Stats for the days [from, to] inclusive, as of `nowMs`. Finished things come from the
+ * history list; planned adds the task blocks whose time has passed unfinished (not waved off).
+ */
+export function periodStats(src: Task[] | DoneSources, from: ISODate, to: ISODate, nowMs: number): PeriodStats {
+  const input = sourcesFor(src, from, to);
   const n = daysBetween(from, to) + 1;
   const days: DayStat[] = Array.from({ length: n }, (_, i) => ({
     date: addDays(from, i),
@@ -178,46 +121,24 @@ export function periodStats(tasks: Task[], from: ISODate, to: ISODate, nowMs: nu
     arcs: [],
   }));
   const dayOf = (d: ISODate) => days[daysBetween(from, d)];
-  const items: DoneItem[] = [];
+  const items = completedItems(input, from, to, nowMs).filter(counts);
   const routines: RoutineStat[] = [];
   let planned = 0;
 
-  for (const t of tasks) {
-    if (t.date) {
-      const r: RoutineStat | null = t.recurrence
-        ? { taskId: t.id, title: t.title, icon: t.icon, category: t.category, done: 0, total: 0 }
-        : null;
-      for (const b of taskBlocks(t, from, to)) {
-        if (!isDue(b, t, nowMs)) continue;
-        const day = dayOf(b.date);
-        day.planned++;
-        planned++;
-        if (r) r.total++;
-        if (!b.done) continue;
-        if (r) r.done++;
-        day.done++;
-        const item = itemFromBlock(b);
-        items.push(item);
-        if (item.kind === 'timed') {
-          const start = minutesOfDay(b.startMs);
-          day.arcs.push({
-            key: b.key,
-            start,
-            end: start + Math.min(item.spentMs, DAY) / MINUTE,
-            category: b.category,
-            title: b.title,
-          });
-        }
-      }
-      if (r && r.total) routines.push(r);
-    } else if (isBacklogDone(t, nowMs)) {
-      const d = isoOf(t.doneAt!);
-      if (d < from || d > to) continue;
-      dayOf(d).backlog++;
-      items.push(backlogItem(t));
+  for (const t of input.tasks) {
+    if (!t.date) continue;
+    const r: RoutineStat | null = t.recurrence
+      ? { taskId: t.id, title: t.title, icon: t.icon, category: t.category, done: 0, total: 0 }
+      : null;
+    for (const b of taskBlocks(t, from, to)) {
+      if (!isDue(b, t, nowMs)) continue;
+      dayOf(b.date).planned++;
+      planned++;
+      if (r) r.total++;
+      if (r && b.done) r.done++;
     }
+    if (r && r.total) routines.push(r);
   }
-
   const spent = emptySpent();
   const byHour = new Array<number>(24).fill(0);
   const partCats = new Map<PartOfDay, Map<CategoryId, number>>();
@@ -227,10 +148,19 @@ export function periodStats(tasks: Task[], from: ISODate, to: ISODate, nowMs: nu
     const day = dayOf(it.date);
     if (!day.categories.includes(it.category)) day.categories.push(it.category);
     if (it.kind === 'backlog') {
+      day.backlog++;
       backlogDone++;
       continue;
     }
+    day.done++;
     finished++;
+    // A calendar event was never a plan of yours until you marked it done; then it counts as one kept.
+    if (it.source === 'event') {
+      day.planned++;
+      planned++;
+    }
+    const arc = arcOf(it);
+    if (arc) day.arcs.push(arc);
     spent[it.category] += it.spentMs;
     day.spentMs += it.spentMs;
     if (it.category === 'focus') day.focusMs += it.spentMs;
@@ -292,7 +222,7 @@ export function periodStats(tasks: Task[], from: ISODate, to: ISODate, nowMs: nu
 }
 
 /** The last `span` days (ending today, in the active zone) and the `span` days before. */
-export function computeInsights(tasks: Task[], nowMs: number, span: Span = 7): Insights {
+export function computeInsights(tasks: Task[] | DoneSources, nowMs: number, span: Span = 7): Insights {
   const today = isoOf(nowMs);
   const from = addDays(today, -(span - 1));
   const current = periodStats(tasks, from, today, nowMs);
@@ -458,9 +388,9 @@ export function highlights(s: Insights, { hour12 = false }: { hour12?: boolean }
 
 export interface HistoryDay {
   date: ISODate;
-  /** Every block that day (timed + anytime). */
+  /** Every task block that day (timed + anytime), and the calendar events marked done. */
   planned: number;
-  /** Finished blocks that day. */
+  /** Finished blocks that day (backlog items aside). */
   done: number;
   focusMs: number;
   categories: Set<CategoryId>;
@@ -477,39 +407,27 @@ export interface History {
   activeDates: ISODate[];
 }
 
-export function buildHistory(tasks: Task[], nowMs: number): History {
+/** Everything finished up to now (the same list the History tab shows), by day. */
+export function buildHistory(src: Task[] | DoneSources, nowMs: number): History {
   const today = isoOf(nowMs);
-  const dates = new Set<ISODate>();
-  for (const t of tasks) {
-    if (t.date) for (const d of t.completions) if (d <= today) dates.add(d);
-    if (isBacklogDone(t, nowMs)) dates.add(isoOf(t.doneAt!));
-  }
-  const items: DoneItem[] = [];
+  const input = sourcesFor(src, null, today);
+  const items = completedItems(input, null, today, nowMs).filter(counts);
   const days = new Map<ISODate, HistoryDay>();
-  for (const date of [...dates].sort()) {
-    const day: HistoryDay = { date, planned: 0, done: 0, focusMs: 0, categories: new Set() };
-    for (const t of tasks) {
-      if (!t.date || t.date > date) continue;
-      for (const b of taskBlocks(t, date, date)) {
-        day.planned++;
-        if (!b.done) continue;
-        const it = itemFromBlock(b);
-        items.push(it);
-        day.done++;
-        day.categories.add(it.category);
-        if (it.category === 'focus') day.focusMs += it.spentMs;
-      }
+  for (const it of items) {
+    let day = days.get(it.date);
+    if (!day) {
+      day = { date: it.date, planned: 0, done: 0, focusMs: 0, categories: new Set() };
+      for (const t of input.tasks) if (t.date && t.date <= it.date) day.planned += taskBlocks(t, it.date, it.date).length;
+      days.set(it.date, day);
     }
-    days.set(date, day);
+    day.categories.add(it.category);
+    if (it.kind === 'backlog') continue;
+    day.done++;
+    if (it.source === 'event') day.planned++;
+    if (it.category === 'focus') day.focusMs += it.spentMs;
   }
-  for (const t of tasks) {
-    if (!isBacklogDone(t, nowMs)) continue;
-    const it = backlogItem(t);
-    items.push(it);
-    days.get(it.date)?.categories.add(it.category);
-  }
-  const activeDates = [...new Set(items.map((i) => i.date))].sort();
-  return { nowMs, today, tasks, items, days, activeDates };
+  const activeDates = [...days.keys()].sort();
+  return { nowMs, today, tasks: input.tasks, items, days, activeDates };
 }
 
 export interface Achievement {
@@ -684,7 +602,7 @@ export const ACHIEVEMENTS: Achievement[] = [
 export const ACHIEVEMENT_BY_ID: Record<string, Achievement> = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
 
 /** Badges satisfied now that aren't in `unlockedIds` yet, in list order. */
-export function evaluateAchievements(tasks: Task[], nowMs: number, unlockedIds: Iterable<string> = []): Achievement[] {
+export function evaluateAchievements(tasks: Task[] | DoneSources, nowMs: number, unlockedIds: Iterable<string> = []): Achievement[] {
   const have = new Set(unlockedIds);
   const todo = ACHIEVEMENTS.filter((a) => !have.has(a.id));
   if (!todo.length) return [];

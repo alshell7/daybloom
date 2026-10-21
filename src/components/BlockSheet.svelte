@@ -2,8 +2,9 @@
   import { tick, untrack } from 'svelte';
   import { slide } from 'svelte/transition';
   import { celebrateBadges, removeBlock, suggest, toBacklog, toggleDone } from '../lib/actions';
+  import { backlog } from '../lib/backlog';
   import { blockKey, parseBlockKey } from '../lib/engine/blocks';
-  import { CATEGORIES, categoryColor } from '../lib/engine/categories';
+  import { CATEGORIES, categoryColor, onColor } from '../lib/engine/categories';
   import { describeRecurrence } from '../lib/engine/recurrence';
   import { addDays, formatDuration, formatMinutes, formatTime, MINUTE, weekday } from '../lib/engine/time';
   import type { Recurrence, Task } from '../lib/engine/types';
@@ -21,7 +22,13 @@
   import MakeSmaller from './addons/smaller/MakeSmaller.svelte';
   import CrumbFields from './addons/crumbs/CrumbFields.svelte';
   import { realityHint } from '../lib/addons/reality/reality.svelte';
+  import type { AiEstimate } from '../lib/addons/reality/aiReality';
+  import { ai } from '../lib/ai/hub.svelte';
   import { isOn } from '../lib/addons/registry';
+  import { ALARM_TONES, previewTone, stopPreview, toneById } from '../lib/alarm';
+  import { settings } from '../lib/stores/settings.svelte';
+  import SalahMark from './addons/waqt/SalahMark.svelte';
+  import { slotOfEvent } from '../lib/addons/waqt/waqt.svelte';
 
   const sheetKey = $derived(view.sheet?.kind === 'edit' ? view.sheet.key : null);
   // Opened from the backlog's "Too big?" tool: the step breaker starts open.
@@ -41,6 +48,7 @@
     return t ? { task: t, date: p.date as string | null } : null;
   });
   const event = $derived(sheetKey?.startsWith('cal:') ? view.blockByKey(sheetKey) : null);
+  const salahSlot = $derived(event?.event ? slotOfEvent(event.event) : null);
 
   const task = $derived(target?.task ?? null);
   const occDate = $derived(target?.date ?? null);
@@ -52,6 +60,30 @@
   // Reality check addon: "usually ~45m" for tasks like this one.
   let usedHint = $state('');
   const hint = $derived(isOn('reality') && task && !done && task.title.trim() && usedHint !== task.id ? realityHint({ title: task.title, category: task.category, minutes: duration }) : null);
+  // With an AI service for Reality check: a realistic length from your own record, asked once the
+  // title has settled (and kept for the session), shown in place of the plain "usually".
+  let aiHint = $state<AiEstimate | null>(null);
+  let aiAsking = $state(false);
+  $effect(() => {
+    const t = task;
+    const d = duration;
+    aiHint = null;
+    if (!isOn('reality') || !t || done || !t.title.trim() || usedHint === t.id || !ai.ready('reality', 'think')) return;
+    const title = t.title;
+    void t.notes;
+    const wait = setTimeout(async () => {
+      aiAsking = true;
+      try {
+        const [{ aiEstimate }, { realityFile }] = await Promise.all([import('../lib/addons/reality/aiReality'), import('../lib/addons/reality/reality.svelte')]);
+        const est = await aiEstimate(t, d, realityFile.value.samples);
+        if (task?.id === t.id && t.title === title && duration === d) aiHint = est;
+      } finally {
+        aiAsking = false;
+      }
+    }, 1100);
+    return () => clearTimeout(wait);
+  });
+  const aiFits = $derived(!!aiHint && Math.abs(aiHint.minutes - duration) < 5);
 
   let iconOpen = $state(false);
   let delOpen = $state(false);
@@ -189,12 +221,24 @@
     tasks.update(task.id, { alerts: a });
   }
 
+  // Ring as an alarm (lib/alarms.svelte.ts): the tone is the one in Settings unless picked here.
+  function setAlarm(on: boolean) {
+    if (!task) return;
+    if (!on) stopPreview();
+    tasks.update(task.id, { alarm: on ? {} : null });
+  }
+  function setAlarmTone(tone: string | undefined) {
+    if (!task) return;
+    tasks.update(task.id, { alarm: tone ? { tone } : {} });
+    previewTone(tone ?? settings.value.alarm.tone, settings.value.alarm.volume);
+  }
+
   const startStr = $derived(start == null ? '' : `${String(Math.floor(start / 60)).padStart(2, '0')}:${String(start % 60).padStart(2, '0')}`);
   const WD = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 </script>
 
 {#if task}
-  <Panel title={task.date === null ? 'Later' : task.recurrence ? 'Repeating block' : 'Block'} onclose={close} accent={color} genieFrom={sheetKey ? `block:${sheetKey}` : undefined}>
+  <Panel title={task.date === null ? 'Later' : task.alarm && start != null ? (task.recurrence ? 'Repeating alarm' : 'Alarm') : task.recurrence ? 'Repeating block' : 'Block'} onclose={close} accent={color} genieFrom={sheetKey ? `block:${sheetKey}` : undefined}>
     <div class="title-row">
       <button
         class="icon-pick"
@@ -297,7 +341,19 @@
         <p class="ends tnum">
           {formatMinutes(start, view.hour12)} → {formatMinutes((start + duration) % 1440, view.hour12)}
         </p>
-        {#if hint}
+        {#if aiHint && task}
+          <div class="usually ai" class:fits={aiFits} transition:slide={{ duration: view.reducedMotion ? 0 : 200 }}>
+            <Icon name={aiFits ? 'check' : 'sparkles'} size={13} />
+            <span>
+              {#if aiFits}<b class="tnum">{formatDuration(duration * MINUTE)}</b> looks realistic · {aiHint.why}{:else}Plan <b class="tnum">~{formatDuration(aiHint.minutes * MINUTE)}</b> · {aiHint.why}{/if}
+              {#if aiHint.tip}<small class="aitip">{aiHint.tip}</small>{/if}
+            </span>
+            {#if !aiFits}<button class="chip" onclick={() => aiHint && (setTime({ duration: aiHint.minutes }), (usedHint = task.id))}>Use {formatDuration(aiHint.minutes * MINUTE)}</button>{/if}
+          </div>
+        {:else if aiAsking && !hint}
+          <p class="asking" transition:slide={{ duration: view.reducedMotion ? 0 : 160 }}><Icon name="hourglass" size={12} /> Checking how long this really takes…</p>
+        {/if}
+        {#if hint && !aiHint}
           <div class="usually" transition:slide={{ duration: view.reducedMotion ? 0 : 200 }}>
             <Icon name="hourglass" size={13} />
             <span>{hint.est.scope === 'title' ? 'This usually takes' : `${hint.est.label} blocks usually take`} <b class="tnum">~{formatDuration(hint.minutes * MINUTE)}</b></span>
@@ -396,6 +452,30 @@
       </div>
     </section>
 
+    {#if start != null && task.date !== null}
+      <section class="group">
+        <label class="alarm" class:on={!!task.alarm} style:--c={color} style:--fg={color ? onColor(color) : undefined}>
+          <span class="alarm-ico">
+            {#key !!task.alarm}<span class="pop-in"><Icon name={task.alarm ? 'alarm-check' : 'alarm'} size={16} stroke={2.1} /></span>{/key}
+          </span>
+          <span class="alarm-txt">
+            <span>Ring as an alarm</span>
+            <small class="tnum">{task.alarm ? `Rings at ${formatMinutes(start, view.hour12)} until you stop or snooze it` : 'Rings at the start, even with sounds off'}</small>
+          </span>
+          <input type="checkbox" class="switch" checked={!!task.alarm} onchange={(e) => setAlarm(e.currentTarget.checked)} />
+        </label>
+        {#if task.alarm}
+          {@const tone = task.alarm.tone}
+          <div class="repeat tones" role="radiogroup" aria-label="Alarm tone" transition:slide={{ duration: view.reducedMotion ? 0 : 200 }}>
+            <button class="chip" class:on={!tone} role="radio" aria-checked={!tone} onclick={() => setAlarmTone(undefined)} title="The tone chosen in Settings">Usual · {toneById(settings.value.alarm.tone).name}</button>
+            {#each ALARM_TONES as t (t.id)}
+              <button class="chip" class:on={tone === t.id} role="radio" aria-checked={tone === t.id} onclick={() => setAlarmTone(t.id)} title={t.hint}>{t.name}</button>
+            {/each}
+          </div>
+        {/if}
+      </section>
+    {/if}
+
     <AddonBlockFields taskId={task.id} blockKey={sheetKey && !sheetKey.startsWith('later:') ? sheetKey : null} minutes={duration} {done} />
     {#if isOn('crumbs')}<CrumbFields taskId={task.id} />{/if}
 
@@ -428,7 +508,7 @@
           </Popover>
         {/if}
       {:else}
-        <button class="icon-btn trash" onclick={() => { if (sheetKey?.startsWith('later:')) { tasks.remove(task.id); view.sheet = null; } else if (sheetKey) removeBlock(sheetKey); }} title="Delete" aria-label="Delete">
+        <button class="icon-btn trash" onclick={() => { if (sheetKey?.startsWith('later:')) { backlog.remove(task.id); view.sheet = null; } else if (sheetKey) removeBlock(sheetKey); }} title="Delete" aria-label="Delete">
           <Icon name="trash-ui" size={17} />
         </button>
       {/if}
@@ -438,11 +518,18 @@
 {:else if event}
   {#if event.event?.provider === 'salah'}
     <Panel title="Salah" onclose={() => ((view.sheet = null), (view.selected = null))} accent={event.color} genieFrom={`block:${event.key}`}>
-      <p class="event-title">{event.title}</p>
-      <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)}{event.event.calendarName && event.event.calendarName !== 'Salah' ? ` · ${event.event.calendarName}` : ''}</p>
-      <p class="note">Time kept free for salah. Times, jamaat and how much time to keep are set in Waqt.</p>
+      {#if !salahSlot}
+        <p class="event-title">{event.title}</p>
+        <p class="note tnum">{formatTime(event.startMs, view.hour12)} – {formatTime(event.endMs, view.hour12)}{event.event.calendarName && event.event.calendarName !== 'Salah' ? ` · ${event.event.calendarName}` : ''}</p>
+      {/if}
+      {#if salahSlot}
+        <!-- Mark it right here: one tap. -->
+        <SalahMark date={salahSlot.date} slot={salahSlot.slot} color={event.color} onmarked={() => setTimeout(() => ((view.sheet = null), (view.selected = null)), 650)} />
+      {:else}
+        <p class="note">Time kept free for salah. Times, jamaat and how much time to keep are set in Waqt.</p>
+      {/if}
       {#snippet footer()}
-        <button class="btn btn-soft" onclick={() => (view.sheet = { kind: 'waqt' })}><Icon name="moon" size={14} /> Open Waqt</button>
+        <button class="btn btn-quiet" onclick={() => (view.sheet = { kind: 'waqt' })}><Icon name="mihrab" size={14} /> Waqt</button>
         <span class="spacer"></span>
         <button class="btn btn-primary" onclick={() => ((view.sheet = null), (view.selected = null))}>Close</button>
       {/snippet}
@@ -655,7 +742,71 @@
   .usually .chip {
     height: 24px;
   }
+  .usually.ai {
+    align-items: flex-start;
+    border-radius: var(--r-md);
+    padding-block: 8px;
+  }
+  .usually.ai :global(svg) {
+    flex: none;
+    margin-top: 2px;
+  }
+  .usually.ai.fits {
+    background: color-mix(in srgb, var(--lume) 10%, transparent);
+  }
+  .aitip {
+    display: block;
+    margin-top: 3px;
+    color: var(--ink-3);
+  }
+  .asking {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: var(--s-2) 0 0;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
   .smaller {
+    margin-top: var(--s-3);
+  }
+  .alarm {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+  }
+  .alarm-ico {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    background: var(--sunken);
+    color: var(--ink-2);
+    transition:
+      background var(--dur-3) var(--ease-out),
+      color var(--dur-3) var(--ease-out);
+  }
+  .alarm.on .alarm-ico {
+    background: var(--c);
+    color: var(--fg);
+  }
+  .alarm-txt {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 1px;
+    font-size: var(--t-sm);
+    font-family: var(--font-ui);
+    color: var(--ink);
+  }
+  .alarm-txt small {
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+  .repeat.tones {
     margin-top: var(--s-3);
   }
   .durations,

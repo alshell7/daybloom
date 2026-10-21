@@ -1,21 +1,30 @@
 <script lang="ts">
-  // "Your salah": a week or a month at a glance. A ring of how the prayers went (in jamaat,
-  // on time, made up late, not marked), each prayer's own bar and streak, the month as rows of
-  // pearls, and a few kind lines. Nothing still ahead is counted; nothing scolds.
+  // "Your salah": a week or a month, drawn. What's going well comes first, in one sentence;
+  // then the period as one stacked meter with its key, each day (stacks for a week, a heatmap
+  // for a month), a ring per prayer with its run of on-time days, the on-time share week by
+  // week, when you mark each prayer against its adhan, a few kind notes, and every number in a
+  // table. Nothing still ahead is counted, nor the days before you started; nothing scolds.
   import { cubicOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
-  import { lines, summarize, type DayInput, type Kind } from '../../../lib/addons/waqt/analytics';
-  import { PRAYER_ICON, PRAYER_NAME } from '../../../lib/addons/waqt/types';
+  import { minutesInWords, notes, summarize, timing, trend, type DayInput } from '../../../lib/addons/waqt/analytics';
+  import { PRAYER_NAME } from '../../../lib/addons/waqt/types';
   import { waqt, waqtFile } from '../../../lib/addons/waqt/waqt.svelte';
   import { addDays, isoOf } from '../../../lib/engine/time';
   import Icon from '../../../lib/Icon.svelte';
   import { clock } from '../../../lib/stores/clock.svelte';
   import { view } from '../../../lib/stores/view.svelte';
   import Segmented from '../../Segmented.svelte';
+  import DayStacks from './charts/DayStacks.svelte';
+  import MarkTiming from './charts/MarkTiming.svelte';
+  import MonthGrid from './charts/MonthGrid.svelte';
+  import PrayerRings from './charts/PrayerRings.svelte';
+  import WeekTrend from './charts/WeekTrend.svelte';
 
   let span = $state<'7' | '30'>('7');
   const rm = $derived(view.reducedMotion);
-  const today = $derived(isoOf(clock.minute));
+  // Once a minute is plenty: a prayer's time ending is the finest change here.
+  const now = $derived(clock.minute);
+  const today = $derived(isoOf(now));
   const s = $derived(waqtFile.value.settings);
 
   function period(endDate: string, n: number): DayInput[] {
@@ -27,29 +36,27 @@
       .filter((x): x is DayInput => !!x);
   }
   const n = $derived(Number(span));
-  const sum = $derived((void waqtFile.value.prayed, void waqtFile.value.detail, summarize(waqtFile.value, period(today, n), clock.now)));
-  const prev = $derived((void waqtFile.value.prayed, summarize(waqtFile.value, period(addDays(today, -n), n), clock.now)));
-  const words = $derived(lines(sum, prev.counted ? prev : null, { jamaat: s.jamaat.on, remindBefore: s.remind.before }));
+  const sum = $derived(summarize(waqtFile.value, period(today, n), now));
+  const prev = $derived(summarize(waqtFile.value, period(addDays(today, -n), n), now));
+  // Twelve weeks back: the trend, and streaks longer than the period.
+  const HISTORY = 84;
+  const long = $derived(summarize(waqtFile.value, period(today, HISTORY), now));
+  const weeks = $derived(trend(long.grid.slice(span === '7' ? -56 : -HISTORY), 7));
+  const streaks = $derived(Object.fromEntries(long.byPrayer.map((p) => [p.id, p.streak])));
+  const said = $derived(notes(sum, prev.counted ? prev : null, { jamaat: s.jamaat.on, remindBefore: s.remind.before, streaks, before: span === '7' ? 'the week before' : 'the 30 days before' }));
+  const head = $derived(said.find((x) => x.tone === 'bright') ?? said[0]);
+  const rest = $derived(said.filter((x) => x !== head).slice(0, 4));
+  const when = $derived(timing(sum));
 
-  // The ring: four arcs in order around a circle of circumference 1 (pathLength).
-  const parts = $derived.by(() => {
-    const total = Math.max(1, sum.counted);
-    const seg = [
-      { key: 'jamaat', n: sum.jamaat, label: 'In jamaat' },
-      { key: 'ontime', n: sum.ontime, label: 'On time' },
-      { key: 'late', n: sum.late, label: 'Made up late' },
-      { key: 'missed', n: sum.missed, label: 'Not marked' },
-    ];
-    let at = 0;
-    return seg.map((x) => {
-      const len = x.n / total;
-      const out = { ...x, len, at };
-      at += len;
-      return out;
-    });
-  });
-  const pct = $derived(sum.counted ? Math.round((sum.prayed / sum.counted) * 100) : 0);
-  const color = (k: Kind) => `var(--k-${k})`;
+  const showJamaat = $derived(s.jamaat.on || sum.jamaat > 0);
+  const parts = $derived(
+    [
+      { k: 'jamaat', label: 'In jamaat', n: sum.jamaat, show: showJamaat },
+      { k: 'ontime', label: 'On time', n: sum.ontime, show: true },
+      { k: 'late', label: 'Made up', n: sum.late, show: sum.late > 0 },
+      { k: 'missed', label: 'Not marked', n: sum.missed, show: true },
+    ].filter((p) => p.show),
+  );
 </script>
 
 <section class="ss" aria-label="Your salah">
@@ -59,85 +66,129 @@
   </div>
 
   {#key span}
-    <div class="hero" in:fly={{ y: 6, duration: rm ? 0 : 320, easing: cubicOut }}>
-      <svg viewBox="0 0 120 120" class="ring" role="img" aria-label={`${sum.prayed} of ${sum.counted} prayers prayed`}>
-        <circle cx="60" cy="60" r="48" class="track" />
-        {#each parts.filter((p) => p.key !== 'missed' && p.len > 0) as p, i (p.key)}
-          <circle
-            cx="60"
-            cy="60"
-            r="48"
-            pathLength="1"
-            class="seg"
-            stroke={color(p.key as Kind)}
-            stroke-dasharray={`${Math.max(0, p.len - 0.006)} 1`}
-            stroke-dashoffset={-p.at}
-            style:--d={`${i * 120}ms`}
-          />
-        {/each}
-        <text x="60" y="58" class="big tnum">{sum.prayed}</text>
-        <text x="60" y="76" class="small tnum">of {sum.counted}</text>
-      </svg>
-      <ul class="legend">
-        {#each parts as p (p.key)}
-          {#if p.key !== 'jamaat' || s.jamaat.on || p.n}
-            <li><i style:background={color(p.key as Kind)}></i><span>{p.label}</span><b class="tnum">{p.n}</b></li>
-          {/if}
-        {/each}
-        {#if sum.qasr}<li><i class="q"></i><span>Qasr</span><b class="tnum">{sum.qasr}</b></li>{/if}
-        <li class="pct tnum">{pct}% prayed{sum.fullDays ? ` · ${sum.fullDays} full ${sum.fullDays === 1 ? 'day' : 'days'}` : ''}</li>
-      </ul>
-    </div>
+    {#if !sum.counted}
+      <p class="empty" in:fly={{ y: 6, duration: rm ? 0 : 320, easing: cubicOut }}><Icon name="sparkle" size={13} /> {head?.text}</p>
+    {:else}
+      <div class="lead" in:fly={{ y: 8, duration: rm ? 0 : 380, easing: cubicOut }}>
+        {#if head}<p class="headline"><Icon name="sparkle" size={15} /> <span>{head.text}</span></p>{/if}
+        <p class="sub tnum">{sum.prayed} of {sum.counted} prayed · {Math.round((sum.prayed / sum.counted) * 100)}%</p>
+      </div>
 
-    <ul class="rows">
-      {#each sum.byPrayer as p, i (p.id)}
-        {@const t = Math.max(1, p.counted)}
-        <li in:fly={{ x: -8, duration: rm ? 0 : 300, delay: rm ? 0 : 60 + i * 50, easing: cubicOut }}>
-          <span class="ic"><Icon name={PRAYER_ICON[p.id]} size={14} /></span>
-          <span class="nm">{PRAYER_NAME[p.id]}</span>
-          <span class="bar" aria-hidden="true">
-            <i style:width={`${(p.jamaat / t) * 100}%`} style:background={color('jamaat')}></i><i style:width={`${(p.ontime / t) * 100}%`} style:background={color('ontime')}></i><i style:width={`${(p.late / t) * 100}%`} style:background={color('late')}></i>
-          </span>
-          <span class="rt tnum">{p.counted ? `${p.prayed}/${p.counted}` : '–'}</span>
-          <span class="st tnum" class:on={p.streak >= 2} title={p.streak >= 2 ? `On time ${p.streak} days in a row` : ''}>{#if p.streak >= 2}<Icon name="flame" size={11} />{p.streak}{/if}</span>
-        </li>
-      {/each}
-    </ul>
-
-    {#if span === '30'}
-      <div class="month" role="img" aria-label="The last 30 days of prayers">
-        {#each sum.grid as d (d.date)}
-          <div class="day" class:today={d.date === today} title={new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}>
-            {#each Object.entries(d.kinds) as [id, k] (id)}
-              <i class={k} class:qasr={d.qasr[id as keyof typeof d.qasr]}></i>
-            {/each}
-          </div>
+      <div class="meter" class:still={rm} role="img" aria-label={parts.map((p) => `${p.n} ${p.label.toLowerCase()}`).join(', ')}>
+        {#each parts.filter((p) => p.n > 0) as p, i (p.k)}
+          <i style:flex-grow={p.n} style:background={`var(--k-${p.k})`} style:--d={`${120 + i * 90}ms`}></i>
         {/each}
       </div>
-    {/if}
-
-    {#if words.length}
-      <ul class="words">
-        {#each words as w, i (w)}
-          <li in:fly={{ y: 4, duration: rm ? 0 : 280, delay: rm ? 0 : 200 + i * 70 }}><Icon name="sparkle" size={12} /> {w}</li>
+      <ul class="legend tnum">
+        {#each parts as p (p.k)}
+          <li><i style:background={`var(--k-${p.k})`}></i>{p.label}<b>{p.n}</b></li>
         {/each}
+        {#if sum.qasr}<li><i class="q"></i>Qasr<b>{sum.qasr}</b></li>{/if}
       </ul>
+
+      <figure>
+        <figcaption>Each day</figcaption>
+        {#if span === '7'}
+          <DayStacks days={sum.grid} {today} reduced={rm} />
+        {:else}
+          <MonthGrid days={sum.grid} {today} reduced={rm} />
+        {/if}
+      </figure>
+
+      <figure>
+        <figcaption>Each prayer</figcaption>
+        <PrayerRings prayers={sum.byPrayer} {streaks} reduced={rm} />
+      </figure>
+
+      {#if weeks.length >= 2}
+        <figure>
+          <figcaption>Week by week <span>on time or in jamaat</span></figcaption>
+          <WeekTrend points={weeks} reduced={rm} />
+        </figure>
+      {/if}
+
+      {#if when.all.length >= 3}
+        <figure>
+          <figcaption>When you mark it</figcaption>
+          {#if when.within != null}<p class="usual">Usually within {minutesInWords(when.within)} of the adhan.</p>{/if}
+          <MarkTiming prayers={when.byPrayer} all={when.all} reduced={rm} />
+        </figure>
+      {/if}
+
+      {#if rest.length}
+        <ul class="words">
+          {#each rest as w, i (w.key)}
+            <li class={w.tone} in:fly={{ y: 4, duration: rm ? 0 : 280, delay: rm ? 0 : 200 + i * 70 }}><Icon name={w.tone === 'tip' ? 'bell' : 'sparkle'} size={12} /> {w.text}</li>
+          {/each}
+        </ul>
+      {/if}
+
+      <details class="numbers">
+        <summary><Icon name="chevron-down" size={13} /> See the numbers</summary>
+        <table class="tnum">
+          <caption class="visually-hidden">Your salah, the last {n} days</caption>
+          <thead>
+            <tr>
+              <th scope="col"><span class="visually-hidden">Prayer</span></th>
+              {#if showJamaat}<th scope="col">In jamaat</th>{/if}
+              <th scope="col">On time</th>
+              <th scope="col">Made up</th>
+              <th scope="col">Not marked</th>
+              <th scope="col">In a row</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each sum.byPrayer as p (p.id)}
+              <tr>
+                <th scope="row">{PRAYER_NAME[p.id]}</th>
+                {#if showJamaat}<td>{p.jamaat}</td>{/if}
+                <td>{p.ontime}</td>
+                <td>{p.late}</td>
+                <td>{p.missed}</td>
+                <td>{streaks[p.id] ?? p.streak}</td>
+              </tr>
+            {/each}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">All</th>
+              {#if showJamaat}<td>{sum.jamaat}</td>{/if}
+              <td>{sum.ontime}</td>
+              <td>{sum.late}</td>
+              <td>{sum.missed}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </details>
     {/if}
   {/key}
 </section>
 
 <style>
+  /* How a prayer went, as calm steps from bare to full ("more" leans toward ink). Checked on every
+     theme: lightness steps in order, neighbours ΔE ≥ 15 (≥ 10 for red-green colour blindness). */
   .ss {
-    --k-jamaat: var(--green);
-    --k-ontime: color-mix(in srgb, var(--green) 55%, var(--surface));
-    --k-late: color-mix(in srgb, var(--warm) 75%, var(--surface));
-    --k-missed: var(--line-strong);
-    --k-open: transparent;
-    --k-ahead: transparent;
+    --green-k: var(--green, #25976a);
+    --k-jamaat: color-mix(in srgb, var(--green-k) 56%, var(--ink));
+    --k-ontime: var(--green-k);
+    --k-late: color-mix(in srgb, var(--warm) 80%, var(--raised));
+    --k-missed: color-mix(in srgb, var(--ink) 11%, var(--raised));
+    --k-open-line: color-mix(in srgb, var(--green-k) 60%, transparent);
+    --k-ahead-line: var(--line-strong);
+    --k-open: var(--k-open-line);
+    --k-ahead: var(--k-ahead-line);
+    --k-before: var(--line);
     display: grid;
     gap: var(--s-3);
     padding: var(--s-4) 0;
     border-top: 1px solid var(--line);
+  }
+  :global([data-theme='dark']) .ss {
+    --k-jamaat: color-mix(in srgb, var(--green-k) 72%, var(--ink));
+    --k-ontime: color-mix(in srgb, var(--green-k) 66%, var(--raised));
+    --k-late: color-mix(in srgb, var(--warm) 42%, var(--raised));
+    --k-missed: color-mix(in srgb, var(--ink) 12%, var(--raised));
   }
   .head {
     display: flex;
@@ -151,175 +202,115 @@
     font-size: var(--t-md);
     font-weight: 500;
   }
-  .hero {
+  .empty {
+    margin: 0;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: var(--t-sm);
+    color: var(--ink-2);
+  }
+  .lead {
     display: grid;
-    grid-template-columns: 124px 1fr;
-    align-items: center;
-    gap: var(--s-4);
+    gap: 3px;
   }
-  .ring {
-    width: 124px;
-    height: 124px;
-    transform: rotate(-90deg);
-  }
-  .ring text {
-    transform: rotate(90deg);
-    transform-origin: 60px 60px;
-    text-anchor: middle;
-    font-family: var(--font-ui);
-    fill: var(--ink);
-  }
-  .ring .big {
-    font-size: 26px;
+  .headline {
+    margin: 0;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: var(--t-lg);
     font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    text-wrap: pretty;
   }
-  .ring .small {
-    font-size: 11px;
-    fill: var(--ink-3);
+  .headline :global(svg),
+  .empty :global(svg) {
+    flex: none;
+    color: var(--green-k);
+    transform: translateY(2px);
   }
-  .track {
-    fill: none;
-    stroke: var(--sunken);
-    stroke-width: 12;
+  .sub {
+    margin: 0 0 0 23px;
+    font-size: var(--t-sm);
+    color: var(--ink-3);
   }
-  .seg {
-    fill: none;
-    stroke-width: 12;
-    stroke-linecap: butt;
-    animation: draw 0.9s var(--ease-out) var(--d) both;
+  .meter {
+    display: flex;
+    gap: 2px;
+    height: 10px;
+    margin-top: 2px;
   }
-  @keyframes draw {
-    from {
-      stroke-dasharray: 0 1;
-    }
+  .meter i {
+    flex-basis: 0;
+    min-width: 4px;
+    border-radius: 3px;
+    transform-origin: left center;
+    animation: grow 700ms cubic-bezier(0.34, 1.3, 0.64, 1) var(--d) backwards;
+  }
+  .meter i:first-child {
+    border-radius: 5px 3px 3px 5px;
+  }
+  .meter i:last-child {
+    border-radius: 3px 5px 5px 3px;
+  }
+  .meter i:only-child {
+    border-radius: 5px;
   }
   .legend {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: grid;
-    gap: 5px;
-    font-size: var(--t-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: var(--t-xs);
+    color: var(--ink-2);
   }
   .legend li {
-    display: grid;
-    grid-template-columns: 10px 1fr auto;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
   .legend i {
     width: 10px;
     height: 10px;
-    border-radius: 50%;
+    border-radius: 3px;
   }
   .legend i.q {
-    border-radius: 3px;
-    background: transparent;
-    box-shadow: inset 0 0 0 2px var(--green);
+    background: linear-gradient(135deg, var(--k-ontime) 62%, var(--raised) 62%);
   }
-  .legend span {
-    color: var(--ink-2);
+  .legend b {
+    font-weight: 500;
+    color: var(--ink);
   }
-  .legend .pct {
-    display: block;
-    margin-top: 4px;
-    font-size: var(--t-xs);
-    color: var(--ink-3);
-  }
-  .rows {
-    list-style: none;
-    margin: 0;
-    padding: 0;
+  figure {
+    margin: var(--s-2) 0 0;
     display: grid;
-    gap: 6px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+    min-width: 0;
   }
-  .rows li {
-    display: grid;
-    grid-template-columns: 22px 64px 1fr 44px 34px;
-    align-items: center;
-    gap: 8px;
+  figcaption {
     font-size: var(--t-sm);
-  }
-  .rows .ic {
-    display: grid;
-    place-items: center;
+    font-weight: 500;
     color: var(--ink-3);
   }
-  .bar {
-    display: flex;
-    height: 8px;
-    border-radius: 4px;
-    background: var(--sunken);
-    overflow: hidden;
+  figcaption span {
+    font-weight: 400;
   }
-  .bar i {
-    height: 100%;
-    transform-origin: left;
-    animation: grow 0.7s var(--ease-out) both;
+  figcaption span::before {
+    content: '· ';
   }
-  @keyframes grow {
-    from {
-      transform: scaleX(0);
-    }
-  }
-  .rt {
-    text-align: right;
-    font-size: var(--t-xs);
-    color: var(--ink-3);
-  }
-  .st {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-size: var(--t-xs);
-    color: var(--ink-3);
-  }
-  .st.on {
-    color: var(--green);
-  }
-  .month {
-    display: grid;
-    grid-template-columns: repeat(30, 1fr);
-    gap: 3px;
-    padding: 10px;
-    border-radius: var(--r-md);
-    background: var(--surface);
-  }
-  .day {
-    display: grid;
-    justify-items: center;
-    gap: 3px;
-  }
-  .day i {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--k-missed);
-  }
-  .day i.jamaat {
-    background: var(--k-jamaat);
-  }
-  .day i.ontime {
-    background: var(--k-ontime);
-  }
-  .day i.late {
-    background: var(--k-late);
-  }
-  .day i.open,
-  .day i.ahead {
-    background: transparent;
-    box-shadow: inset 0 0 0 1px var(--line-strong);
-  }
-  .day i.qasr {
-    border-radius: 2px;
-  }
-  .day.today i {
-    outline: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
-    outline-offset: 1px;
+  .usual {
+    margin: -2px 0 2px;
+    font-size: var(--t-sm);
+    color: var(--ink-2);
   }
   .words {
     list-style: none;
-    margin: 0;
+    margin: var(--s-2) 0 0;
     padding: 0;
     display: grid;
     gap: 6px;
@@ -334,11 +325,77 @@
   }
   .words li :global(svg) {
     flex: none;
-    color: var(--green);
+    color: var(--green-k);
     transform: translateY(1px);
   }
-  :global([data-motion='calm']) .ss .seg,
-  :global([data-motion='calm']) .ss .bar i {
+  .words li.tip :global(svg),
+  .words li.info :global(svg) {
+    color: var(--ink-3);
+  }
+  .numbers {
+    margin-top: var(--s-1);
+    font-size: var(--t-sm);
+  }
+  .numbers summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 4px;
+    border-radius: var(--r-pill);
+    color: var(--ink-3);
+    cursor: pointer;
+    list-style: none;
+  }
+  .numbers summary::-webkit-details-marker {
+    display: none;
+  }
+  .numbers summary:hover {
+    background: var(--sunken);
+    color: var(--ink);
+  }
+  .numbers summary :global(svg) {
+    transform: rotate(-90deg);
+    transition: transform var(--dur-2) var(--ease-out);
+  }
+  .numbers[open] summary :global(svg) {
+    transform: none;
+  }
+  table {
+    width: 100%;
+    margin-top: var(--s-2);
+    border-collapse: collapse;
+    font-size: var(--t-xs);
+  }
+  th,
+  td {
+    padding: 5px 4px;
+    text-align: right;
+    border-bottom: 1px solid var(--line);
+  }
+  thead th {
+    font-weight: 500;
+    color: var(--ink-3);
+    vertical-align: bottom;
+    line-height: 1.2;
+  }
+  tbody th,
+  tfoot th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+  tfoot th,
+  tfoot td {
+    border-bottom: 0;
+    font-weight: 500;
+  }
+  @keyframes grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  .meter.still i,
+  :global([data-motion='calm']) .meter i {
     animation: none;
   }
 </style>

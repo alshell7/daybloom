@@ -1,15 +1,15 @@
 <script lang="ts">
   // Talking with Alef, face to face. Alef sits on a little stage: it watches the field while you
   // type, thinks visibly, then answers in a big speech bubble that writes itself out as it
-  // speaks, with the planner's card (and its Undo) when the answer came from this device, and a
-  // few things to ask next. Earlier talk stays below. The field you type in lives in the panel's
-  // footer (`input`).
+  // speaks, with the planner's card (and its Undo) when the answer came from this device, the
+  // AI's own small UI when it drew one (loaded lazily), and a few things to ask next. Earlier
+  // talk stays below. The field you type in lives in the panel's footer (`input`).
   import { tick, untrack } from 'svelte';
   import { cubicOut } from 'svelte/easing';
   import { fly, scale } from 'svelte/transition';
   import { alef, alefFile, type Msg } from '../../../lib/addons/alef/alef.svelte';
   import { ACTS } from '../../../lib/addons/alef/behaviors';
-  import { providerOf } from '../../../lib/addons/alef/llm';
+  import { providerOf, type ProviderId } from '../../../lib/addons/alef/llm';
   import { md } from '../../../lib/addons/alef/md';
   import type { Option } from '../../../lib/assistant/tools';
   import { HELP_GROUPS } from '../../../lib/assistant/tools';
@@ -17,6 +17,7 @@
   import { clock } from '../../../lib/stores/clock.svelte';
   import { view } from '../../../lib/stores/view.svelte';
   import { voice } from '../../../lib/voice/voice.svelte';
+  import { loadGenUi } from '../../../lib/ai/genui/load';
   import Card from '../../assistant/Card.svelte';
   import MicButton from '../../voice/MicButton.svelte';
   import AlefFace from './AlefFace.svelte';
@@ -28,9 +29,7 @@
   const pal = $derived(alef.screenFor(view.finish));
   const rm = $derived(view.reducedMotion);
 
-  const brainLine = $derived(
-    s.brain === 'local' ? 'thinks on this device' : alef.aiReady ? `thinks with ${providerOf(s.brain).name}` : `${providerOf(s.brain).name} isn't set up · thinks on this device`,
-  );
+  const brainLine = $derived(alef.brainName ? `thinks with ${providerOf(alef.brainName as ProviderId).name}` : 'thinks on this device');
   const mood = $derived(alef.thinking ? 'thinking…' : alef.typing ? 'listening' : ACTS[alef.perf.id].label.toLowerCase().replace(' (cute)', ''));
 
   // The latest exchange is on the stage; everything before it is "earlier".
@@ -167,6 +166,11 @@
       <div class="card"><Card entry={m.entry} /></div>
     {/if}
   {/if}
+  {#if m.ui}
+    {#await loadGenUi() then g}
+      <div class="gen"><g.default source={m.ui} at={m.at} onask={(t) => void alef.ask(t)} /></div>
+    {:catch}{/await}
+  {/if}
 {/snippet}
 
 {#if input}
@@ -216,6 +220,7 @@
           <p>Hi! I'm <b>Alef</b>. I keep you company while you work, cheer your wins and help you plan. What shall we do?</p>
         {:else if lastAlef.pending}
           <p class="dots" aria-label="Alef is thinking"><i></i><i></i><i></i></p>
+          {#if alef.doing}{#key alef.doing}<p class="doing" in:fly={{ y: 4, duration: rm ? 0 : 220 }}>{alef.doing}</p>{/key}{/if}
         {:else if writing}
           <p>{lastAlef.text.slice(0, Math.floor(shown))}<span class="caret"></span></p>
         {:else}
@@ -227,6 +232,14 @@
     {#if lastAlef && !lastAlef.pending && !writing}
       <div class="after" in:fly={{ y: 6, duration: rm ? 0 : 260, easing: cubicOut }}>
         {#if lastAlef.note}<p class="note"><Icon name="info" size={13} /> {lastAlef.note}</p>{/if}
+        {#if alef.bubble?.offers?.length && alef.bubble.text === lastAlef.text}
+          {@const b = alef.bubble}
+          <div class="offers">
+            {#each b.offers ?? [] as o, i (o.id + i)}
+              <button class="offer" onclick={() => void alef.act(b.seq, i)} in:fly={{ y: 6, duration: rm ? 0 : 260, delay: rm ? 0 : 80 * i, easing: cubicOut }}><Icon name={o.icon} size={13} stroke={2.2} /> {o.label}</button>
+            {/each}
+          </div>
+        {/if}
         {#if lastAlef.tools?.length}
           <p class="used">{#each toolWords(lastAlef.tools) as w (w)}<span>{w}</span>{/each}</p>
         {/if}
@@ -234,7 +247,7 @@
       </div>
     {/if}
 
-    {#if !alef.busy && !writing && (!lastAlef || !lastAlef.entry || lastAlef.entry.result?.card.kind === 'note')}
+    {#if !alef.busy && !writing && (!lastAlef || (!lastAlef.ui && (!lastAlef.entry || lastAlef.entry.result?.card.kind === 'note')))}
       <div class="ideas next" in:fly={{ y: 6, duration: rm ? 0 : 300, delay: rm ? 0 : 120, easing: cubicOut }}>
         {#each ideas as q (q)}
           <button class="idea" onclick={() => void alef.ask(q)}>{q}</button>
@@ -273,6 +286,40 @@
 {/if}
 
 <style>
+  .doing {
+    margin: 4px 0 0;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+    text-align: center;
+  }
+  .offers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+  .offer {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--r-pill);
+    border: 1px solid color-mix(in srgb, var(--focus-ring) 35%, var(--line));
+    background: color-mix(in srgb, var(--focus-ring) 8%, var(--raised));
+    color: var(--ink);
+    font-size: var(--t-sm);
+    cursor: pointer;
+    transition:
+      transform var(--dur-2) cubic-bezier(0.3, 1.5, 0.5, 1),
+      background var(--dur-2) var(--ease-out);
+  }
+  .offer:hover {
+    transform: translateY(-1px) scale(1.03);
+    background: color-mix(in srgb, var(--focus-ring) 16%, var(--raised));
+  }
+  .offer:active {
+    transform: scale(0.97);
+  }
   /* ── The stage ── */
   .stage {
     display: grid;
@@ -424,6 +471,11 @@
     width: min(100%, 460px);
     display: grid;
     gap: 8px;
+  }
+  /* The AI's generative UI under its words (components/genui/). */
+  .gen {
+    min-width: 0;
+    text-align: left;
   }
   .note {
     display: flex;

@@ -13,7 +13,9 @@
   let { anchor, date, slot, onclose }: { anchor: HTMLElement; date: ISODate; slot: PrayerSlot; onclose: () => void } = $props();
 
   const how = $derived(waqt.howOf(date, slot.id));
-  const qasr = $derived(!!waqt.detailOf(date, slot.id).qasr);
+  // Shown before marking too: travelling turns it on; a change before marking is kept for the mark.
+  let pending = $state<boolean | null>(null);
+  const qasr = $derived(pending ?? waqt.qasrOf(date, slot.id));
   const jamaatOn = $derived(waqtFile.value.settings.jamaat.on || how === 'jamaat');
   const canQasr = $derived(QASR.includes(slot.id));
 
@@ -43,7 +45,7 @@
     {#if canQasr}
       <label class="q">
         <span>Qasr <small>shortened, travelling</small></span>
-        <input type="checkbox" class="switch" checked={qasr} disabled={!how} onchange={(e) => how && waqt.markAs(date, slot.id, how, e.currentTarget.checked)} />
+        <input type="checkbox" class="switch" checked={qasr} onchange={(e) => (how ? waqt.setQasr(date, slot.id, e.currentTarget.checked) : (pending = e.currentTarget.checked))} />
       </label>
     {/if}
     {#if how}

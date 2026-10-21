@@ -6,17 +6,18 @@ import { PRESETS, resolveFinish, type PresetId } from '../presets';
 import { THEME_BY_ID } from '../themes';
 import { openItems } from '../backlog';
 import { clock } from './clock.svelte';
-import { BREATH_MS } from '../breath.svelte';
+import { breath } from '../breath.svelte';
 import { settings } from './settings.svelte';
 import { taskFile } from './tasks.svelte';
 import { timer } from './timer.svelte';
+import { eventStateFile } from './eventStates.svelte';
 
 export type Sheet =
   | null
   | { kind: 'edit'; key: string; smaller?: boolean }
   | { kind: 'new'; date: ISODate | null; start: Minutes | null; duration: Minutes }
   | { kind: 'settings'; section?: string }
-  | { kind: 'insights' }
+  | { kind: 'insights'; tab?: 'week' | 'done'; date?: ISODate }
   | { kind: 'backlog' }
   | { kind: 'winddown' }
   | { kind: 'assistant'; query?: string }
@@ -32,6 +33,8 @@ export type Sheet =
   | { kind: 'whatsnew'; version?: string }
   | { kind: 'landings' }
   | { kind: 'retro' }
+  | { kind: 'trash' }
+  | { kind: 'reset' }
   | { kind: 'alef'; tab?: 'talk' | 'alef' | 'feelings' };
 
 const DOCK_ORDER = ['crumb', 'waqt', 'landing'];
@@ -58,10 +61,19 @@ class View {
   calendarEvents = $state<CalendarEvent[]>([]);
   /** Events an addon adds to the day (e.g. prayer blocks), by addon. */
   addonEvents = $state<Record<string, CalendarEvent[]>>({});
-  /** Everything with a time that isn't a task: calendars and addons. */
+  /** Time an addon keeps free without drawing it as blocks (e.g. salah when its blocks are hidden). */
+  busyEvents = $state<Record<string, CalendarEvent[]>>({});
+  /** Everything with a time that isn't a task: calendars and addons, with what you did with them. */
   events = $derived.by(() => {
+    const states = eventStateFile.value.states;
+    const cal = Object.keys(states).length
+      ? this.calendarEvents.map((ev) => {
+          const s = states[`cal:${ev.accountId}:${ev.id}`];
+          return s ? { ...ev, done: s.done, skipped: s.skipped } : ev;
+        })
+      : this.calendarEvents;
     const extra = Object.values(this.addonEvents).flat();
-    return extra.length ? [...this.calendarEvents, ...extra].sort((a, b) => a.startMs - b.startMs) : this.calendarEvents;
+    return extra.length ? [...cal, ...extra].sort((a, b) => a.startMs - b.startMs) : cal;
   });
   sparks = $state<Spark[]>([]);
   toast = $state<null | { id: number; text: string; ms: number; action?: { label: string; run: () => void } }>(null);
@@ -101,9 +113,9 @@ class View {
       if ((this.dock[id] ?? 0) !== h) this.dock = { ...this.dock, [id]: h };
     });
   }
-  /** Breathing guide start time (0 = off). Four 16-second cycles (see breath.svelte.ts). */
+  /** Breathing guide start time (0 = off). A few rounds of the rhythm in Settings (see breath.svelte.ts). */
   breatheAt = $state(0);
-  breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < BREATH_MS);
+  breathing = $derived(this.breatheAt > 0 && clock.now - this.breatheAt < breath.rhythm.totalMs);
 
   systemDark = $state(media('(prefers-color-scheme: dark)')?.matches ?? false);
   systemReduced = $state(media('(prefers-reduced-motion: reduce)')?.matches ?? false);

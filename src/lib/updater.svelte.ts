@@ -107,3 +107,53 @@ export function startUpdateChecks(): () => void {
 }
 
 if (import.meta.env.DEV) (globalThis as { __updates?: typeof updates }).__updates = updates;
+
+// Dev only: pretend a release arrived, to see the update card in a browser.
+// `__updateSim.offer()`, `.offer('0.2.0', { fail: true })` (the download stops halfway),
+// `.offer('0.2.0', { ms: 8000 })` (a slower download), `.reset()`. A finished download stays on
+// "Restarting…" (there is nothing to relaunch in a browser).
+if (import.meta.env.DEV) {
+  const SAMPLE = [
+    'New',
+    '• A top bar that fits — what doesn’t fit folds into More, and comes back as the window widens.',
+    '• Choose your top bar — show or hide each item in Settings › Screen.',
+    'Fixes',
+    '• Update card — a calm card with what’s new and a progress ring.',
+  ].join('\n');
+  (globalThis as { __updateSim?: unknown }).__updateSim = {
+    offer(version = '0.1.14', o: { notes?: string; fail?: boolean; ms?: number } = {}) {
+      const ms = o.ms ?? 4000;
+      const body = o.notes ?? SAMPLE;
+      pending = {
+        version,
+        body,
+        downloadAndInstall: (cb) =>
+          new Promise<void>((_, reject) => {
+            const total = 12_000_000;
+            const chunk = total / (ms / 100);
+            let got = 0;
+            cb({ event: 'Started', data: { contentLength: total } });
+            const t = setInterval(() => {
+              got += chunk;
+              if (o.fail && got >= total / 2) {
+                clearInterval(t);
+                reject(new Error('The download was interrupted.'));
+              } else if (got >= total) {
+                clearInterval(t);
+                cb({ event: 'Finished' });
+              } else cb({ event: 'Progress', data: { chunkLength: chunk } });
+            }, 100);
+          }),
+      };
+      updates.version = version;
+      updates.notes = body;
+      updates.error = '';
+      updates.progress = 0;
+      updates.status = 'available';
+    },
+    reset() {
+      pending = null;
+      Object.assign(updates, { status: 'idle', version: '', notes: '', progress: 0, error: '' });
+    },
+  };
+}

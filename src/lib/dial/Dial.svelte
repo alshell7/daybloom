@@ -14,6 +14,7 @@
   import { detent } from '../sound';
   import { angleOf, arcPath, C, laneRadii, MAX_LANES, nearestTurn, polar, R, radiusOf, sectorPath } from './geometry';
   import DialArc from './DialArc.svelte';
+  import ZoneRings from './ZoneRings.svelte';
   import type { ScreenPalette } from '../addons/alef/palette';
 
   type Range = { startMs: number; endMs: number };
@@ -48,6 +49,7 @@
     prayerBloom = 0,
     lift = 0,
     screen = null,
+    worldZones = [],
     children,
   }: {
     presetId: PresetId;
@@ -88,6 +90,8 @@
     lift?: number;
     /** A face lives in the middle (Alef): the centre becomes its screen, in these colours. */
     screen?: { led: string; glow: number; palette: ScreenPalette } | null;
+    /** World clock: up to two other zones, drawn as day/night rings outside the bezel. */
+    worldZones?: string[];
     children?: Snippet;
   } = $props();
 
@@ -538,9 +542,6 @@
     ondrop={onDrop}
   >
     <defs>
-      <pattern id="dial-hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width="5" height="14" fill="white" opacity="0.22" />
-      </pattern>
       <filter id="dial-glow" x="-20%" y="-20%" width="140%" height="140%">
         <feGaussianBlur stdDeviation="5" result="b" />
         <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -716,6 +717,10 @@
       </g>
     {/if}
 
+    {#if worldZones.length}
+      <ZoneRings zones={worldZones} span={w} now={minuteNow} {finish} {compact} {reduced} {hour12} interactive={interactive && !drag} />
+    {/if}
+
     <!-- now hand -->
     {#if showNow}
       <!-- The hand lives between the numerals and the bezel; only a hairline crosses the
@@ -751,7 +756,7 @@
 
   {#if breathing && breathStart}
     {#key breathStart}
-      <BreathOrb startAt={breathStart} color={categoryColor('rest', finish.dark)} dark={finish.dark} {reduced} />
+      <BreathOrb startAt={breathStart} color={categoryColor('rest', sp?.dark ?? finish.dark)} dark={sp?.dark ?? finish.dark} ink={sp?.ink ?? finish.ink} {compact} {reduced} />
     {/key}
   {/if}
 

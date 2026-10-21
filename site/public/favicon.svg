@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Daybloom app icon. 824px macOS tile on a 1024 canvas; angles run clockwise from 12. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#223050"/>
+      <stop offset="1" stop-color="#19223A"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Tile -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)" filter="url(#shadow)"/>
+
+  <!-- Bezel: empty track, then plan segments (blue 100°, green 70°, amber 50°) -->
+  <circle cx="512" cy="512" r="326" fill="none" stroke="#2A3758" stroke-width="54"/>
+  <g fill="none" stroke-width="54" stroke-linecap="round">
+    <path stroke="#3E6FE4" d="M199.8 418.1A326 326 0 0 1 608.7 200.7"/>
+    <path stroke="#2E9E6B" d="M688.3 237.8A326 326 0 0 1 837.5 530.5"/>
+    <path stroke="#F0A532" d="M820.7 616.8A326 326 0 0 1 678.7 792.2"/>
+  </g>
+
+  <!-- Dial with 60 minute ticks and 12 hour ticks (dash patterns on a 360-unit circle) -->
+  <circle cx="512" cy="512" r="270" fill="#EEF1F4"/>
+  <circle cx="512" cy="512" r="244" fill="none" stroke="#B7C0CC" stroke-width="14"
+          pathLength="360" stroke-dasharray="0.9 5.1" stroke-dashoffset="0.45"/>
+  <circle cx="512" cy="512" r="240" fill="none" stroke="#7E8A9C" stroke-width="22"
+          pathLength="360" stroke-dasharray="1.9 28.1" stroke-dashoffset="0.95"/>
+
+  <!-- Hands at 10:10, hour hand resting inside the blue block -->
+  <g stroke="#1C2740" stroke-linecap="round">
+    <line x1="512" y1="512" x2="709.5" y2="398.0" stroke-width="14"/>
+    <line x1="512" y1="512" x2="382.6" y2="421.4" stroke-width="30"/>
+  </g>
+  <circle cx="397.3" cy="431.7" r="9" fill="#F0A532"/>
+  <circle cx="512" cy="512" r="22" fill="#1C2740"/>
+  <circle cx="512" cy="512" r="7" fill="#EEF1F4"/>
+</svg>

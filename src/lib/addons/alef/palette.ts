@@ -31,7 +31,15 @@ export interface ScreenPalette {
 }
 
 /** Inked eyes that suit each light face (the finish's lume is green on all of them). */
-const LIGHT_EYES: Partial<Record<Finish['id'], string>> = { glacier: '#2C6E9E', salmon: '#3A4FA0', mint: '#1F7A57' };
+const LIGHT_EYES: Partial<Record<Finish['id'], string>> = {
+  glacier: '#2C6E9E',
+  salmon: '#3A4FA0',
+  mint: '#1F7A57',
+  lilac: '#5B45A8',
+  blossom: '#9C3A5E',
+  champagne: '#1E46A3',
+  azure: '#2C5E9E',
+};
 
 /** 'dial' as an eye colour follows the finish. */
 export function eyeColorFor(finish: Finish, eyes: string, style: ScreenStyle): string {

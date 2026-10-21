@@ -1,19 +1,19 @@
 <script lang="ts">
-  // Setting Alef up: where it shows, how it looks and sounds, how much it talks, and its brain —
-  // on this device, or an AI service you choose (key kept in the system keychain, a model to
-  // pick, a quick test, and your clear yes before anything is sent).
+  // Setting Alef up: about you, where it shows, how it looks and sounds, how much it talks, and
+  // its brain. The brain and the voice come from Settings › AI (services are set up once there,
+  // for every part of Daybloom); here you pick which one Alef uses.
   import { onMount } from 'svelte';
-  import { alef, alefFile, EYE_COLORS, keyAccount, type Brain } from '../../../lib/addons/alef/alef.svelte';
-  import { chatOnce, LlmError, listModels, PROVIDERS, providerOf, type ProviderId } from '../../../lib/addons/alef/llm';
+  import { alef, alefFile, EYE_COLORS } from '../../../lib/addons/alef/alef.svelte';
+  import { ai, aiFile } from '../../../lib/ai/hub.svelte';
+  import { can, PROVIDERS, providerOf } from '../../../lib/ai/providers';
   import { tinyTts, VOICE_BYTES } from '../../../lib/addons/alef/tts/tts.svelte';
-  import type { VoiceMode } from '../../../lib/addons/alef/voice';
   import Icon from '../../../lib/Icon.svelte';
-  import { platform } from '../../../lib/platform';
   import { session } from '../../../lib/assistant/session.svelte';
   import { settings } from '../../../lib/stores/settings.svelte';
   import { view } from '../../../lib/stores/view.svelte';
   import EngineBadge from '../../assistant/EngineBadge.svelte';
   import Segmented from '../../Segmented.svelte';
+  import AiRoute from '../../settings/AiRoute.svelte';
 
   const s = $derived(alefFile.value.settings);
   const set = (patch: Partial<typeof alefFile.value.settings>) => Object.assign(alefFile.value.settings, patch);
@@ -21,117 +21,34 @@
 
   onMount(() => {
     session.open();
-    void alef.refreshKey();
+    void ai.refreshKeys();
     void tinyTts.check();
   });
 
-  // ── Voice ──
-  const VOICE_HINT: Record<VoiceMode, string> = {
+  const openAi = () => (view.sheet = { kind: 'settings', section: 'ai' });
+
+  // ── Voice: Alef's own voices, and any AI service set up to speak ──
+  const speak = $derived(aiFile.value.use.alef.speak);
+  const VOICE_HINT: Record<string, string> = {
     chirps: 'Little robot sounds in the rhythm of the words.',
-    speech: 'A small spoken voice, made on this device.',
+    device: 'A small spoken voice, made on this device.',
     system: "Your computer's own voice, a little higher.",
     off: 'Alef stays silent; you can still read what it says.',
   };
+  const speakers = $derived(PROVIDERS.filter((p) => can(p.id, 'speak') && ai.connected(p.id)));
+  const cloudVoice = $derived(speak.via !== 'chirps' && speak.via !== 'device' && speak.via !== 'system' && speak.via !== 'off' ? speak.via : null);
   function testVoice() {
     alef.perform('happy');
     alef.say("Hi! I'm Alef. This is how I sound.", { voice: true, important: true });
   }
 
   // ── Brain ──
-  const BRAINS: { id: Brain; name: string; icon: string }[] = [{ id: 'local', name: 'This device', icon: 'cpu' }, ...PROVIDERS.map((p) => ({ id: p.id as Brain, name: p.name, icon: p.id === 'custom' ? 'link' : 'cloud' }))];
-  const provider = $derived(s.brain === 'local' ? null : providerOf(s.brain));
-  const cfg = $derived(s.brain === 'local' ? null : (s.configs[s.brain] ?? { model: '' }));
-
-  function chooseBrain(b: Brain) {
-    set({ brain: b });
-    if (b !== 'local' && !s.configs[b]) alefFile.value.settings.configs = { ...s.configs, [b]: { model: providerOf(b).suggested[0] ?? '' } };
-    models = [];
-    test = null;
-    keyText = '';
-    void alef.refreshKey();
-  }
-  function patchCfg(p: Record<string, unknown>) {
-    if (s.brain === 'local') return;
-    const b = s.brain;
-    alefFile.value.settings.configs = { ...s.configs, [b]: { model: '', ...(s.configs[b] ?? {}), ...p } };
-  }
-
-  // Key: saved straight to the keychain, never shown again.
-  let keyText = $state('');
-  let keyBusy = $state(false);
-  async function saveKey(e: SubmitEvent) {
-    e.preventDefault();
-    if (s.brain === 'local' || !keyText.trim()) return;
-    keyBusy = true;
-    try {
-      await platform.secrets.set(keyAccount(s.brain), keyText.trim());
-      keyText = '';
-      await alef.refreshKey();
-    } finally {
-      keyBusy = false;
-    }
-  }
-  async function removeKey() {
-    if (s.brain === 'local') return;
-    await platform.secrets.delete(keyAccount(s.brain));
-    await alef.refreshKey();
-  }
-
-  // Headers for a custom endpoint, one "Name: value" a line.
-  const headerText = $derived(Object.entries(cfg?.headers ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n'));
-  function setHeaders(t: string) {
-    const h: Record<string, string> = {};
-    for (const line of t.split('\n')) {
-      const m = /^\s*([\w-]+)\s*:\s*(.+?)\s*$/.exec(line);
-      if (m) h[m[1]] = m[2];
-    }
-    patchCfg({ headers: h });
-  }
-
-  // Models: the provider's list when it can say, with good suggestions first.
-  let models = $state<string[]>([]);
-  let loadingModels = $state(false);
-  async function loadModels() {
-    if (s.brain === 'local' || !cfg) return;
-    loadingModels = true;
-    try {
-      const key = (await platform.secrets.get(keyAccount(s.brain))) ?? '';
-      models = await listModels({ provider: s.brain, ...cfg }, key, (u, i) => platform.fetch(u, i));
-    } finally {
-      loadingModels = false;
-    }
-  }
-  const modelChips = $derived((models.length ? models : (provider?.suggested ?? [])).slice(0, models.length ? 60 : 4));
-
-  // A quick test: say hello.
-  let test = $state<{ ok: boolean; text: string } | null>(null);
-  let testing = $state(false);
-  async function tryIt() {
-    if (s.brain === 'local' || !cfg) return;
-    testing = true;
-    test = null;
-    try {
-      const key = (await platform.secrets.get(keyAccount(s.brain))) ?? '';
-      const r = await chatOnce({ provider: s.brain, ...cfg }, key, [{ role: 'user', content: 'Say hello to me in five cheerful words.' }], null, (u, i) => platform.fetch(u, i), 40);
-      test = { ok: true, text: r.content.trim() || '(an empty answer, but it works)' };
-      alef.perform('delighted', { sound: true });
-    } catch (e) {
-      test = { ok: false, text: e instanceof LlmError ? e.message : String(e) };
-      alef.perform('confused', { sound: true });
-    } finally {
-      testing = false;
-    }
-  }
-
-  const agreed = $derived(s.brain !== 'local' && !!s.consent[s.brain]);
-  function agree(on: boolean) {
-    if (s.brain === 'local') return;
-    const c = { ...s.consent };
-    if (on) c[s.brain as ProviderId] = Date.now();
-    else delete c[s.brain as ProviderId];
-    alefFile.value.settings.consent = c;
-    if (on) alef.react('thanks', { line: null });
-  }
+  const think = $derived(ai.route('alef', 'think'));
+  const brain = $derived.by(() => {
+    if (think.via === 'device') return { name: 'This device', model: null as string | null, ready: true };
+    const svc = ai.service(think.via);
+    return { name: providerOf(think.via).name, model: think.model || svc?.model || null, ready: ai.ready('alef', 'think') };
+  });
 </script>
 
 <div class="as">
@@ -251,19 +168,12 @@
   <!-- Voice -->
   <section>
     <h4>Voice</h4>
-    <Segmented
-      label="Voice"
-      value={s.voice}
-      onchange={(v) => set({ voice: v })}
-      options={[
-        { value: 'chirps', label: 'Chirps' },
-        { value: 'speech', label: 'Voice' },
-        { value: 'system', label: 'System' },
-        { value: 'off', label: 'Silent' },
-      ]}
-    />
-    <p class="hint">{VOICE_HINT[s.voice]}</p>
-    {#if s.voice === 'speech'}
+    <AiRoute feature="alef" skill="speak" compact />
+    <p class="hint">
+      {cloudVoice ? `${providerOf(cloudVoice).name}'s voice, through Alef's small speaker.` : VOICE_HINT[speak.via]}
+      {#if !speakers.length}<button class="link" onclick={openAi}>Use an AI voice <Icon name="external" size={11} /></button>{/if}
+    </p>
+    {#if speak.via === 'device'}
       <div class="tts">
         {#if tinyTts.status === 'ready'}
           <span class="ok"><Icon name="check" size={14} /> Alef's voice is on this device.</span>
@@ -276,7 +186,7 @@
         {/if}
       </div>
     {/if}
-    {#if s.voice !== 'off'}
+    {#if speak.via !== 'off'}
       <div class="sliders">
         <label>
           <span>Pitch</span>
@@ -313,104 +223,17 @@
   <!-- Brain -->
   <section>
     <h4>Alef's brain</h4>
-    <div class="brains" role="radiogroup" aria-label="Alef's brain">
-      {#each BRAINS as b (b.id)}
-        <button role="radio" aria-checked={s.brain === b.id} class="brain" class:on={s.brain === b.id} onclick={() => chooseBrain(b.id)}>
-          <Icon name={b.icon} size={14} />
-          {b.name}
-        </button>
-      {/each}
-    </div>
-
-    {#if s.brain === 'local'}
-      <p class="hint">Alef understands you on this device with Daybloom's own assistant. Nothing leaves your computer.</p>
-      <div class="engine"><EngineBadge /></div>
-    {:else if provider && cfg}
-      <div class="setup">
-        {#if provider.needsAccount}
-          <label class="fieldset">
-            <span>Account ID</span>
-            <input class="field" value={cfg.accountId ?? ''} oninput={(e) => patchCfg({ accountId: e.currentTarget.value.trim() })} placeholder="32 letters and numbers, from your Cloudflare dashboard" spellcheck="false" autocomplete="off" />
-          </label>
-        {/if}
-        {#if s.brain === 'custom'}
-          <label class="fieldset">
-            <span>Address</span>
-            <input class="field" value={cfg.baseUrl ?? ''} oninput={(e) => patchCfg({ baseUrl: e.currentTarget.value.trim() })} placeholder="https://…/v1 (any OpenAI-compatible service)" spellcheck="false" autocomplete="off" />
-          </label>
-          <label class="fieldset">
-            <span>Extra headers <small>(optional, one “Name: value” a line)</small></span>
-            <textarea class="field area" value={headerText} onchange={(e) => setHeaders(e.currentTarget.value)} spellcheck="false" rows="2"></textarea>
-          </label>
-        {/if}
-
-        <div class="fieldset">
-          <span>Key {#if provider.keyUrl}<button class="link" onclick={() => platform.openExternal(provider.keyUrl)}>Get one <Icon name="external" size={11} /></button>{/if}</span>
-          {#if alef.hasKey}
-            <div class="saved">
-              <Icon name="lock" size={14} />
-              <span>Saved in your system keychain</span>
-              <button class="link" onclick={() => (alef.hasKey = false)}>Replace</button>
-              <button class="link danger" onclick={removeKey}>Remove</button>
-            </div>
-          {:else}
-            <form class="keyrow" onsubmit={saveKey}>
-              <input class="field" type="password" bind:value={keyText} placeholder={provider.keyHint} autocomplete="off" spellcheck="false" aria-label={`${provider.name} key`} />
-              <button class="btn btn-soft" type="submit" disabled={!keyText.trim() || keyBusy}>Save</button>
-            </form>
-          {/if}
-        </div>
-
-        <div class="fieldset">
-          <span>Model</span>
-          <div class="keyrow">
-            <input class="field" value={cfg.model} oninput={(e) => patchCfg({ model: e.currentTarget.value.trim() })} placeholder="A model id" spellcheck="false" autocomplete="off" list="alef-models" />
-            <button class="btn btn-quiet" onclick={loadModels} disabled={loadingModels} title="Ask the provider which models you can use">
-              <Icon name="refresh" size={13} />
-              {loadingModels ? 'Loading…' : 'All models'}
-            </button>
-          </div>
-          <datalist id="alef-models">{#each models as m (m)}<option value={m}></option>{/each}</datalist>
-          {#if modelChips.length}
-            <div class="chips" class:many={models.length > 4}>
-              {#each modelChips as m (m)}
-                <button class="mchip" class:on={cfg.model === m} onclick={() => patchCfg({ model: m })}>{m}</button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-
-        <!-- Consent -->
-        <div class="consent" class:yes={agreed}>
-          <Icon name={agreed ? 'shield' : 'info'} size={16} />
-          <div>
-            <p>
-              To answer, Alef sends <b>{provider.name}</b> what you say, <b>today's blocks</b> (titles, times, notes), <b>your Daybloom settings</b>{s.you.name.trim() || s.you.about.trim() ? ' and what you wrote under About you' : ''}.{s.mayChange ? ' It can also add, move or finish blocks; each change shows with an Undo.' : ''}
-              {provider.name}'s own privacy terms apply. Nothing is sent until you agree.
-            </p>
-            {#if agreed}
-              <button class="link" onclick={() => agree(false)}>Stop sharing</button>
-            {:else}
-              <button class="btn btn-primary" onclick={() => agree(true)}>I agree</button>
-            {/if}
-          </div>
-        </div>
-
-        <label class="row">
-          <span><b>Alef may change my plans</b><small>Off: it can only read and suggest.</small></span>
-          <input type="checkbox" class="switch" checked={s.mayChange} onchange={(e) => set({ mayChange: e.currentTarget.checked })} />
-        </label>
-
-        <div class="test">
-          <button class="btn btn-soft" onclick={tryIt} disabled={testing || (!alef.hasKey && s.brain !== 'custom') || !cfg.model}>
-            <Icon name="zap" size={13} />
-            {testing ? 'Trying…' : 'Try it'}
-          </button>
-          {#if test}<span class:ok={test.ok} class:bad={!test.ok}>{test.text}</span>{/if}
-          {#if !alef.hasKey && s.brain !== 'custom'}<span class="muted">Save a key first.</span>{/if}
-        </div>
-      </div>
-    {/if}
+    <AiRoute feature="alef" skill="think" compact />
+    {#if think.via !== 'device' && !brain.ready}<p class="hint">{brain.name} isn't set up yet, so Alef thinks on this device for now. <button class="link" onclick={openAi}>Set it up <Icon name="external" size={11} /></button></p>{/if}
+    {#if think.via === 'device'}<div class="engine"><EngineBadge /></div>{/if}
+    <label class="row">
+      <span><b>Alef may change my plans</b><small>With an AI brain. Each change shows with an Undo. Off: it only reads and suggests.</small></span>
+      <input type="checkbox" class="switch" checked={s.mayChange} onchange={(e) => set({ mayChange: e.currentTarget.checked })} />
+    </label>
+    <label class="row">
+      <span><b>Speaks up in its own words</b><small>With an AI brain, Alef writes its own hellos, check-ins and cheers, a few times a day.</small></span>
+      <input type="checkbox" class="switch" checked={s.proactive} onchange={(e) => set({ proactive: e.currentTarget.checked })} />
+    </label>
   </section>
 </div>
 
@@ -573,42 +396,8 @@
     color: var(--ink-3);
     font-size: var(--t-xs);
   }
-  .brains {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .brain {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 32px;
-    padding: 0 12px;
-    border-radius: var(--r-pill);
-    border: 1px solid var(--line-strong);
-    font-size: var(--t-xs);
-    color: var(--ink-2);
-    transition:
-      background var(--dur-1) var(--ease-out),
-      color var(--dur-1) var(--ease-out),
-      border-color var(--dur-1) var(--ease-out);
-  }
-  .brain:hover {
-    border-color: var(--ink-3);
-    color: var(--ink);
-  }
-  .brain.on {
-    background: var(--ink);
-    border-color: var(--ink);
-    color: var(--raised);
-  }
   .engine {
     margin-top: var(--s-2);
-  }
-  .setup {
-    display: grid;
-    gap: var(--s-3);
-    margin-top: var(--s-3);
   }
   .fieldset {
     display: grid;
@@ -637,28 +426,6 @@
     font-family: ui-monospace, monospace;
     font-size: 12px;
   }
-  .keyrow {
-    display: flex;
-    gap: 6px;
-  }
-  .keyrow .field {
-    flex: 1;
-    min-width: 0;
-  }
-  .saved {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 36px;
-    padding: 0 12px;
-    border-radius: var(--r-sm);
-    background: color-mix(in srgb, var(--ink) 5%, transparent);
-    font-size: var(--t-xs);
-    color: var(--ink-2);
-  }
-  .saved span {
-    flex: 1;
-  }
   .link {
     display: inline-flex;
     align-items: center;
@@ -670,73 +437,5 @@
   }
   .link:hover {
     color: var(--ink);
-  }
-  .link.danger {
-    color: var(--danger);
-  }
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  .chips.many {
-    max-height: 132px;
-    overflow-y: auto;
-    padding: 2px;
-  }
-  .mchip {
-    height: 26px;
-    padding: 0 10px;
-    border-radius: var(--r-pill);
-    border: 1px solid var(--line-strong);
-    font: 500 11px / 1 ui-monospace, monospace;
-    color: var(--ink-2);
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .mchip.on {
-    background: var(--ink);
-    color: var(--raised);
-    border-color: var(--ink);
-  }
-  .consent {
-    display: flex;
-    gap: 10px;
-    padding: var(--s-3);
-    border-radius: var(--r-md);
-    background: color-mix(in srgb, #ffc75c 14%, transparent);
-    color: var(--ink);
-  }
-  .consent.yes {
-    background: color-mix(in srgb, var(--lume) 14%, transparent);
-  }
-  .consent :global(svg) {
-    flex: none;
-    margin-top: 2px;
-  }
-  .consent p {
-    margin: 0 0 var(--s-2);
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--ink-2);
-  }
-  .consent b {
-    color: var(--ink);
-    font-weight: 500;
-  }
-  .test {
-    display: flex;
-    align-items: center;
-    gap: var(--s-3);
-    flex-wrap: wrap;
-    font-size: var(--t-xs);
-  }
-  .test .ok {
-    color: var(--ink);
-  }
-  .test .bad {
-    color: var(--danger);
   }
 </style>

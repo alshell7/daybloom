@@ -12,6 +12,7 @@ import { startLandings } from './landings/landings.svelte';
 import { landingsFile } from './landings/pad.svelte';
 import { retroFile, startRetro } from './retro/retro.svelte';
 import { alefFile, startAlef, startAlefView } from './alef/alef.svelte';
+import { viewsFile } from './views/views.svelte';
 import { view } from '../stores/view.svelte';
 
 /**
@@ -105,6 +106,10 @@ export function startAddons(): () => void {
     });
     $effect(() => {
       if (isOn('work') && !work.ready) void work.load();
+    });
+    $effect(() => {
+      // Timeline views: just its choice of view (List, Board or Gantt) to read.
+      if (isOn('views')) void loaded(viewsFile);
     });
     $effect(() => {
       const on = isOn('crumbs');

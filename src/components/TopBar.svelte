@@ -1,255 +1,418 @@
 <script lang="ts">
-  import { blocksInRange } from '../lib/engine/blocks';
-  import { addDays, formatDayLong, formatTime, fromISODate, startOfDayMs, weekday } from '../lib/engine/time';
-  import { clock } from '../lib/stores/clock.svelte';
-  import type { Block, ISODate } from '../lib/engine/types';
+  // The top bar: the day on the left (the clock, the date, the zone), the week, and the actions
+  // on the right. It never overlaps or clips. Every item has a group and a priority
+  // (topbar/items.ts); a ResizeObserver reports the bar's width and each item's natural width
+  // (only when one changes), and fitBar() decides from those numbers what stays out: the long date
+  // shortens, the quietest actions fold into More, the week drops to a row of its own. A wider
+  // window brings them back in the same order. Items spring aside as others fold or return, and
+  // the week glides between rows (FLIP, transform only). What you hide in Settings › Screen ›
+  // Top bar waits in More too.
+  import { flip } from 'svelte/animate';
+  import type { Action } from 'svelte/action';
+  import { calendarState } from '../lib/calendarBridge.svelte';
+  import { activeTimeZone, addDays, formatDayLong, formatTime, fromISODate, zoneCity } from '../lib/engine/time';
   import Icon from '../lib/Icon.svelte';
-  import ThemeToggle from './ThemeToggle.svelte';
   import { toggleTheme } from '../lib/themeToggle';
-  import { cubicOut } from 'svelte/easing';
-  import { scale } from 'svelte/transition';
-  import ZonePicker from './ZonePicker.svelte';
-  import UpdateChip from './UpdateChip.svelte';
+  import { tracker } from '../lib/addons/tracker/tracker.svelte';
+  import { clock } from '../lib/stores/clock.svelte';
   import { settings } from '../lib/stores/settings.svelte';
-  import { taskFile } from '../lib/stores/tasks.svelte';
-  import { view } from '../lib/stores/view.svelte';
   import { timer } from '../lib/stores/timer.svelte';
-  import { enabledAddons, isOn } from '../lib/addons/registry';
+  import { view } from '../lib/stores/view.svelte';
+  import { updates } from '../lib/updater.svelte';
+  import ThemeToggle from './ThemeToggle.svelte';
+  import ZonePicker from './ZonePicker.svelte';
   import TrackerPill from './addons/tracker/TrackerPill.svelte';
   import SessionPill from './focus/SessionPill.svelte';
   import BacklogButton from './backlog/BacklogButton.svelte';
   import CalendarButton from './calendars/CalendarButton.svelte';
+  import { fitBar } from './topbar/fit';
+  import { barCatalog, GROUPS, KBD, type BarItemDef, type GroupId } from './topbar/items';
+  import { barLive } from './topbar/live.svelte';
+  import MoreMenu, { type MenuEntry, type MenuGroup } from './topbar/MoreMenu.svelte';
+  import { popIn, popOut, slideFrom, springOut } from './topbar/motion';
+  import { showUpdate, updateWaiting } from './topbar/updateNotice.svelte';
+  import WeekStrip from './topbar/WeekStrip.svelte';
+  import Popover from './pickers/Popover.svelte';
+  import MonthCalendar from './calendar-view/MonthCalendar.svelte';
+  import type { ISODate } from '../lib/engine/types';
 
   let { mac = false, ontogglewidget }: { mac?: boolean; ontogglewidget: () => void } = $props();
 
-  const weekStart = $derived(addDays(view.date, -((weekday(view.date) + 6) % 7)));
-  const days = $derived(Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)));
+  /** The traffic lights' room on macOS (row one only; the week's own row runs full width). */
+  const MAC_INSET = 64;
+  /** Widths to assume until an item has been measured. */
+  const GUESS: Record<string, number> = { clock: 66, rel: 48, long: 170, short: 96, 'zone:full': 120, 'zone:compact': 40, today: 70, more: 34, 'it:private': 92, 'it:session': 170, 'it:tracker': 150 };
 
-  const byDay = $derived.by(() => {
-    const s = startOfDayMs(weekStart);
-    const e = startOfDayMs(addDays(weekStart, 7));
-    const all = blocksInRange(taskFile.value.tasks, view.events, s, e, view.finish.dark);
-    const map = new Map<ISODate, Block[]>();
-    for (const b of all) {
-      const list = map.get(b.date) ?? [];
-      list.push(b);
-      map.set(b.date, list);
-    }
-    return map;
-  });
+  const rm = $derived(view.reducedMotion);
+  const hidden = $derived(new Set(settings.value.topBar.hidden));
+  const catalog = $derived(barCatalog());
+  const connected = $derived(calendarState.accounts.some((a) => a.enabled !== false));
 
-  // The selected-day puck slides between days instead of jumping.
-  let weekEl: HTMLElement | undefined = $state();
-  let puckX = $state(-1);
-  let puckReady = $state(false);
-  function placePuck() {
-    const el = weekEl?.querySelector<HTMLElement>('.day-chip.selected');
-    puckX = el ? el.offsetLeft : -1;
+  /** Whether an item has anything to show right now (the pills only while they're live). */
+  function present(id: string): boolean {
+    if (id === 'private') return settings.value.privacy.on;
+    if (id === 'session') return !!timer.active && !view.focus;
+    if (id === 'tracker') return !!tracker.running;
+    if (id === 'calendars') return connected;
+    return true;
   }
+
+  // --- measuring -------------------------------------------------------------------------
+  // One observer for the row and every item. Natural widths only: items never shrink (flex: none,
+  // nowrap), and the variants not in use (the other date, a hidden "Today") are laid out off to
+  // the side, invisible, so they can still be measured.
+  let rowW = $state(0);
+  let widths = $state<Record<string, number>>({});
+  let ready = $state(false);
+  const keys = new WeakMap<Element, string>();
+  let rowEl = $state<HTMLElement>();
+
+  const ro =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver((entries) => {
+          let next: Record<string, number> | null = null;
+          for (const e of entries) {
+            if (e.target === rowEl) {
+              rowW = e.contentRect.width;
+              continue;
+            }
+            const key = keys.get(e.target);
+            if (!key) continue;
+            const w = e.borderBoxSize?.[0]?.inlineSize ?? (e.target as HTMLElement).offsetWidth;
+            if (Math.abs((widths[key] ?? -1) - w) > 0.5) (next ??= { ...widths })[key] = w;
+          }
+          if (next) widths = next;
+          if (!ready && rowW > 0) requestAnimationFrame(() => requestAnimationFrame(() => (ready = true)));
+        });
+
+  const measure: Action<HTMLElement, string> = (node, key) => {
+    keys.set(node, key);
+    ro?.observe(node);
+    return {
+      update: (k: string) => void keys.set(node, k),
+      destroy: () => ro?.unobserve(node),
+    };
+  };
   $effect(() => {
-    view.date;
-    days;
-    placePuck();
-    requestAnimationFrame(() => (puckReady = true));
-  });
-  // Layout changes (window resize, fonts arriving) move the chips; keep the puck under them.
-  $effect(() => {
-    if (!weekEl) return;
-    const ro = new ResizeObserver(placePuck);
-    ro.observe(weekEl);
+    if (!rowEl || !ro) return;
+    ro.observe(rowEl);
     return () => ro.disconnect();
   });
+  const w = (key: string, guess = 34) => widths[key] ?? GUESS[key] ?? guess;
 
-  const title = $derived(formatDayLong(view.date));
-  const shortTitle = $derived(fromISODate(view.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
-
-  function openFocus() {
-    if (timer.active) view.focus = true;
-    else view.sheet = view.sheet?.kind === 'focus' ? null : { kind: 'focus' };
-  }
-
-  // Narrow windows fold the quieter actions into a "more" menu (see the container queries).
-  let moreOpen = $state(false);
-  function pick(run: () => void) {
-    moreOpen = false;
-    run();
-  }
-  function onMoreKey(e: KeyboardEvent) {
-    if (e.key === 'Escape' && moreOpen) {
-      e.stopPropagation();
-      moreOpen = false;
-    }
-  }
+  // --- deciding --------------------------------------------------------------------------
   const rel = $derived.by(() => {
     if (view.date === view.today) return 'Today';
     if (view.date === addDays(view.today, 1)) return 'Tomorrow';
     if (view.date === addDays(view.today, -1)) return 'Yesterday';
     return null;
   });
+  const dateOn = $derived(!hidden.has('date'));
+  const zoneOn = $derived(!hidden.has('zone'));
+  const weekOn = $derived(!hidden.has('week'));
+  const actions = $derived(catalog.filter((d) => !d.lead && present(d.id) && !hidden.has(d.id)));
+
+  const fit = $derived(
+    fitBar({
+      row: Math.max(0, rowW - (mac ? MAC_INSET : 0)),
+      row2: rowW,
+      date: dateOn ? { clock: w('clock'), rel: rel ? w('rel') : 0, long: w('long'), short: w('short') } : null,
+      zone: zoneOn ? { full: w('zone:full'), compact: w('zone:compact') } : null,
+      week: weekOn ? { today: w('today') } : null,
+      items: actions.map((d) => ({ id: d.id, priority: d.priority, group: d.group, width: w(`it:${d.id}`) })),
+      more: w('more'),
+    }),
+  );
+  const inBar = $derived(actions.filter((d) => fit.shown.includes(d.id)));
+  const showLong = $derived(fit.date === 'long');
+  const showShort = $derived(fit.date === 'short' || (fit.date === 'rel' && !rel));
+  const showRel = $derived(!!rel && fit.date !== 'clock');
+  const weekIn = $derived(fit.week === 'inline' || fit.week === 'below');
+
+  $effect(() => {
+    barLive.folded = fit.folded;
+    barLive.week = fit.week;
+    barLive.zone = fit.zone;
+  });
+
+  // The week gliding between rows: where it was, then where it is (FLIP).
+  let weekEl = $state<HTMLElement>();
+  let weekWas: DOMRect | null = null;
+  let lastWeek: string | null = null;
+  $effect.pre(() => {
+    const m = fit.week;
+    if (ready && lastWeek && m !== lastWeek && weekEl?.isConnected) weekWas = weekEl.getBoundingClientRect();
+  });
+  $effect(() => {
+    const m = fit.week;
+    if (weekWas && weekEl && m !== lastWeek) {
+      const now = weekEl.getBoundingClientRect();
+      slideFrom(weekEl, weekWas.left - now.left, weekWas.top - now.top, rm);
+    }
+    weekWas = null;
+    lastWeek = m;
+  });
+
+  // --- what the items do -----------------------------------------------------------------
+  const title = $derived(formatDayLong(view.date));
+  const shortTitle = $derived(fromISODate(view.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
+
+  function toggleSheet(kind: 'assistant' | 'insights' | 'addons' | 'backlog' | 'calendars') {
+    view.sheet = view.sheet?.kind === kind ? null : { kind };
+  }
+  function openSheet(kind: string) {
+    view.sheet = view.sheet?.kind === kind ? null : ({ kind } as typeof view.sheet);
+  }
+  function openFocus() {
+    if (timer.active) view.focus = true;
+    else view.sheet = view.sheet?.kind === 'focus' ? null : { kind: 'focus' };
+  }
+  function togglePrivacy() {
+    const on = !settings.value.privacy.on;
+    settings.value.privacy.on = on;
+    view.say(on ? 'Privacy mode on · Daybloom stays out of screenshots and recordings' : 'Privacy mode off');
+  }
+
+  /** The More menu's row for an item. */
+  function entryFor(d: BarItemDef): MenuEntry | null {
+    const base = { id: d.id, label: d.label, icon: d.icon, kbd: d.kbd };
+    switch (d.id) {
+      case 'private':
+        return null; // "Privacy mode" is always in More.
+      case 'session':
+        return { ...base, label: 'Back to focus', detail: timer.active?.label, kbd: 'F', run: () => (view.focus = true) };
+      case 'tracker':
+        return { ...base, detail: 'Tracking now', run: () => (view.sheet = { kind: 'tracker' }) };
+      case 'ask':
+        return { ...base, run: () => toggleSheet('assistant') };
+      case 'backlog':
+        return { ...base, detail: view.later.length ? `${view.later.length} waiting` : undefined, run: () => toggleSheet('backlog') };
+      case 'focus':
+        return { ...base, run: openFocus };
+      case 'insights':
+        return { ...base, run: () => toggleSheet('insights') };
+      case 'calendars':
+        return { ...base, run: () => toggleSheet('calendars') };
+      case 'theme':
+        return { ...base, label: view.dark ? 'Light mode' : 'Dark mode', icon: view.dark ? 'sun' : 'moon', run: (el) => toggleTheme(el) };
+      case 'widget':
+        return { ...base, label: settings.value.widget.visible ? 'Hide the widget' : 'Desktop widget', run: ontogglewidget };
+      case 'addons':
+        return { ...base, label: 'Browse addons', run: () => toggleSheet('addons') };
+      case 'settings':
+        return { ...base, kbd: ',', run: () => (view.sheet = { kind: 'settings' }) };
+      default:
+        return d.sheet ? { ...base, run: () => openSheet(d.sheet!) } : null;
+    }
+  }
+
+  const menuGroups = $derived.by((): MenuGroup[] => {
+    const by = new Map<GroupId, MenuEntry[]>();
+    const add = (g: GroupId, e: MenuEntry | null) => e && by.set(g, [...(by.get(g) ?? []), e]);
+    for (const d of catalog) {
+      if (d.lead) continue;
+      if (d.id === 'calendars' && !connected) {
+        add('see', { id: 'calendars', label: 'Calendars', icon: 'calendar', detail: 'Connect Google or a calendar link', run: () => toggleSheet('calendars') });
+        continue;
+      }
+      if (present(d.id) && (hidden.has(d.id) || fit.folded.includes(d.id))) add(d.group, entryFor(d));
+    }
+    if (!weekIn) add('navigate', { id: 'month', label: 'Month', icon: 'calendar-days', kbd: 'M', run: () => openCal(moreBtn()) });
+    if (!zoneOn || fit.zone === 'menu') {
+      add('navigate', { id: 'zone', label: 'Time zone', icon: 'globe', detail: (clock.zone, zoneCity(activeTimeZone())), run: () => (view.sheet = { kind: 'settings', section: 'world' }) });
+    }
+    add('app', { id: 'privacy', label: 'Privacy mode', icon: 'eye-off', checked: settings.value.privacy.on, kbd: KBD.privacy, run: togglePrivacy });
+    if (updateWaiting()) add('app', { id: 'update', label: `Version ${updates.version} is ready`, icon: 'sparkles', dot: true, run: showUpdate });
+    const days = !weekOn || fit.week === 'menu' || !dateOn;
+    return GROUPS.map((g) => ({ id: g.id, name: g.name, entries: by.get(g.id) ?? [], days: g.id === 'navigate' && days })).filter((g) => g.entries.length || g.days);
+  });
+  const footer: MenuEntry = { id: 'customize', label: 'Customize the top bar', icon: 'panel-top', run: () => (view.sheet = { kind: 'settings', section: 'topbar' }) };
+
+  const motion = $derived({ reduced: rm || !ready });
+
+  // --- the month calendar ----------------------------------------------------------------
+  // It hangs from whatever opened it: the date, the week's calendar button, or More (when
+  // both are folded away). M opens it from the first of those that is in the bar.
+  // `calFrom` stays set after closing, so the popover can still hand the focus back to it.
+  let calOpen = $state(false);
+  let calFrom = $state<HTMLElement | null>(null);
+  let whenEl = $state<HTMLButtonElement>();
+  let moreEl = $state<HTMLElement>();
+  const dateShown = $derived(dateOn && (showRel || showLong || showShort));
+  const moreBtn = () => moreEl?.querySelector<HTMLElement>('button.more') ?? moreEl!;
+  function openCal(from: HTMLElement) {
+    if (calOpen) return void (calOpen = false);
+    calFrom = from;
+    calOpen = true;
+  }
+  function closeCal(refocus = false) {
+    calOpen = false;
+    if (refocus && calFrom?.isConnected) calFrom.focus();
+  }
+  function pickDay(d: ISODate) {
+    view.setDate(d);
+    closeCal(true);
+  }
+  function calAnchor(): HTMLElement {
+    if (whenEl && dateShown) return whenEl;
+    return weekEl?.querySelector<HTMLElement>('.cal-btn') ?? moreBtn();
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key.toLowerCase() !== 'm' || e.metaKey || e.ctrlKey || e.altKey || e.repeat || view.focus) return;
+    const t = e.target;
+    if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.closest('[role="dialog"]'))) return;
+    e.preventDefault();
+    openCal(calAnchor());
+  }
+  const flipMs = $derived(rm || !ready ? 0 : 520);
 </script>
 
-<svelte:window onkeydown={onMoreKey} />
+{#snippet action(d: BarItemDef)}
+  {#if d.id === 'private'}
+    <button class="private" onclick={togglePrivacy} title={`Privacy mode is on: Daybloom stays out of screenshots and recordings. Click to turn it off · ${KBD.privacy}`} aria-label="Privacy mode is on. Turn it off">
+      <Icon name="eye-off" size={14} stroke={2.1} /><span>Private</span>
+    </button>
+  {:else if d.id === 'session'}
+    <SessionPill />
+  {:else if d.id === 'tracker'}
+    <TrackerPill />
+  {:else if d.id === 'ask'}
+    <button class="icon-btn" onclick={() => toggleSheet('assistant')} aria-pressed={view.sheet?.kind === 'assistant'} aria-label={`Ask Daybloom (${KBD.ask})`} title={`Ask Daybloom · ${KBD.ask}`}>
+      <Icon name="sparkles" size={18} />
+    </button>
+  {:else if d.id === 'backlog'}
+    <BacklogButton />
+  {:else if d.id === 'focus'}
+    <button class="icon-btn" onclick={openFocus} aria-pressed={view.sheet?.kind === 'focus' || !!timer.active} aria-label="Focus (F)" title="Focus · F">
+      <Icon name="focus" size={18} />
+    </button>
+  {:else if d.id === 'insights'}
+    <button class="icon-btn" onclick={() => toggleSheet('insights')} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
+      <Icon name="chart" size={18} />
+    </button>
+  {:else if d.id === 'calendars'}
+    <CalendarButton />
+  {:else if d.id === 'theme'}
+    <ThemeToggle />
+  {:else if d.id === 'widget'}
+    <button class="icon-btn" onclick={ontogglewidget} aria-pressed={settings.value.widget.visible} aria-label="Desktop widget (W)" title="Desktop widget · W">
+      <Icon name="picture" size={18} />
+    </button>
+  {:else if d.id === 'addons'}
+    <button class="icon-btn" onclick={() => toggleSheet('addons')} aria-pressed={view.sheet?.kind === 'addons'} aria-label="Addons" title="Addons">
+      <Icon name="puzzle" size={18} />
+    </button>
+  {:else if d.id === 'settings'}
+    <button class="icon-btn" onclick={() => (view.sheet = { kind: 'settings' })} aria-pressed={view.sheet?.kind === 'settings'} aria-label="Settings" title="Settings · ,">
+      <Icon name="settings" size={18} />
+    </button>
+  {:else if d.sheet}
+    <button class="icon-btn" onclick={() => openSheet(d.sheet!)} aria-pressed={view.sheet?.kind === d.sheet} aria-label={d.label} title={d.label}>
+      <Icon name={d.icon} size={18} />
+    </button>
+  {/if}
+{/snippet}
+
+<svelte:window onkeydown={onKey} />
 
 <header class="bar" class:mac data-tauri-drag-region>
-  <div class="row" data-tauri-drag-region>
-    <div class="when" data-tauri-drag-region>
-      <h1 class="day" data-tauri-drag-region>
-        <button class="clock tnum" onclick={() => view.goToday()} aria-label={`It's ${formatTime(clock.now, view.hour12)}. Go to today`} title="Now · T">{formatTime(clock.now, view.hour12)}</button>
-        {#if rel}<span class="rel" data-tauri-drag-region>{rel}</span>{/if}
-        <span class="date long" class:solo={!rel} data-tauri-drag-region>{title}</span>
-        <span class="date short" class:solo={!rel} data-tauri-drag-region>{shortTitle}</span>
-      </h1>
-      <ZonePicker />
+  <div class="row" class:below={fit.week === 'below'} bind:this={rowEl} data-tauri-drag-region>
+    <div class="lead" data-tauri-drag-region>
+      {#if dateOn}
+        <h1 class="day" data-tauri-drag-region>
+          <button class="clock tnum" onclick={() => view.goToday()} aria-label={`It's ${formatTime(clock.now, view.hour12)}. Go to today`} title="Now · T" use:measure={'clock'}>{formatTime(clock.now, view.hour12)}</button>
+          <!-- The date opens the month. Its padding is taken back by margins, so it measures as
+               its words (see fit.ts); with only the clock showing it takes no room at all. -->
+          <button
+            class="when"
+            class:bare={!dateShown}
+            class:on={calOpen && calFrom === whenEl}
+            bind:this={whenEl}
+            onclick={() => whenEl && openCal(whenEl)}
+            tabindex={dateShown ? 0 : -1}
+            aria-hidden={!dateShown}
+            aria-haspopup="dialog"
+            aria-expanded={calOpen}
+            aria-label={`${title}. Open the month (M)`}
+            title="Open the month · M"
+          >
+            {#if rel}<span class="rel" class:ghost={!showRel} aria-hidden={!showRel} use:measure={'rel'}>{rel}</span>{/if}
+            <span class="date" class:solo={!showRel} class:ghost={!showLong} aria-hidden={!showLong} use:measure={'long'}>{title}</span>
+            <span class="date" class:solo={!showRel} class:ghost={!showShort} aria-hidden={!showShort} use:measure={'short'}>{shortTitle}</span>
+          </button>
+        </h1>
+      {/if}
+      {#if zoneOn && fit.zone && fit.zone !== 'menu'}
+        <div class="zone-slot" class:compact={fit.zone === 'compact'} use:measure={fit.zone === 'compact' ? 'zone:compact' : 'zone:full'}>
+          <ZonePicker />
+        </div>
+      {/if}
     </div>
 
-    <nav class="week" aria-label="Week" bind:this={weekEl}>
-      <span class="puck" class:ready={puckReady} style:transform={`translateX(${puckX}px)`} style:opacity={puckX < 0 ? 0 : 1} aria-hidden="true"></span>
-      <button class="icon-btn" onclick={() => view.shiftDay(-7)} aria-label="Previous week"><Icon name="chevron-left" size={18} /></button>
-      {#each days as d (d)}
-        {@const blocks = byDay.get(d) ?? []}
-        {@const date = fromISODate(d)}
-        <button
-          class="day-chip"
-          class:selected={d === view.date}
-          class:today={d === view.today}
-          onclick={() => view.setDate(d)}
-          aria-pressed={d === view.date}
-          aria-label={`${date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}, ${blocks.length} blocks`}
-        >
-          <span class="dow">{date.toLocaleDateString(undefined, { weekday: 'narrow' })}</span>
-          <span class="num tnum">{date.getDate()}</span>
-          <span class="dots" aria-hidden="true">
-            {#each blocks.slice(0, 4) as b (b.key)}
-              <i style:background={b.color} class:done={b.done}></i>
-            {/each}
-          </span>
-        </button>
+    {#if weekOn && weekIn}
+      <div class="week-slot" bind:this={weekEl}>
+        <WeekStrip chip={fit.chip} today={fit.weekToday} {measure} {calOpen} oncalendar={openCal} />
+      </div>
+    {/if}
+
+    <div class="actions" data-tauri-drag-region>
+      {#each inBar as d, i (d.id)}
+        <div class="it" class:gs={i > 0 && inBar[i - 1].group !== d.group} use:measure={`it:${d.id}`} animate:flip={{ duration: flipMs, easing: springOut }} in:popIn={motion} out:popOut={motion}>
+          {@render action(d)}
+        </div>
       {/each}
-      <button class="icon-btn" onclick={() => view.shiftDay(7)} aria-label="Next week"><Icon name="chevron-right" size={18} /></button>
-      {#if view.date !== view.today}
-        <button class="btn btn-soft today-btn" onclick={() => view.goToday()}>Today</button>
-      {/if}
-    </nav>
-
-    <div class="actions">
-      {#if settings.value.privacy.on}
-        <button class="private" onclick={() => (settings.value.privacy.on = false)} title="Privacy mode is on: Daybloom stays out of screenshots and recordings. Click to turn it off · ⇧⌘P" aria-label="Privacy mode is on. Turn it off" in:scale={{ start: 0.8, duration: view.reducedMotion ? 0 : 220, easing: cubicOut }}>
-          <Icon name="eye-off" size={14} stroke={2.1} /><span>Private</span>
-        </button>
-      {/if}
-      <SessionPill />
-      {#if isOn('tracker')}<TrackerPill />{/if}
-      <UpdateChip />
-      <button class="icon-btn ask" onclick={() => (view.sheet = view.sheet?.kind === 'assistant' ? null : { kind: 'assistant' })} aria-pressed={view.sheet?.kind === 'assistant'} aria-label="Ask Daybloom (⌘K)" title="Ask Daybloom · ⌘K">
-        <Icon name="sparkles" size={18} />
-      </button>
-      <span class="fold-b wrap"><ThemeToggle /></span>
-      <CalendarButton />
-      <BacklogButton />
-      <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' })} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
-        <Icon name="chart" size={18} />
-      </button>
-      {#each enabledAddons().filter((x) => x.sheet) as a (a.id)}
-        <button
-          class="icon-btn fold-a"
-          onclick={() => (view.sheet = view.sheet?.kind === a.sheet ? null : { kind: a.sheet! })}
-          aria-pressed={view.sheet?.kind === a.sheet}
-          aria-label={a.name}
-          title={a.name}
-          in:scale={{ start: 0.6, duration: view.reducedMotion ? 0 : 260, easing: cubicOut }}
-        >
-          <Icon name={a.icon} size={18} />
-        </button>
-      {/each}
-      <button class="icon-btn fold-b" onclick={() => (view.sheet = view.sheet?.kind === 'addons' ? null : { kind: 'addons' })} aria-pressed={view.sheet?.kind === 'addons'} aria-label="Addons" title="Addons">
-        <Icon name="puzzle" size={18} />
-      </button>
-      <button class="icon-btn fold-a" onclick={openFocus} aria-pressed={view.sheet?.kind === 'focus' || !!timer.active} aria-label="Focus (F)" title="Focus · F">
-        <Icon name="focus" size={18} />
-      </button>
-      <button class="icon-btn fold-a" onclick={ontogglewidget} aria-pressed={settings.value.widget.visible} aria-label="Desktop widget (W)" title="Desktop widget · W">
-        <Icon name="picture" size={18} />
-      </button>
-      <button class="icon-btn fold-c" onclick={() => (view.sheet = { kind: 'settings' })} aria-label="Settings" title="Settings · ,">
-        <Icon name="settings" size={18} />
-      </button>
-
-      <div class="more-wrap">
-        <button class="icon-btn more" class:on={moreOpen} onclick={() => (moreOpen = !moreOpen)} aria-expanded={moreOpen} aria-haspopup="menu" aria-label="More" title="More">
-          <Icon name="more" size={18} />
-        </button>
-        {#if moreOpen}
-          <div class="scrim" role="presentation" onclick={() => (moreOpen = false)}></div>
-          <div class="menu" role="menu" transition:scale={{ start: 0.94, duration: view.reducedMotion ? 0 : 180, easing: cubicOut }}>
-            <button class="item always" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'calendars' }))}>
-              <Icon name="calendar" size={16} /><span>Calendars</span>
-            </button>
-            <button class="item always" role="menuitemcheckbox" aria-checked={settings.value.privacy.on} onclick={() => pick(() => (settings.value.privacy.on = !settings.value.privacy.on))}>
-              <Icon name="eye-off" size={16} /><span>Privacy mode</span>
-              {#if settings.value.privacy.on}<span class="check"><Icon name="check" size={14} stroke={2.4} /></span>{:else}<kbd>⇧⌘P</kbd>{/if}
-            </button>
-            <div class="sep a" aria-hidden="true"></div>
-            <button class="item b" role="menuitem" onclick={(e) => { const el = e.currentTarget; pick(() => toggleTheme(el)); }}>
-              <Icon name={view.dark ? 'sun' : 'moon'} size={16} /><span>{view.dark ? 'Light mode' : 'Dark mode'}</span>
-            </button>
-            <button class="item b" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'insights' }))}>
-              <Icon name="chart" size={16} /><span>Your week</span><kbd>I</kbd>
-            </button>
-            {#each enabledAddons().filter((x) => x.sheet) as a (a.id)}
-              <button class="item a" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: a.sheet! }))}>
-                <Icon name={a.icon} size={16} /><span>{a.name}</span>
-              </button>
-            {/each}
-            <button class="item b" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'addons' }))}>
-              <Icon name="puzzle" size={16} /><span>Addons</span>
-            </button>
-
-            <button class="item a" role="menuitem" onclick={() => pick(openFocus)}>
-              <Icon name="focus" size={16} /><span>Focus</span><kbd>F</kbd>
-            </button>
-            <button class="item a" role="menuitem" onclick={() => pick(ontogglewidget)}>
-              <Icon name="picture" size={16} /><span>{settings.value.widget.visible ? 'Hide the widget' : 'Desktop widget'}</span><kbd>W</kbd>
-            </button>
-            <button class="item c" role="menuitem" onclick={() => pick(() => (view.sheet = { kind: 'settings' }))}>
-              <Icon name="settings" size={16} /><span>Settings</span><kbd>,</kbd>
-            </button>
-          </div>
-        {/if}
+      <div class="it more-it" use:measure={'more'} bind:this={moreEl}>
+        <MoreMenu groups={menuGroups} {footer} folded={fit.folded.length} dot={updateWaiting()} {ready} />
       </div>
     </div>
   </div>
 </header>
 
+{#if calOpen && calFrom}
+  <Popover anchor={calFrom} onclose={() => closeCal()} label="Month" width={324}>
+    <MonthCalendar onpick={pickDay} />
+  </Popover>
+{/if}
+
 <style>
-  /* The bar sizes itself from its own width (container queries), so the macOS
-     traffic-light inset and the window width are both accounted for. */
+  /* Sizes match BAR in topbar/fit.ts: 16px between the day, the week and the actions; 8px inside
+     the day; 2px after each action and 6px more where one group meets the next. */
+  /* min-width: 0 — the bar's width is the window's, never its content's (else the measured
+     width would follow what it holds, and nothing would ever fold). */
   .bar {
-    container: topbar / inline-size;
+    min-width: 0;
     padding: var(--s-3) var(--s-5) var(--s-2);
     min-height: 60px;
     -webkit-user-select: none;
     user-select: none;
-    --chip: 42px;
   }
   .row {
     display: grid;
-    grid-template-columns: minmax(0, max-content) minmax(0, 1fr) max-content;
-    grid-template-areas: 'when week actions';
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-areas: 'lead week actions';
     align-items: center;
-    gap: var(--s-4);
+    column-gap: var(--s-4);
+    row-gap: var(--s-2);
   }
-  .bar.mac {
-    padding-left: 88px;
-    padding-top: var(--s-3);
+  /* The week on a row of its own, full width (no traffic-light inset down there). */
+  .row.below {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    grid-template-areas: 'lead actions' 'week week';
   }
-  .when {
-    grid-area: when;
+  .lead {
+    grid-area: lead;
     display: flex;
     align-items: center;
     gap: var(--s-2);
     min-width: 0;
+    min-height: 34px;
+  }
+  .bar.mac .lead {
+    padding-left: 64px;
   }
   .day {
+    position: relative;
     margin: 0;
     display: flex;
     align-items: baseline;
@@ -259,13 +422,11 @@
     font-weight: 500;
     letter-spacing: -0.01em;
     white-space: nowrap;
-    overflow: hidden;
   }
-  .rel {
-    color: var(--ink);
+  .day > * {
+    flex: none;
   }
   .clock {
-    flex: none;
     padding: 2px 9px;
     border-radius: var(--r-pill);
     background: var(--ink);
@@ -282,120 +443,94 @@
     transform: scale(0.97);
   }
   .rel {
-    flex: none;
+    color: var(--ink);
   }
-  .date {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .rel + .date,
-  .rel ~ .date {
+  .date:not(.solo) {
     color: var(--ink-3);
     font-weight: 400;
     font-size: var(--t-md);
   }
-  .date.short {
-    display: none;
-  }
-  .week {
-    grid-area: week;
-    justify-self: center;
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    isolation: isolate;
-  }
-  .puck {
+  /* A variant not in use: laid out off to the side so it can still be measured. */
+  .ghost {
     position: absolute;
     left: 0;
-    top: 50%;
-    width: var(--chip);
-    height: 50px;
-    margin-top: -25px;
-    border-radius: var(--r-md);
-    background: var(--ink);
-    z-index: -1;
+    top: 0;
+    visibility: hidden;
     pointer-events: none;
   }
-  .puck.ready {
+  .when {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--s-2);
+    padding: 1px 8px;
+    margin: -1px -8px;
+    border-radius: var(--r-pill);
+    font: inherit;
+    letter-spacing: inherit;
+    white-space: nowrap;
     transition:
-      transform 0.42s var(--ease-out),
-      opacity 0.2s;
+      background var(--dur-1) var(--ease-out),
+      transform var(--dur-1) var(--ease-out);
   }
-  .day-chip {
-    position: relative;
-    display: grid;
-    justify-items: center;
-    gap: 1px;
-    width: var(--chip);
-    padding: 5px 0 6px;
-    border-radius: var(--r-md);
-    font-family: var(--font-ui);
-    transition:
-      background var(--dur-2) var(--ease-out),
-      color var(--dur-2) var(--ease-out);
-  }
-  .day-chip:hover {
+  .when:hover,
+  .when.on {
     background: var(--sunken);
   }
-  .dow {
-    font-size: var(--t-xs);
-    color: var(--ink-3);
-    line-height: 1.2;
+  .when:active {
+    transform: scale(0.98);
   }
-  .num {
-    font-size: var(--t-md);
-    font-weight: 500;
-    line-height: 1.3;
+  .when.bare {
+    padding: 0;
+    margin: 0 0 0 calc(-1 * var(--s-2));
+    pointer-events: none;
   }
-  .day-chip.today .num {
-    color: var(--signal);
+  .when > :not(.ghost) {
+    animation: text-in 320ms var(--ease-out);
   }
-  .day-chip.selected {
-    color: var(--ink-inverse);
-    background: transparent;
+  @keyframes text-in {
+    from {
+      opacity: 0;
+      transform: translateX(-4px);
+    }
   }
-  .day-chip.selected:hover {
-    background: transparent;
+  .zone-slot {
+    flex: none;
+    white-space: nowrap;
   }
-  .day-chip.selected .dow {
-    color: color-mix(in srgb, var(--ink-inverse) 70%, transparent);
+  /* The zone chip down to its globe (and the offset when you're away). */
+  .zone-slot.compact :global(.chip > span:not(.off)) {
+    display: none;
   }
-  .day-chip.selected.today .num {
-    color: var(--ink-inverse);
-  }
-  .dots {
-    display: flex;
-    gap: 2px;
-    height: 4px;
-  }
-  .dots i {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-  }
-  .dots i.done {
-    background: var(--lume) !important;
-    box-shadow: 0 0 5px var(--lume);
-  }
-  .today-btn {
-    height: 30px;
-    margin-left: var(--s-2);
-  }
-  .actions .icon-btn {
-    position: relative;
+  .week-slot {
+    grid-area: week;
+    justify-self: center;
+    min-width: 0;
   }
   .actions {
     grid-area: actions;
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 2px;
   }
-  .wrap {
-    display: contents;
+  .it {
+    flex: none;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    margin-right: 2px;
+  }
+  .it:empty {
+    display: none;
+  }
+  .it.gs {
+    margin-left: 6px;
+  }
+  .it.more-it {
+    margin-right: 0;
+  }
+  .it :global(.icon-btn) {
+    position: relative;
   }
   .private {
     display: inline-flex;
@@ -415,155 +550,13 @@
   .private:hover {
     background: color-mix(in srgb, var(--ink) 8%, var(--sunken));
   }
-  .more-wrap {
-    position: relative;
-  }
-  .more.on {
-    background: var(--sunken);
-    color: var(--ink);
-  }
-  .scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 44;
-  }
-  .menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 45;
-    min-width: 236px;
-    padding: 6px;
-    border-radius: var(--r-lg);
-    background: var(--raised);
-    border: 1px solid var(--line);
-    box-shadow: var(--shadow-3);
-    transform-origin: top right;
-  }
-  .item {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 8px 10px;
-    border-radius: var(--r-sm);
-    font-size: var(--t-sm);
-    color: var(--ink-2);
-    text-align: left;
-    transition: background var(--dur-1) var(--ease-out);
-  }
-  .item.always {
-    display: flex;
-  }
-  .item .check {
-    width: 16px;
-    color: var(--ink);
-  }
-  .sep {
-    display: none;
-    height: 1px;
-    margin: 4px 6px;
-    background: var(--line);
-  }
-  .item:hover {
-    background: var(--sunken);
-    color: var(--ink);
-  }
-  .item span {
-    flex: 1;
-    white-space: nowrap;
-  }
-  .item span.check {
-    flex: none;
-  }
-  .item kbd {
-    font-family: var(--font-ui);
-    font-size: var(--t-xs);
-    color: var(--ink-3);
-    padding: 1px 6px;
-    border-radius: 5px;
-    border: 1px solid var(--line);
-  }
-
-  /* One row while everything fits; the long date gives way to a short one first. */
-  @container topbar (max-width: 1240px) {
-    .date.long {
-      display: none;
-    }
-    .date.short {
-      display: inline;
+  @media (max-width: 560px) {
+    .bar {
+      padding-left: var(--s-4);
+      padding-right: var(--s-4);
     }
   }
-  /* Two rows: the day and actions on top, the week centred underneath. */
-  @container topbar (max-width: 1060px) {
-    .row {
-      grid-template-columns: minmax(0, 1fr) max-content;
-      grid-template-areas: 'when actions' 'week week';
-      row-gap: var(--s-2);
-    }
-    .week {
-      justify-content: center;
-    }
-    .date.long {
-      display: inline;
-    }
-    .date.short {
-      display: none;
-    }
-  }
-  @container topbar (max-width: 820px) {
-    .date.long {
-      display: none;
-    }
-    .date.short {
-      display: inline;
-    }
-  }
-  /* Narrow: the week below already says which day it is; quieter actions fold away. */
-  @container topbar (max-width: 700px) {
-    .private span {
-      display: none;
-    }
-    .date:not(.solo) {
-      display: none !important;
-    }
-    .when :global(.chip > span:not(.off)) {
-      display: none;
-    }
-    .fold-a {
-      display: none;
-    }
-    .item.a {
-      display: flex;
-    }
-    .sep.a {
-      display: block;
-    }
-  }
-  @container topbar (max-width: 560px) {
-    .fold-b {
-      display: none;
-    }
-    .item.b {
-      display: flex;
-    }
-    .today-btn {
-      display: none;
-    }
-  }
-  @container topbar (max-width: 440px) {
-    .bar,
-    .row {
-      --chip: 38px;
-    }
-    .fold-c {
-      display: none;
-    }
-    .item.c {
-      display: flex;
-    }
-    .date.solo {
-      display: none !important;
-    }
+  :global([data-motion='calm']) .when > * {
+    animation: none;
   }
 </style>

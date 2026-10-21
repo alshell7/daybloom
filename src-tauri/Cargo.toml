@@ -3,6 +3,7 @@ name = "daybloom"
 version = "0.1.13"
 description = "Daybloom — a visual, sectograph-style day planner and timer"
 authors = ["Daybloom"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -42,6 +43,8 @@ objc2-app-kit = { version = "0.3", default-features = false, features = ["std", 
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString", "NSLocale", "NSFormatter", "NSDateFormatter"] }
 
 [target.'cfg(windows)'.dependencies]
+# Clearing a remembered microphone "Block" in WebView2 (src/mic.rs). The version wry already builds.
+webview2-com = "0.39"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Globalization",

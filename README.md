@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [AI](#set-up-ai), [help to start](#get-help-to-start), [alarms](#set-an-alarm), [world clock](#compare-time-zones), [Trash](#restore-from-the-trash), [top bar](#choose-the-top-bar-buttons), [done](#see-what-youve-done), [month](#see-the-month), [start fresh](#start-fresh), [Board and Gantt](#see-the-timeline-as-a-board-or-a-gantt-chart), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -121,8 +121,8 @@ Focus mode shows only the session, the steps of the task and the next block.
 
 <br><br>
 
-### Ten themes
-Four light themes and six dark themes, including true black.
+### Twenty themes
+Nine light themes and eleven dark themes, including true black, and twenty dial finishes to match.
 
 <img src="docs/media/themes.png" alt="Eight dials in the themes Fog, Linen, Mist, Sage, Black, Forest, Plum and Cocoa.">
 
@@ -419,10 +419,12 @@ You can also speak your request. See [Talk to Daybloom](#talk-to-daybloom).
 
 The assistant works in **basic mode** without a download. For better understanding of requests, download **Needle**:
 
-1. Open **Settings › Voice**.
-2. Click **Download** (35 MB, one time).
+1. Open **Settings › AI**.
+2. Under **On this device**, click **Download** next to Needle (35 MB, one time).
 
 Needle is a small on-device model by [Cactus Compute](https://cactuscompute.com/needle) (Apache-2.0). Daybloom checks the download with SHA-256. After the download, the assistant works offline. It does not send your requests to a server.
+
+To let an AI service answer instead, set it up in **Settings › AI**, then select it for **Ask Daybloom** under **Who uses what**. It can read and change your day; one **Undo** takes back all its changes. If the service does not answer, Daybloom answers on this device.
 
 ### Talk to Daybloom
 
@@ -448,7 +450,7 @@ The first time, Daybloom asks to download **Whistle** (17 MB, one time). Whistle
 > [!NOTE]
 > The microphone is on only while the capsule shows “Listening”. The first time, macOS or Windows asks for permission to use the microphone.
 
-To change the language, open **Settings › Voice**. Commands are understood in English.
+To change the language, open **Settings › AI**. Commands are understood in English.
 
 ### See your week
 
@@ -583,6 +585,8 @@ Exports go to your **Downloads** folder.
 3. Daybloom shows a few small steps. Change, remove or add steps, then click **Keep the steps**.
 4. Optional: click **Start the first step** for a 2-minute focus session.
 
+With an AI service selected for **Make it smaller** in **Settings › AI**, the steps fit your task: its notes, the steps it already has, the time before your next block, and how long tasks like it really take you. Each step says when it is done, and a tip comes with them. To split a step again, click **Make this step smaller** (the layers button). The built-in ideas show first, and the service's steps replace them when they arrive.
+
 ### Plan with real times
 
 1. Turn on **Reality check** in the Addons gallery.
@@ -649,16 +653,136 @@ On the desktop widget, you can pet Alef and click it too.
 
 **On its own,** Alef says hello when you come back, asks you to stretch after a long time at the screen, cheers when a focus session is half done, and dances when every block of the day is done. Under **How much Alef talks**, select **Quiet**, **Now and then** or **Chatty**.
 
-**Talk to Alef:** in the **Talk** tab, type or click the microphone. Ask about your day, or ask it to plan: “When am I free tomorrow?”, “Move lunch to 2pm”, “I'm stuck”.
+**A helping hand:** at the right moments, Alef offers one small next step under its words. Click it to do it:
+
+| When | Alef offers |
+|---|---|
+| A block starts | **Start with 2 minutes** (and **Make it smaller** for a long block) |
+| A block ends without a tick | **Done**, **10 more min** or **Move it** |
+| You sit in a block for a while and nothing starts | **Start with 2 minutes**, side by side |
+| Some blocks of the day did not happen | **Just one thing** or **Fresh start tomorrow** |
+| You have free time and a backlog task fits | **Do it** |
+
+Alef also reacts when you add a block, drag one or change the look, and it looks at the block that you select.
+
+**Talk to Alef:** in the **Talk** tab, type or click the microphone. Ask about your day, or ask it to plan: “When am I free tomorrow?”, “Add reading in my free time”, “I'm stuck”. Your last conversation stays when you open Alef again.
 
 - **On this device** (the default): Alef uses Daybloom's own assistant. Nothing leaves your computer.
-- **With an AI service:** under **Alef's brain**, select OpenAI, Anthropic, Gemini, OpenRouter, Cloudflare (with your account ID) or **Custom** (any address that works like OpenAI's). Enter your key; Daybloom keeps it in your system's keychain. Select a model, or click **All models** to see the models that you can use. Click **Try it** to test.
-- **Your consent:** Alef sends nothing to an AI service until you click **I agree**. Then it sends what you say, today's blocks and your settings. With **Alef may change my plans** on, it can add, move or finish blocks. Each change shows a message with **Undo**.
+- **With an AI service:** set up the service one time in **Settings › AI** (see [Set up AI](#set-up-ai)). Then, under **Alef's brain**, select it. With **Alef may change my plans** on, it can add, move or finish blocks. Each change shows a message with **Undo**. With **Speaks up in its own words** on, Alef writes its own hellos, check-ins and cheers, a few times a day.
+- While the AI service works, Alef shows what it does (for example, “Finding free time…”).
 - If the AI service does not answer, Alef answers on this device and tells you why.
 
-**Voice:** under **Voice**, select **Chirps** (small robot sounds), **Voice** (a small spoken voice), **System** (your computer's voice) or **Silent**. **Voice** needs a download of about 30 MB, one time. Daybloom checks the download with SHA-256, and the voice works on your computer. Alef uses the sound switch and volume from Settings.
+**Voice:** under **Voice**, select **Chirps** (small robot sounds), **On-device voice** (a small spoken voice), **System voice**, **Off**, or a voice from an AI service that you set up. The on-device voice needs a download of about 30 MB, one time. Daybloom checks the download with SHA-256, and the voice works on your computer. Alef uses the sound switch and volume from Settings.
 
 **Look:** under **Screen**, select **Dial colours** (Alef's screen uses the colours of your dial) or **OLED black**. Select the colour of the eyes and of the mood light. **Feelings** shows all 32 feelings and Alef's tricks.
+
+### Set up AI
+
+Set up an AI service one time. Then select which part of Daybloom uses it.
+
+1. Open **Settings › AI**.
+2. Under **Services**, click a service: OpenAI, Anthropic, Gemini, OpenRouter, Cloudflare or **Custom** (any address that works like OpenAI's).
+3. Enter your key. Daybloom keeps it in your system's keychain.
+4. Select a model. Click the refresh button to see all the models that you can use.
+5. Click **Say hello** to test the service.
+6. Read what Daybloom sends to the service, then click **I agree**. Daybloom sends nothing before you agree.
+7. Under **Who uses what**, select what each part uses:
+
+| Part | Can use |
+|---|---|
+| Alef | A service to think, and a voice to speak |
+| Getting started | Ready-made first steps, or a service |
+| Ask Daybloom | Needle on this device, or a service |
+| Make it smaller | Built-in ideas, or a service |
+| Reality check | Your own numbers, or a service |
+| Voice input | Whistle on this device, or a service that listens (such as OpenAI) |
+
+Under **On this device**, download or remove Needle, Whistle and Alef's voice. They work without the internet.
+
+### Get help to start
+
+When one of your blocks begins, a card offers one tiny first step for it, such as “open the report and write one messy line”. Daybloom also adds the step as the block's first step.
+
+1. Click **Start · 2 min** to do just that step as a short focus.
+2. To get a different step, click **Another idea**. To close the card, click **Not now**.
+
+When the short focus ends, Daybloom ticks the step. To get steps that fit your exact task, select an AI service for **Getting started** in **Settings › AI**. To turn the help off, open **Settings › Rhythm › Gentle support**.
+
+### Set an alarm
+
+1. Open a block that has a time.
+2. Turn on **Ring as an alarm**. To use a different tone for this block, select it.
+
+You can also type it in quick add: “alarm at 7am” or “wake me at 6:30”.
+
+When the block starts, Daybloom comes to the front and rings. Click **Stop**, **Snooze** or **Start now**. Press <kbd>Space</kbd> or <kbd>Esc</kbd> to stop, or <kbd>S</kbd> to snooze. The alarm stops by itself after a few minutes.
+
+To change the tone, the volume, the snooze time and the gentle start, open **Settings › Rhythm › Alarm**. Alarms ring also when **Sounds** is off.
+
+### Compare time zones
+
+1. Click the time-zone chip in the top bar.
+2. Click the pin next to a city. You can pin two cities.
+
+The dial shows each city's day and night as a thin ring, with its time. To change the cities, or to hide the rings, open **Settings › Rhythm › World clock**.
+
+### See the timeline as a board or a Gantt chart
+
+1. Turn on **Timeline views** in the Addons gallery.
+2. At the top of the timeline, select **List**, **Board** or **Gantt**.
+
+**Board:** drag a card between **Later**, **Today**, **Now** and **Done**. A card from **Later** goes to the first free time. Select **Week** to drag cards between days. Keys: arrows move between cards, <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd> moves a card to the next column, <kbd>Space</kbd> ticks it.
+
+**Gantt:** drag a bar to move it, drag its ends to change its length, or drag on an empty row to add a block. Select **Day**, **3 days** or **Week**. To zoom, pinch the trackpad or hold <kbd>Ctrl</kbd> and scroll.
+
+Calendar events and salah show in both views, but you cannot move them.
+
+### See what you've done
+
+Click **N of N done** at the top of the timeline, or open **Your week** (<kbd>I</kbd>) and select **Done**. Every block, backlog task, calendar event and salah that you finished shows by day. Type to search, or select **Tasks**, **Calendar**, **Salah** or a category. To undo a tick, click the check at the end of the row.
+
+### See the month
+
+1. Click the date in the top bar, click the calendar button next to the week, or press <kbd>M</kbd>.
+2. Click a day to go to it. Or type a day, for example “fri”, “next week” or “12 nov”, and press <kbd>Enter</kbd>.
+
+Each day shows a small ring of its blocks. Use the arrow keys to move by day, and <kbd>Page Up</kbd>/<kbd>Page Down</kbd> to move by month. To look at other weeks without leaving your day, click ‹ › in the week strip or swipe it sideways.
+
+### Start fresh
+
+**Clear the sample day:** at the end of the getting-started card, click **Start with a clean dial**. Or open **Settings › App › Your data** and click **Clear sample day**. Sample blocks that you renamed stay.
+
+**Reset Daybloom:**
+
+1. Open **Settings › App › Your data** and click **Reset Daybloom…**.
+2. Select what to clear: blocks and backlog, progress, settings, addons and their data, AI services and keys, calendars, GitHub sync, downloaded models — or **Everything**.
+3. Optional: click **Save a copy** to keep a file of your blocks and settings.
+4. Press and hold **Hold to reset** until it fills.
+
+Daybloom clears what you selected on this computer and starts again. Your calendars and your GitHub repository stay as they are.
+
+### Choose the top bar buttons
+
+Open **Settings › Screen › Top bar** and turn each button on or off. Hidden buttons stay in the **More** menu (⋯). When the window is narrow, buttons that do not fit also move into **More**, and they come back when the window is wide again.
+
+### Restore from the Trash
+
+When you delete a block or a backlog task, it goes to the Trash for 30 days.
+
+1. Open the backlog and click **Trash**, or open **Settings › App › Your data › Trash**.
+2. Click **Restore** next to the item. The block goes back to its day.
+
+To delete an item forever, click **✕** next to it, then click **Forever?**. After 30 days, Daybloom deletes items in the Trash by itself.
+
+### Plan with real times, with AI
+
+1. Turn on **Reality check** in the Addons gallery.
+2. In **Settings › AI**, under **Who uses what**, select an AI service for **Reality check**.
+
+- **In the block editor:** when you set a length, Daybloom suggests a realistic one from your own record, with the reason and a tip. Click **Use** to take it.
+- **In Reality check:** **Practical tips** looks at your record and at what is left today. Some tips have a button: **Make it 50m** gives a repeating task its real length, and **Move to tomorrow** moves one block so today fits. Each change has an **Undo**.
+
+Daybloom sends the service the block's title, notes and steps, and the planned and real lengths of your finished blocks.
 
 ### Land softly after meetings
 
@@ -951,5 +1075,5 @@ docs/                calendar notes and the media in this README
 <br>
 
 <div align="center">
-<sub>Made with care for calm, clear days. Icons by <a href="https://lucide.dev">Lucide</a> (ISC). Needle and Whistle models by <a href="https://cactuscompute.com">Cactus Compute</a> (Apache-2.0). Alef's voice: <a href="https://github.com/tronghieuit/tiny-tts">tiny-tts</a> with the CMU Pronouncing Dictionary and the g2p_en model (Apache-2.0), on <a href="https://onnxruntime.ai">ONNX Runtime</a> (MIT).</sub>
+<sub>Made with care for calm, clear days. Daybloom is open source under the <a href="LICENSE">MIT licence</a>. Icons by <a href="https://lucide.dev">Lucide</a> (ISC). Needle and Whistle models by <a href="https://cactuscompute.com">Cactus Compute</a> (Apache-2.0). Alef's voice: <a href="https://github.com/tronghieuit/tiny-tts">tiny-tts</a> with the CMU Pronouncing Dictionary and the g2p_en model (Apache-2.0), on <a href="https://onnxruntime.ai">ONNX Runtime</a> (MIT).</sub>
 </div>

@@ -7,7 +7,8 @@
   import Rolling from './Rolling.svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { ROUNDS, type BreathState } from '../breath.svelte';
+  import { breath as guide, rhythm, rhythmLength, type BreathState } from '../breath.svelte';
+  import Marquee from '../../components/widget/Marquee.svelte';
 
   let {
     state,
@@ -24,6 +25,10 @@
     onbreathe,
     face,
     note = null,
+    ontally,
+    slide,
+    ontitle,
+    titleOpen = false,
   }: {
     state: NowState;
     now: number;
@@ -42,6 +47,14 @@
     face?: Snippet<[{ big: string; tone: string }]>;
     /** A passing line (Alef speaking on the widget) shown for a moment in place of the title. */
     note?: string | null;
+    /** The day's "3 of 5 done" opens what was done (the history). */
+    ontally?: () => void;
+    /** The widget (compact): a long title glides along its line (false: it ends with "…"). */
+    slide?: boolean;
+    /** The widget (compact): a tap on the title, e.g. to show it whole beside the dial. */
+    ontitle?: (e: MouseEvent) => void;
+    /** The title is showing in full elsewhere (the widget's wing): it rests at its start. */
+    titleOpen?: boolean;
   } = $props();
 
   const breathPhase = $derived(breath ?? null);
@@ -66,7 +79,7 @@
       return {
         big: `${d.dow} ${d.day}`,
         title: tally.total ? `${tally.total} ${tally.total === 1 ? 'block' : 'blocks'} planned` : 'Nothing planned yet',
-        sub: tally.total ? '' : 'Sweep the ring to add one',
+        sub: tally.total ? (ontally && tally.done ? `${tally.done} done` : '') : 'Sweep the ring to add one',
         icon: null,
         tone: 'day' as const,
       };
@@ -109,14 +122,14 @@
   {#if breathPhase}
     <div class="breath-words">
       {#key `${breathPhase.round}:${breathPhase.id}`}
-        <div class="breath-phase" in:fly={{ y: reduced ? 0 : 6, duration: reduced ? 0 : 700, easing: cubicOut }} out:fly={{ y: reduced ? 0 : -6, duration: reduced ? 0 : 400 }}>{breathPhase.word}</div>
+        <div class="breath-phase" in:fly={{ y: reduced ? 0 : 6, delay: reduced ? 0 : 160, duration: reduced ? 0 : 720, easing: cubicOut }} out:fly={{ y: reduced ? 0 : -6, duration: reduced ? 0 : 280 }}>{breathPhase.word}</div>
       {/key}
     </div>
     <div class="sub breath-sub">
-      <span class="rounds" role="img" aria-label={`Round ${breathPhase.round} of ${ROUNDS}`}>
-        {#each Array(ROUNDS) as _, i (i)}<i class:on={i < breathPhase.round} class:now={i === breathPhase.round - 1}></i>{/each}
+      <span class="rounds" role="img" aria-label={`Round ${breathPhase.round} of ${guide.rhythm.rounds}`}>
+        {#each Array(guide.rhythm.rounds) as _, i (i)}<i class:on={i < breathPhase.round} class:now={i === breathPhase.round - 1}></i>{/each}
       </span>
-      <span class="secs tnum" aria-hidden="true">{breathPhase.id === 'rest' ? '' : breathPhase.secondsLeft}</span>
+      <span class="secs tnum" aria-hidden="true"><Rolling text={String(breathPhase.secondsLeft)} {reduced} /></span>
     </div>
     {#if onbreathe && !compact}
       <div class="controls"><button class="pill" onclick={() => onbreathe(false)}>Stop</button></div>
@@ -133,10 +146,21 @@
   {#key note ?? view.title}
     <div class="title" class:note={!!note} in:fly={{ y: 8, duration: reduced ? 0 : 360, easing: cubicOut }}>
       {#if view.icon && !compact && !note}<Icon name={view.icon} size={16} stroke={2} />{/if}
-      <span>{note ?? view.title}</span>
+      {#if compact && !note && (ontitle || slide !== undefined)}
+        <!-- the widget: a long title glides (Calm: two lines); a tap shows it whole -->
+        {#if ontitle}
+          <button class="whole" onclick={(e) => (e.stopPropagation(), ontitle(e))} aria-label={`${view.title} · show in full`} aria-expanded={titleOpen}><Marquee text={view.title} slide={slide !== false} paused={titleOpen} wrap={reduced} round={face ? 0.236 : 0.29} /></button>
+        {:else}
+          <Marquee text={view.title} slide={slide !== false} wrap={reduced} round={face ? 0.236 : 0.29} />
+        {/if}
+      {:else}
+        <span>{note ?? view.title}</span>
+      {/if}
     </div>
   {/key}
-  {#if view.sub && !compact}
+  {#if view.sub && !compact && ontally && tally.done && (view.tone === 'rest' || view.tone === 'day')}
+    <button class="sub tally" onclick={ontally} title="See what you finished">{view.sub}<Icon name="chevron-right" size={12} stroke={2.2} /></button>
+  {:else if view.sub && !compact}
     <div class="sub">{view.sub}</div>
   {/if}
   {#if timer && ontimer && !compact}
@@ -153,7 +177,7 @@
     </div>
   {/if}
   {#if onbreathe && !compact && !timer && (view.tone === 'free' || view.tone === 'rest')}
-    <div class="controls"><button class="pill" onclick={() => onbreathe(true)}><Icon name="wind" size={13} /> Breathe · 1 min</button></div>
+    <div class="controls"><button class="pill" onclick={() => onbreathe(true)}><Icon name="wind" size={13} /> Breathe · {rhythmLength(rhythm())}</button></div>
   {:else if onbreathe && !compact && !timer && view.tone === 'now'}
     <div class="controls"><button class="pill quiet" onclick={() => onbreathe(true)} title="A one-minute breathing pause" aria-label="Breathe for one minute"><Icon name="wind" size={13} /></button></div>
   {/if}
@@ -289,6 +313,18 @@
   .compact .title span {
     max-width: 44cqi;
   }
+  .whole {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: opacity var(--dur-1) var(--ease-out);
+  }
+  .whole:hover {
+    opacity: 0.8;
+  }
   .sub {
     font-size: clamp(10px, 2.3cqi, 14px);
     opacity: 0.66;
@@ -297,12 +333,29 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .sub.tally {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+    padding: 2px 6px 2px 10px;
+    border-radius: 999px;
+    color: inherit;
+    transition:
+      opacity var(--dur-1) var(--ease-out),
+      background var(--dur-1) var(--ease-out);
+  }
+  .sub.tally:hover {
+    opacity: 0.9;
+    background: color-mix(in srgb, currentColor 9%, transparent);
+  }
   .breath-words {
     display: grid;
   }
   .breath-phase {
     grid-area: 1 / 1;
-    font-size: clamp(18px, 7cqi, 40px);
+    /* Fits inside the guide's box (BreathOrb), "Breathe out" included. */
+    font-size: clamp(14px, 5.4cqi, 34px);
     font-weight: 300;
     letter-spacing: -0.02em;
     line-height: 1.1;

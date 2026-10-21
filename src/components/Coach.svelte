@@ -3,6 +3,7 @@
   import { cubicOut } from 'svelte/easing';
   import { settings } from '../lib/stores/settings.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { clearSample, keepSample, sampleTasks } from '../lib/sample';
 
   // First run: one card, three ideas, gone the moment the user acts.
   let step = $state(0);
@@ -20,24 +21,43 @@
       body: 'Tick a block on the right when it is done. Finished time keeps a soft glow — that is your day, adding up.',
     },
   ];
+  // The last card: a clean dial, or keep the sample blocks to try things on.
+  const hasSample = $derived(sampleTasks().length > 0);
+  const steps = $derived(
+    hasSample
+      ? [...STEPS, { title: 'Make it yours', body: 'These blocks are a sample day. Start with a clean dial, or keep them for now to try things out. You can clear them later in Settings.' }]
+      : STEPS,
+  );
   const done = () => (settings.value.onboarded = true);
+  function fresh() {
+    clearSample();
+    done();
+  }
+  function keep() {
+    keepSample();
+    done();
+  }
 </script>
 
 <div class="coach" role="dialog" aria-label="Getting started" in:fly={{ y: 20, duration: view.reducedMotion ? 0 : 420, delay: 500, easing: cubicOut }}>
   <div class="steps" aria-hidden="true">
-    {#each STEPS as _, i (i)}<i class:on={i === step}></i>{/each}
+    {#each steps as _, i (i)}<i class:on={i === step}></i>{/each}
   </div>
   {#key step}
     <div in:fly={{ x: 12, duration: view.reducedMotion ? 0 : 240, easing: cubicOut }}>
-      <p class="title">{STEPS[step].title}</p>
-      <p class="body">{STEPS[step].body}</p>
+      <p class="title">{steps[step].title}</p>
+      <p class="body">{steps[step].body}</p>
     </div>
   {/key}
   <div class="row">
-    <button class="btn btn-quiet" onclick={done}>Skip</button>
-    {#if step < STEPS.length - 1}
+    {#if step < steps.length - 1}
+      <button class="btn btn-quiet" onclick={done}>Skip</button>
       <button class="btn btn-primary" onclick={() => step++}>Next</button>
+    {:else if hasSample}
+      <button class="btn btn-quiet" onclick={keep}>Keep them for now</button>
+      <button class="btn btn-primary" onclick={fresh}>Start with a clean dial</button>
     {:else}
+      <button class="btn btn-quiet" onclick={done}>Skip</button>
       <button class="btn btn-primary" onclick={done}>Start my day</button>
     {/if}
   </div>

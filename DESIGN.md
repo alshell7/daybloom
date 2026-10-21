@@ -10,7 +10,7 @@ colors:
   line-strong: "rgb(21 28 42 / 0.16)"
   ink: "#151c2a"
   ink-2: "#485365"
-  ink-3: "#5f6a7b"
+  ink-3: "#5c6778"
   ink-inverse: "#f7f8fa"
   signal: "#f2551d"
   lume: "#2fae7b"
@@ -223,7 +223,7 @@ Daybloom is one object sitting on a quiet desk. The object is a Bauhaus watch di
 
 Colour is semantic before it is decorative. Seven category colours carry meaning on every surface. One signal colour means *now*. One lume colour means *finished*. Free time keeps the bare neutral of the bezel. The palette is calm on purpose. Its users experience time blindness and anxiety around transitions, so nothing is red, nothing flashes, and nothing loops except one slow breathing halo around the block you are in. Delight is spent on real progress: a block draws itself onto the bezel, a finished block glows with lume, and a capsule fills like a glass.
 
-The world ships as ten whole-app themes (four light, six dark, including true black). Each theme pairs with one of nine dial finishes. The planner, the desktop widget and the dial always agree.
+The world ships as twenty whole-app themes (nine light, eleven dark, including true black). Each theme pairs with one of twenty dial finishes; `src/lib/palettes.test.ts` checks the contrast of every theme and finish. The planner, the desktop widget and the dial always agree.
 
 **Key Characteristics:**
 - A 1000-unit SVG dial with fixed radii: bezel band, minute track, numeral ring and face, all drawn in the finish's colours.
@@ -262,7 +262,7 @@ Text and icons on a category fill are white or Night Ink, whichever contrasts be
 - **Pressed Fog** (#e2e6ec): sunken fills, such as hover backgrounds, the segmented track, chips and soft buttons.
 - **Night Ink** (#151c2a): primary text, the primary button, the selected week-day puck and toasts.
 - **Slate Ink** (#485365): secondary text and quiet button labels.
-- **Pencil Grey** (#5f6a7b): tertiary text, including times, meta, section headings, placeholders and free-time rows.
+- **Pencil Grey** (#5c6778): tertiary text, including times, meta, section headings, placeholders and free-time rows.
 - **Hairline** (9% ink) and **Firm Hairline** (16% ink): dividers, field borders, scrollbars and dotted gap lines.
 - **Focus Ring Blue** (#3d6fe3): keyboard focus and text selection, at 28% for selection.
 - **Delete Red** (#c4372b): the text of destructive buttons and system error messages, such as a calendar account that failed to sync. It is never used for the state of the user's own time.
@@ -337,7 +337,7 @@ Depth is tonal first. Four desk tones step up from Pressed Fog (sunken) to Fog D
 
 The master shape is the circle: the dial, its case, the check rings, the category dots, the seconds bead and the sun or moon on the 24-hour hand. Every control is a pill (999px): buttons, icon buttons, the segmented control and its thumb, chips, tooltips and toast actions. Containers are gently rounded rectangles: 10px for fields and small tiles, 14px for rail rows, the quick-add bar and week-day chips, and 20px for the inspector panel and toasts. The global focus outline has a 6px radius. Rail blocks are capsules (40px wide, fully rounded 20px ends) whose height is their duration. On the dial, time is an annular sector with a small arc-length gap at each end (3.5 units, 5 in compact), so neighbouring blocks read as separate bezel inserts. Nothing in the system has a sharp corner.
 
-Two line patterns carry meaning. **Dashes** mean provisional or unclaimed: the sweep ghost (8/8), a missed block's outline (7/7), the drop ghost, the "add" circle and the empty Later-field border. **Hatching and stripes** mean the block comes from a calendar and is read-only: 45° white hatch at 22% on the dial, 135° stripes on the rail capsule.
+**Dashes** mean provisional or unclaimed: the sweep ghost (8/8), a missed block's outline (7/7), the drop ghost, the "add" circle and the empty Later-field border. Kinds of blocks differ by *material*, never by texture (no hatching, stripes or tiles anywhere): **your blocks** are solid; **calendar events** (read-only) are clear glass — a see-through wash of their colour (about 20% on the dial, 8% in the rail) inside one crisp full-colour edge; **salah** is soft light — a gradient brightest in the middle (in the rail, near the top where the prayer starts), with no edge. **Skipped** events are a faint outline with the title crossed out.
 
 ## Components
 
@@ -385,7 +385,7 @@ A Structured-style timeline row. The capsule is a coloured glass whose height is
 - **Live:** the capsule becomes a glass, a soft tint (category at 20% over white, or over Midnight surface on dark finishes) with a 2px inner ring at 45%. Liquid in the full category colour rises from the bottom as time is spent. The level moves once a minute with a 0.9s ease-out on `transform`. On each minute, two scalloped gradient strips roll across the surface once (1.6s ×2 and 2.7s ×1, in opposite directions), then rest. They keep rolling only while the row is hovered. The meta line reads "25m left".
 - **Done:** the liquid pours to the brim (1.3s), then fades. The capsule settles to the soft tint with a 2px inner lume ring, and the icon pops to a check. The title's strike-through draws left to right (0.5s). The check ring fills from the centre and its tick draws in.
 - **Missed:** soft tint plus a 2px dashed outline at 50% of the category colour, never red. The first tool becomes an always-visible "slide into the next free gap".
-- **From calendar:** 135° stripes, read-only.
+- **From calendar:** clear glass (a light tint with one crisp edge), read-only. **Salah:** soft light, no edge.
 - **Interaction:** drag the capsule to move it and its bottom edge to resize, snapping to 5 minutes with an audible detent. A dark time pill reports "10:15 → 11:30 · 1h 15m". Hover reveals three 28px tools that stagger in (0/30/60ms).
 
 ### The Dial (signature)
@@ -438,7 +438,7 @@ Motion rewards real progress and otherwise stays out of the way. The widget live
 - **Tokens:** `--ease-out` cubic-bezier(0.16, 1, 0.3, 1) is the default for everything. `--ease-in-out` (0.65, 0, 0.35, 1) is for the theme reveal and demos. `--ease-settle` (0.22, 1, 0.36, 1) is for things that land, such as the capsule scale, the check and the switch thumb. Durations are `--dur-1` 120ms (hover, press), `--dur-2` 220ms (state) and `--dur-3` 380ms (colour and settle).
 - **Springs for arcs:** arc start, end and radii are Svelte springs (stiffness 0.14, damping 0.72), always taking the nearest turn. On first paint, arcs bloom clockwise, each drawing from zero sweep, staggered 120ms + 55ms per arc. Arcs added later draw on immediately.
 - **One-shots:** the lume charge (950ms), the day-complete lume sweep (2.4s), the pour (1.3s), the theme change as a circular View Transition from the clicked swatch (650ms), the day change (the new day's dial turns in through 28° in the direction of travel and scales up from 0.94 over 560ms), odometer digits (420ms with 2px blur), the now-dot ping (twice per minute), and the readout title rising 8px.
-- **Continuous:** only the aura, a conic halo in the current block's colour just outside the rim. It breathes on opacity, 0.12 to 0.70 over 8s (4s in, 4s out), and quickens to 4s during a heads-up before a transition. The user-started breathing guide (a soft disc in the face on a 16s cycle of 4s in, 4s hold, 6s out, 2s rest) runs only for its one minute.
+- **Continuous:** only the aura, a conic halo in the current block's colour just outside the rim. It breathes on opacity, 0.12 to 0.70 over 8s (4s in, 4s out), and quickens to 4s during a heads-up before a transition. The user-started breathing guide runs only for its rounds: a soft sphere in the face that grows on the in-breath, holds still, shrinks on the out-breath and dims on rest, inside a ring split into the four phases (equal quarters for box breathing, 3–6 s each; 4·4·6·2 for Calm), with a glowing bead travelling one phase per arc and each arc filling with light behind it. Opacity and transform on HTML layers only.
 
 #### Named Rules
 **The Compositor-Only Loop Rule.** Anything that moves without the user touching it animates only `opacity` or `transform` on an HTML layer. That covers the aura, the seconds bead, the liquid level, the waves and the now-ping. Never loop an animation on SVG geometry, a mask or a gradient. SVG may animate only in one-shots that end: the bloom, the charge, the day sweep and the wedge's path transition.
@@ -456,7 +456,7 @@ Motion rewards real progress and otherwise stays out of the way. The widget live
 - **Do** leave free time bare: bezel graduation dots on the dial, a dotted Firm Hairline with "Nm free" in the rail.
 - **Do** give every block an icon and a label as well as a colour. Colour is never the only signal.
 - **Do** set every time, duration and count in tabular numerals.
-- **Do** draw dial geometry from the fixed radii in `geometry.ts` (bezel 468→382, track 366→340, numerals 298). Do not invent new rings.
+- **Do** draw dial geometry from the fixed radii in `geometry.ts` (bezel 468→382, track 366→340, numerals 298). Do not invent new rings. The one exception is the world clock (`ZoneRings.svelte`): up to two thin day/night rings just outside the bezel for compared cities, redrawn once a minute, never animated.
 - **Do** animate arc geometry with springs (0.14 / 0.72) and chrome with the `--ease-*` and `--dur-*` tokens.
 - **Do** pair every new theme with a dial finish in the single `THEMES` table, so the planner, the widget and the dial agree.
 - **Do** gate every loop and every spatial transition behind `prefers-reduced-motion` and the Calm setting.

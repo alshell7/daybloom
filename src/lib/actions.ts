@@ -1,3 +1,7 @@
+import { busyBetween, freeSlot } from './busy';
+import { trash, trashOccurrence, trashTask } from './stores/trash.svelte';
+import { eventStates } from './stores/eventStates.svelte';
+import { toggleSalahEvent } from './addons/waqt/waqt.svelte';
 import { blockKey, freeGaps, parseBlockKey } from './engine/blocks';
 import { CATEGORY_BY_ID } from './engine/categories';
 import { atMinutes, formatDuration, formatTime, isoOf, MINUTE, minutesOfDay, snap, startOfDayMs, addDays } from './engine/time';
@@ -126,6 +130,7 @@ export function leaveFocus() {
 
 /** Tick a block. Celebrates proportionally — a whole finished day gets the big sweep. */
 export function toggleDone(key: string, origin?: { x: number; y: number }) {
+  if (key.startsWith('cal:')) return toggleEventDone(key, origin);
   const p = parseBlockKey(key);
   if (!p) return;
   const t = tasks.get(p.taskId);
@@ -154,6 +159,31 @@ export function toggleDone(key: string, origin?: { x: number; y: number }) {
   });
 }
 
+/**
+ * A calendar event or a salah, ticked like a block. The event stays read-only; Daybloom keeps
+ * that you did it (a salah is marked in Waqt: on time while its time lasts, late after).
+ */
+function toggleEventDone(key: string, origin?: { x: number; y: number }) {
+  const b = view.blockByKey(key);
+  const ev = b?.event;
+  if (!b || !ev) return;
+  const was = { title: ev.title, startMs: ev.startMs, endMs: ev.endMs, ...(ev.category ? { category: ev.category } : {}), ...(ev.icon ? { icon: ev.icon } : {}), ...(ev.calendarName ? { calendarName: ev.calendarName } : {}) };
+  const done = ev.provider === 'salah' ? toggleSalahEvent(ev) : eventStates.toggleDone(key, clock.now, was);
+  if (!done) return;
+  const color = CATEGORY_BY_ID[b.category]?.[view.finish.dark ? 'dark' : 'light'] ?? '#3D6FE3';
+  if (origin) view.spark(origin.x, origin.y, color, false, ev.provider === 'salah' ? 'Prayed' : 'Done');
+  sounds.done();
+}
+
+/** Skip a calendar event (or bring it back): its time is free for plans, and it shows softly. */
+export function skipEvent(key: string) {
+  const b = view.blockByKey(key);
+  if (!b?.event || b.event.provider === 'salah') return;
+  const skipped = eventStates.toggleSkip(key);
+  if (view.selected === key && skipped) view.selected = null;
+  view.say(skipped ? `Skipping “${b.title}” · its time is free` : `“${b.title}” is back on`, { label: 'Undo', run: () => eventStates.toggleSkip(key) }, 5000);
+}
+
 /** Remove (with undo). Recurring: just this occurrence unless `all`. */
 export function removeBlock(key: string, all = false) {
   const p = parseBlockKey(key);
@@ -161,15 +191,16 @@ export function removeBlock(key: string, all = false) {
   const t = tasks.get(p.taskId);
   if (!t) return;
   const snapshot: Task = JSON.parse(JSON.stringify(t));
-  if (t.recurrence && !all) tasks.removeOccurrence(t.id, p.date);
-  else tasks.remove(t.id);
+  // Into the Trash for 30 days, either way.
+  const kept = t.recurrence && !all ? trashOccurrence(t.id, p.date) : trashTask(t.id);
   if (view.selected === key) view.selected = null;
   if (view.sheet && 'key' in view.sheet && view.sheet.key === key) view.sheet = null;
-  view.say(t.recurrence && !all ? `Skipped “${t.title || 'block'}” today` : `Removed “${t.title || 'block'}”`, {
+  view.say(t.recurrence && !all ? `Skipped “${t.title || 'block'}” today · it's in the Trash` : `Removed “${t.title || 'block'}” · in the Trash for 30 days`, {
     label: 'Undo',
     run: () => {
       tasks.remove(snapshot.id);
       tasks.restore(snapshot);
+      trash.drop(kept);
     },
   });
 }
@@ -209,8 +240,8 @@ export function moveToNextGap(key: string) {
   const len = b.endMs - b.startMs;
   const from = Math.ceil(Math.max(clock.now, b.startMs) / (5 * MINUTE)) * 5 * MINUTE;
   const end = startOfDayMs(addDays(view.today, 1));
-  const others = view.todayBlocks.filter((x) => x.key !== key);
-  const gap = freeGaps(others, from, end, len).find((g) => g.endMs - g.startMs >= len);
+  // Calendar events and salah are busy too (lib/busy.ts).
+  const gap = freeGaps(busyBetween(startOfDayMs(view.today), end, { except: key }), from, end, len).find((g) => g.endMs - g.startMs >= len);
   if (!gap) {
     view.say('No free gap left today — try tomorrow.');
     return;
@@ -234,11 +265,10 @@ export function moveToTomorrow(key: string) {
 export function scheduleSoon(taskId: string) {
   const t = tasks.get(taskId);
   if (!t) return;
-  const date = view.today;
-  const len = t.duration * MINUTE;
-  const from = Math.ceil(clock.now / (5 * MINUTE)) * 5 * MINUTE;
-  const gap = freeGaps(view.todayBlocks, from, startOfDayMs(addDays(date, 1)), len)[0];
-  const start = gap ? Math.round(minutesOfDay(gap.startMs)) : snap(minutesOfDay(from));
+  // The first free time that fits, skipping meetings and salah; a full today goes to the next day.
+  const slot = freeSlot(view.today, t.duration, clock.now);
+  const date = slot?.date ?? view.today;
+  const start = slot?.start ?? snap(minutesOfDay(Math.ceil(clock.now / (5 * MINUTE)) * 5 * MINUTE));
   tasks.schedule(t.id, date, start);
   view.date = date;
   view.selected = blockKey(t.id, date);
@@ -295,7 +325,8 @@ export function toBacklog(key: string) {
   const t = p && tasks.get(p.taskId);
   const b = view.blockByKey(key);
   if (!p || !t) return;
-  const duration = b ? Math.round((b.endMs - b.startMs) / MINUTE) : t.duration;
+  // An anytime block has no length on the dial; keep the task's own.
+  const duration = b && !b.floating ? Math.max(5, Math.round((b.endMs - b.startMs) / MINUTE)) : t.duration;
   const before: Task = JSON.parse(JSON.stringify(t));
   let made: string | null = null;
   if (t.recurrence) {

@@ -1,8 +1,11 @@
 // Alef, the live side. The main window runs the feelings: it watches the day (signals.ts),
 // lets moments move the mood (affect.ts), plays a behaviour for each (behaviors.ts), chirps
-// and sometimes says a line (lines.ts), and keeps Alef alive between moments with small idle
-// performances. It talks with you through an AI brain you set up (llm.ts), or on this device
-// with the planner's own tools. The widget only mirrors the face (startAlefView).
+// and sometimes says a line (lines.ts) with a helping hand under it (coach.ts: start for two
+// minutes, make it smaller, move it…), and keeps Alef alive between moments with small idle
+// performances. It reacts at once to what you do (a new block, a move, a new look) and glances
+// at what you touch. With an AI brain from Settings › AI it talks with you and the planner's
+// tools, and says its own moments in its own words (muse.ts); otherwise it answers on this
+// device. The widget only mirrors the face and bubble (startAlefView).
 
 import { untrack } from 'svelte';
 import { isoOf, MINUTE, formatTime } from '../../engine/time';
@@ -18,16 +21,20 @@ import { view } from '../../stores/view.svelte';
 import type { Entry } from '../../assistant/session.svelte';
 import type { Call } from '../../assistant/tools';
 import { behaviorForEvent, idleBehavior, impulse, moodTarget, settle, type Affect, type AffectEvent } from './affect';
-import { ACTS, BEHAVIOR_IDS, lengthOf, type ActId, type BehaviorId } from './behaviors';
+import { ACTS, BEHAVIOR_IDS, lengthOf, type ActId, type BehaviorId, type ChirpId } from './behaviors';
 import { chirp } from './chirps';
 import { moodGlow, moodLed } from './face';
 import { screenPalette, type ScreenPalette, type ScreenStyle } from './palette';
 import type { AboutYou } from './persona';
 import type { Finish } from '../../presets';
-import { lateLine, lineFor, type Chattiness } from './lines';
+import { lateLine, lineFor, speaksFor, type Chattiness } from './lines';
 import type { LlmConfig, ProviderId } from './llm';
 import { moments, NOTHING_SEEN, signalsOf, type Seen, type Snapshot } from './signals';
 import { hush, speak, type SpeechSynth, type VoiceMode } from './voice';
+import { ai, aiFile } from '../../ai/hub.svelte';
+import { helpFor, type Help, type Offer } from './coach';
+import { isOn } from '../registry';
+import { starter } from '../../starter.svelte';
 
 export type Brain = 'local' | ProviderId;
 
@@ -55,6 +62,8 @@ export interface AlefSettings {
   lively: boolean;
   /** The AI brain may change plans (each change shows with an Undo). */
   mayChange: boolean;
+  /** With an AI brain: Alef also speaks up on its own, in its own words (a few times a day). */
+  proactive: boolean;
   brain: Brain;
   /** Per provider: model, Cloudflare account, custom address and headers. */
   configs: Partial<Record<ProviderId, Omit<LlmConfig, 'provider'>>>;
@@ -67,8 +76,10 @@ export interface AlefFile {
   settings: AlefSettings;
   /** The day you met. */
   met: string | null;
-  /** Your friendship: the days you spent together, pets and chats. */
-  bond: { days: string[]; pets: number; chats: number };
+  /** Your friendship: the days you spent together, pets and chats, and the milestone last celebrated. */
+  bond: { days: string[]; pets: number; chats: number; celebrated?: number };
+  /** The last words you and Alef said to each other, so a conversation picks up where it left off. */
+  recent?: { who: 'you' | 'alef'; text: string; at: number; ui?: string }[];
 }
 
 export const EYE_COLORS = [
@@ -96,6 +107,7 @@ export const DEFAULT_ALEF: AlefSettings = {
   inWidget: true,
   lively: true,
   mayChange: true,
+  proactive: true,
   brain: 'local',
   configs: {},
   consent: {},
@@ -129,7 +141,14 @@ export function migrateAlef(raw: any): AlefFile {
       days: Array.isArray(raw?.bond?.days) ? raw.bond.days.filter((d: unknown): d is string => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(-400) : [],
       pets: Number.isFinite(raw?.bond?.pets) ? Math.max(0, raw.bond.pets) : 0,
       chats: Number.isFinite(raw?.bond?.chats) ? Math.max(0, raw.bond.chats) : 0,
+      celebrated: Number.isFinite(raw?.bond?.celebrated) ? Math.max(0, raw.bond.celebrated) : 0,
     },
+    recent: Array.isArray(raw?.recent)
+      ? raw.recent
+          .filter((m: any) => (m?.who === 'you' || m?.who === 'alef') && typeof m?.text === 'string' && Number.isFinite(m?.at))
+          .slice(-40)
+          .map((m: any) => ({ who: m.who, text: m.text.slice(0, 4000), at: m.at, ...(typeof m.ui === 'string' && m.ui.length <= 6000 ? { ui: m.ui } : {}) }))
+      : [],
     settings: {
       eyes: s.eyes === 'dial' ? 'dial' : hex(s.eyes, DEFAULT_ALEF.eyes),
       screen: s.screen === 'oled' ? 'oled' : 'dial',
@@ -148,6 +167,7 @@ export function migrateAlef(raw: any): AlefFile {
       inWidget: s.inWidget !== false,
       lively: s.lively !== false,
       mayChange: s.mayChange !== false,
+      proactive: s.proactive !== false,
       brain: BRAINS.includes(s.brain) ? s.brain : 'local',
       configs,
       consent,
@@ -157,7 +177,11 @@ export function migrateAlef(raw: any): AlefFile {
 
 export const alefFile = persisted<AlefFile>('addon-alef', migrateAlef(null), migrateAlef);
 
+/** Where Alef's AI keys lived before Settings › AI (moved by startAi). */
 export const keyAccount = (p: ProviderId) => `alef-llm:${p}`;
+
+/** Friendship milestones (days together) Alef celebrates once each. */
+export const MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365];
 
 export interface Msg {
   id: number;
@@ -173,6 +197,8 @@ export interface Msg {
   error?: boolean;
   /** Why the AI brain didn't answer this time. */
   note?: string;
+  /** The AI's generative UI (OpenUI Lang), drawn under the words. */
+  ui?: string;
   pending?: boolean;
 }
 
@@ -181,8 +207,20 @@ interface Mirror {
   perf?: { id: ActId; seq: number };
   affect?: Affect;
   talk?: { seq: number; starts: number[]; total: number } | null;
-  bubble?: { text: string; seq: number } | null;
+  bubble?: Bubble | null;
   thinking?: boolean;
+  glance?: { x: number; y: number } | null;
+  /** The planner is hidden: the widget plays this chirp… */
+  sound?: { chirp: ChirpId; pitch: number; volume: number };
+  /** …or says this line. */
+  speak?: string;
+}
+
+/** A line in Alef's speech bubble, with its helping hand (buttons) if any. */
+export interface Bubble {
+  text: string;
+  seq: number;
+  offers?: Offer[];
 }
 
 /** Feeling colours for the mood light. */
@@ -197,7 +235,11 @@ class Alef {
   /** While a behaviour plays: the dial's posture and the blocks' lift follow it. */
   performing = $state(false);
   /** A line in a speech bubble. */
-  bubble = $state<{ text: string; seq: number } | null>(null);
+  bubble = $state<Bubble | null>(null);
+  /** Where Alef glances for a moment (−1..1 each way): a block you picked, the way you scrolled. */
+  glance = $state<{ x: number; y: number } | null>(null);
+  /** What the AI brain is doing right now ("Finding free time…"). */
+  doing = $state<string | null>(null);
   /** Syllable timings while Alef speaks (the eyes bob to them). */
   talk = $state<{ seq: number; starts: number[]; total: number } | null>(null);
   thinking = $state(false);
@@ -205,8 +247,6 @@ class Alef {
   typing = $state(false);
   messages = $state<Msg[]>([]);
   busy = $state(false);
-  /** A key is saved for the chosen AI brain. */
-  hasKey = $state(false);
   /** The on-device voice, once loaded (tts/). */
   tts = $state.raw<SpeechSynth | null>(null);
 
@@ -230,6 +270,7 @@ class Alef {
 
   #seq = 0;
   #msg = 0;
+  #reactions = 0;
   #perfTimer: ReturnType<typeof setTimeout> | null = null;
   #bubbleTimer: ReturnType<typeof setTimeout> | null = null;
   #lastChirp = 0;
@@ -255,56 +296,157 @@ class Alef {
 
   #chirp(id: ActId) {
     const s = this.settings;
-    if (s.voice === 'off' || !settings.value.sound) return;
+    if (aiFile.value.use.alef.speak.via === 'off' || !settings.value.sound) return;
     const now = Date.now();
     if (now - this.#lastChirp < 2500) return;
     this.#lastChirp = now;
-    chirp(ACTS[id].chirp, { pitch: s.pitch, volume: s.volume });
+    const sound = { chirp: ACTS[id].chirp, pitch: s.pitch, volume: s.volume };
+    if (this.#elsewhere) this.#send({ sound });
+    else chirp(sound.chirp, sound);
   }
 
-  /** A moment happened: feel it, show it, maybe say something. */
-  react(ev: AffectEvent, o: { block?: Block | null; name?: string; inMin?: number; quiet?: boolean; line?: string | null } = {}) {
-    this.affect = impulse(this.affect, ev);
-    const id = behaviorForEvent(ev, this.affect);
-    const line =
+  /**
+   * The planner is hidden and the widget shows Alef: its sounds play there, where you are. A
+   * hidden window's audio wakes late (seconds, sometimes), so a poke on the widget would chirp
+   * long after the face moved.
+   */
+  get #elsewhere(): boolean {
+    return this.mirror && typeof document !== 'undefined' && document.hidden && settings.value.widget.visible && this.settings.inWidget;
+  }
+
+  /**
+   * A moment happened: feel it, show it, maybe say something — with a helping hand when the
+   * moment calls for one. With an AI brain, the words may be its own (muse.ts); the face never
+   * waits for them.
+   */
+  react(ev: AffectEvent | 'stuck' | 'gap', o: { block?: Block | null; name?: string; inMin?: number; count?: number; quiet?: boolean; line?: string | null; help?: Help | null } = {}) {
+    const affectEv: AffectEvent = ev === 'stuck' || ev === 'gap' ? 'nudge' : ev;
+    this.affect = impulse(this.affect, affectEv);
+    const id = behaviorForEvent(affectEv, this.affect);
+    const title = o.block ? shownTitle(o.block.title, o.block.category) : undefined;
+    const seed = this.#seq + Math.floor(clock.now / 1000);
+    const chatty = this.settings.chattiness;
+    // A block starting (or stuck): Help me start's prepared first step, if there is one.
+    const first = (ev === 'blockStart' || ev === 'stuck') && o.block && o.help === undefined && chatty !== 'quiet' ? starter.helpFor(o.block.key) : null;
+    const help =
+      o.help !== undefined
+        ? o.help
+        : first
+          ? first
+          : chatty === 'quiet'
+          ? null
+          : helpFor(ev, {
+              title,
+              key: o.block?.key,
+              minutes: o.block ? Math.round((o.block.endMs - o.block.startMs) / MINUTE) : undefined,
+              own: o.block?.kind === 'task',
+              smaller: isOn('smaller'),
+              crumbs: isOn('crumbs'),
+              who: this.settings.you.name.trim() || undefined,
+              seed,
+            });
+    const plain =
       o.line !== undefined
         ? o.line
-        : lineFor(
-            ev,
-            {
-              title: o.block ? shownTitle(o.block.title, o.block.category) : undefined,
-              at: o.block ? formatTime(o.block.startMs, view.hour12) : undefined,
-              inMin: o.inMin,
-              name: o.name,
-              hour: new Date(clock.now).getHours(),
-              seed: this.#seq + Math.floor(clock.now / 1000),
-              who: this.settings.you.name.trim() || undefined,
-            },
-            this.settings.chattiness,
-          );
+        : ev === 'stuck' || ev === 'gap'
+          ? null
+          : lineFor(ev, { title, at: o.block ? formatTime(o.block.startMs, view.hour12) : undefined, inMin: o.inMin, count: o.count, name: o.name, hour: new Date(clock.now).getHours(), seed, who: this.settings.you.name.trim() || undefined }, chatty);
+    const line = help && (ev === 'stuck' || ev === 'gap' || speaksFor(ev as AffectEvent, chatty) || ev === 'checkIn') ? help.line : plain;
     // A line speaks for itself; otherwise the chirp does.
     this.perform(id, { sound: !o.quiet && !line });
     // The whole day done: after the cheer, a little dance.
     if (ev === 'allDone') setTimeout(() => this.perform('dancing', { sound: true }), lengthOf(ACTS[id]) + 300);
-    if (line && !o.quiet) this.say(line, { voice: true, important: ['allDone', 'poke', 'pokeAgain', 'pokeTooMuch', 'greet'].includes(ev) });
+    if (!line || o.quiet) return;
+    const offers = line === help?.line ? help.offers : undefined;
+    const important = ['allDone', 'poke', 'pokeAgain', 'pokeTooMuch', 'greet', 'milestone', 'stuck', 'checkIn'].includes(ev) || !!offers;
+    const mine = ++this.#reactions;
+    void import('./muse')
+      .then(async ({ canMuse, muse }) => {
+        if (!canMuse(ev)) return null;
+        this.thinking = true;
+        this.#send({ thinking: true });
+        try {
+          return await muse({ moment: ev, fallback: line, offers: (offers ?? []).map((x) => x.label), feeling: id });
+        } finally {
+          this.thinking = false;
+          this.#send({ thinking: false });
+        }
+      })
+      .catch(() => null)
+      .then((m) => {
+        // Something newer happened meanwhile: let it speak instead.
+        if (this.#reactions !== mine) return;
+        if (m?.feeling && m.feeling !== id) this.perform(m.feeling);
+        this.say(m?.text ?? line, { voice: true, important, offers });
+      });
   }
 
-  /** Show a line in the bubble (and speak it, in Alef's voice). */
-  say(text: string, o: { voice?: boolean; important?: boolean; ms?: number } = {}) {
+  /** Show a line in the bubble (and speak it, in Alef's voice); `offers` puts buttons under it. */
+  say(text: string, o: { voice?: boolean; important?: boolean; ms?: number; offers?: Offer[] } = {}) {
     const now = Date.now();
     if (!o.important && now - this.#lastLine < 15_000) return;
     this.#lastLine = now;
-    this.bubble = { text, seq: ++this.#seq };
+    this.bubble = { text, seq: ++this.#seq, ...(o.offers?.length ? { offers: o.offers } : {}) };
     this.#send({ bubble: this.bubble });
     if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
-    this.#bubbleMs = o.ms ?? readingMs(text);
+    // With buttons under it, the bubble waits longer for you.
+    this.#bubbleMs = o.ms ?? readingMs(text) + (o.offers?.length ? 14_000 : 0);
     this.#hideBubbleLater(this.#bubbleMs);
     if (o.voice) void this.#voice(text);
   }
 
+  /** A button under the bubble: do it, and feel good about it. */
+  async act(seq: number, index: number) {
+    const offer = this.bubble?.seq === seq ? this.bubble.offers?.[index] : undefined;
+    if (!offer) return;
+    this.dismissBubble();
+    const { runOffer } = await import('./offers');
+    const r = runOffer(offer);
+    if (r) {
+      this.react(offer.id === 'start2' ? 'started' : offer.id === 'tick' ? 'done' : 'answered', { line: r.line ?? null, block: r.block ?? null, quiet: !r.line });
+    }
+  }
+
+  /** Glance somewhere for a moment (−1..1 each way), then look back. */
+  look(x: number, y: number, ms = 1100) {
+    this.glance = { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
+    this.#send({ glance: this.glance });
+    if (this.#glanceTimer) clearTimeout(this.#glanceTimer);
+    this.#glanceTimer = setTimeout(() => {
+      this.glance = null;
+      this.#send({ glance: null });
+    }, ms);
+  }
+  #glanceTimer: ReturnType<typeof setTimeout> | null = null;
+
   async #voice(text: string) {
+    if (this.#elsewhere) {
+      // The widget says it (and moves its eyes to it).
+      this.#send({ speak: text });
+      return;
+    }
+    await this.#speakHere(text);
+  }
+
+  /** Say it in this window, in the voice from Settings › AI, and bob the eyes to the syllables. */
+  async #speakHere(text: string) {
     const s = this.settings;
-    const spoken = await speak(text, s.voice, { pitch: s.pitch, volume: s.volume, soundOn: settings.value.sound, tts: this.tts });
+    const via = aiFile.value.use.alef.speak.via;
+    // The widget loads the on-device voice the first time it has to speak.
+    if (via === 'device' && !this.tts) {
+      try {
+        const m = await import('./tts/tts.svelte');
+        this.tts = m.tinyTts;
+        await m.tinyTts.check();
+      } catch {
+        /* the system voice speaks instead */
+      }
+    }
+    const mode: VoiceMode | 'cloud' = via === 'device' ? 'speech' : via === 'chirps' || via === 'system' || via === 'off' ? via : 'cloud';
+    const spoken =
+      mode === 'cloud'
+        ? await import('./cloudVoice').then((m) => m.speakCloud(text, { pitch: s.pitch, volume: s.volume, soundOn: settings.value.sound })).catch(() => null)
+        : await speak(text, mode, { pitch: s.pitch, volume: s.volume, soundOn: settings.value.sound, tts: this.tts });
     const total = spoken?.total ?? Math.max(0.8, text.split(/\s+/).length * 0.3);
     this.talk = { seq: ++this.#seq, starts: spoken?.starts ?? [], total };
     this.#send({ talk: this.talk });
@@ -387,25 +529,16 @@ class Alef {
     return this.messages[this.messages.length - 1];
   }
 
-  /** Is the AI brain set up and agreed to? */
+  /** Is Alef's AI brain (Settings › AI) set up and agreed to? */
   get aiReady(): boolean {
-    const s = this.settings;
-    if (s.brain === 'local') return false;
-    const c = s.configs[s.brain];
-    return !!c?.model?.trim() && !!s.consent[s.brain] && (this.hasKey || s.brain === 'custom');
+    return ai.ready('alef', 'think');
   }
 
-  async refreshKey() {
-    const b = this.settings.brain;
-    if (b === 'local') {
-      this.hasKey = false;
-      return;
-    }
-    try {
-      this.hasKey = !!(await platform.secrets.get(keyAccount(b)));
-    } catch {
-      this.hasKey = false;
-    }
+  /** The service Alef thinks with, when it has one ready. */
+  get brainName(): string | null {
+    const r = ai.route('alef', 'think');
+    if (r.via === 'device' || !this.aiReady) return null;
+    return r.via;
   }
 
   async ask(raw: string) {
@@ -421,10 +554,15 @@ class Alef {
     this.react('listening', { line: null, quiet: true });
     const think = setTimeout(() => this.thinking && this.perform('spinning'), 650);
     try {
-      const { answer } = await import('./conversation');
+      const { answer, TOOL_WORDS } = await import('./conversation');
       const out = await answer(text, {
         history: this.messages.filter((m) => !m.pending && m.id !== reply.id).slice(-14, -1),
         aiReady: this.aiReady,
+        // While the brain works with your day, Alef shows what it's doing.
+        onTool: (name) => {
+          this.doing = TOOL_WORDS[name] ?? 'Working on it…';
+          this.perform(/^(create|update|complete|delete|schedule|add)/.test(name) ? 'excited' : 'curious');
+        },
       });
       this.#settle(reply, out);
     } catch (e) {
@@ -434,18 +572,32 @@ class Alef {
     } finally {
       clearTimeout(think);
       this.thinking = false;
+      this.doing = null;
       this.#send({ thinking: false });
       this.busy = false;
     }
   }
 
-  #settle(reply: Msg, out: { text: string; feeling: BehaviorId; entry?: Entry; tools?: string[]; via: 'ai' | 'device'; error?: boolean; note?: string; thanks?: boolean }) {
-    Object.assign(reply, { text: out.text, feeling: out.feeling, entry: out.entry, tools: out.tools, via: out.via, error: out.error, note: out.note, pending: false });
+  #settle(reply: Msg, out: { text: string; feeling: BehaviorId; beats?: { at: number; feeling: BehaviorId }[]; offers?: Offer[]; entry?: Entry; tools?: string[]; via: 'ai' | 'device'; error?: boolean; note?: string; thanks?: boolean; ui?: string }) {
+    Object.assign(reply, { text: out.text, feeling: out.feeling, entry: out.entry, tools: out.tools, via: out.via, error: out.error, note: out.note, ui: out.ui, pending: false });
     this.thinking = false;
+    this.doing = null;
     if (out.thanks) this.affect = impulse(this.affect, 'thanks');
-    this.affect = impulse(this.affect, out.error || out.note ? 'failed' : out.feeling === 'confused' ? 'unsure' : 'answered');
+    this.affect = impulse(this.affect, out.error || out.note ? 'unsure' : out.feeling === 'confused' ? 'unsure' : 'answered');
     this.perform(out.feeling, { sound: false });
-    this.say(out.text, { voice: true, important: true });
+    this.say(out.text, { voice: true, important: true, offers: out.offers });
+    // Feelings that change as it speaks, timed along the words.
+    const span = readingMs(out.text) * 0.55;
+    for (const b of out.beats ?? []) setTimeout(() => this.bubble && this.perform(b.feeling), Math.max(700, b.at * span));
+    this.#remember();
+  }
+
+  /** Keep the last words between you, so the chat picks up where it left off next time. */
+  #remember() {
+    alefFile.value.recent = this.messages
+      .filter((m) => !m.pending && !m.error && m.text)
+      .slice(-40)
+      .map((m) => ({ who: m.who, text: m.text.slice(0, 4000), at: m.at, ...(m.ui && m.ui.length <= 6000 ? { ui: m.ui } : {}) }));
   }
 
   /** Run what a card offered ("Did you mean…" or a help example). */
@@ -467,6 +619,14 @@ class Alef {
 
   clearChat() {
     this.messages = [];
+    alefFile.value.recent = [];
+  }
+
+  /** Bring back the last conversation (once, when Alef starts). */
+  restore() {
+    if (this.messages.length) return;
+    const r = alefFile.value.recent ?? [];
+    this.messages = r.map((m) => ({ id: ++this.#msg, who: m.who, text: m.text, at: m.at, via: 'device' as const, ...(m.ui ? { ui: m.ui } : {}) }));
   }
 
   #send(m: Mirror) {
@@ -485,6 +645,9 @@ class Alef {
     }
     if (m.talk !== undefined) this.talk = m.talk;
     if (m.thinking !== undefined) this.thinking = m.thinking;
+    if (m.glance !== undefined) this.glance = m.glance;
+    if (m.sound && settings.value.sound) chirp(m.sound.chirp, m.sound);
+    if (m.speak) void this.#speakHere(m.speak);
     if (m.bubble !== undefined) {
       this.bubble = m.bubble;
       if (this.#bubbleTimer) clearTimeout(this.#bubbleTimer);
@@ -522,7 +685,8 @@ async function snapshot(now: number, idleMin: number): Promise<Snapshot> {
 /** Main window, while the addon is on. */
 export function startAlef(): () => void {
   alef.mirror = true;
-  void alef.refreshKey();
+  alef.restore();
+  void ai.refreshKeys();
   void import('./tts/tts.svelte')
     .then((m) => {
       alef.tts = m.tinyTts;
@@ -539,6 +703,19 @@ export function startAlef(): () => void {
   let prevIdleMin = 0;
   let activeMin = 0;
   let petMemory: import('./pet').PetMemory = { last: {}, halfway: null, checked: null, quirks: { day: '', n: 0 } };
+  /** Help already offered (one per block and kind). */
+  const offered = new Set<string>();
+  let openItemsOf: ((tasks: import('../../engine/types').Task[]) => import('../../engine/types').Task[]) | null = null;
+  void import('../../backlog').then((m) => (openItemsOf = m.openItems));
+  /** The first backlog task that fits the free time until the next block (at most an hour). */
+  function fitting(now: number, next: Block | undefined): { item: { id: string; title: string; minutes: number }; freeMin: number } | null {
+    const freeMin = Math.min(60, Math.floor(((next?.startMs ?? now + 60 * MINUTE) - now) / MINUTE));
+    if (freeMin < 10 || !openItemsOf) return null;
+    const t = openItemsOf(taskFile.value.tasks).find((x) => x.duration <= freeMin - 5 && !offered.has(`fill:${x.id}`));
+    if (!t) return null;
+    offered.add(`fill:${t.id}`);
+    return { item: { id: t.id, title: t.title, minutes: t.duration }, freeMin };
+  }
 
   async function look() {
     if (stopped) return;
@@ -569,11 +746,26 @@ export function startAlef(): () => void {
         return;
       }
     }
-    // A day together.
+    // A day together, and now and then a milestone worth a little party.
     const bond = alefFile.value.bond;
-    if (sig.awake && idleMin < 5 && bond.days.at(-1) !== today) bond.days = [...bond.days, today].slice(-400);
+    if (sig.awake && idleMin < 5 && bond.days.at(-1) !== today) {
+      bond.days = [...bond.days, today].slice(-400);
+      const m = MILESTONES.filter((x) => x <= bond.days.length).at(-1) ?? 0;
+      if (m > (bond.celebrated ?? 0)) {
+        bond.celebrated = m;
+        alef.react('milestone', { count: m });
+        return;
+      }
+    }
     activeMin = idleMin >= 5 ? 0 : activeMin + Math.max(1, Math.round(dt / MINUTE));
-    if (r.moments.length) {
+    // Around, a block of yours under way a while, no focus running: a hand to get started (once per block).
+    const cur = snap.blocks.find((b) => b.kind === 'task' && !b.floating && !b.done && b.startMs <= now && now < b.endMs);
+    const stuck =
+      !r.moments.length && cur && !timer.active && sig.awake && idleMin < 2 && now - cur.startMs >= 8 * MINUTE && cur.endMs - now >= 10 * MINUTE && ['focus', 'learn'].includes(cur.category) && !offered.has(`stuck:${cur.key}`);
+    if (stuck && cur) {
+      offered.add(`stuck:${cur.key}`);
+      alef.react('stuck', { block: cur });
+    } else if (r.moments.length) {
       for (const m of r.moments.slice(0, 1)) alef.react(m.ev, { block: m.block ?? null });
     } else if (!alef.performing && !alef.busy && !alef.talk) {
       // Nothing happened in the day: maybe Alef does something on its own.
@@ -587,7 +779,13 @@ export function startAlef(): () => void {
         petMemory,
       );
       petMemory = p.memory;
-      if (p.moment) {
+      const fits = p.moment?.kind === 'bored' ? fitting(now, next) : null;
+      if (p.moment?.kind === 'welcome' && alef.settings.chattiness !== 'quiet') {
+        alef.react('welcomeBack', { block: next ?? null });
+      } else if (p.moment?.kind === 'bored' && fits && alef.settings.chattiness !== 'quiet') {
+        // A free stretch and something from the backlog fits it: offer just that one.
+        alef.react('gap', { help: helpFor('gap', { fits: fits.item, freeMin: fits.freeMin, seed: Math.floor(now / 1000) }) });
+      } else if (p.moment) {
         const quietLine = alef.settings.chattiness === 'quiet' && p.moment.kind !== 'still-there';
         alef.perform(p.moment.act, { sound: !p.moment.line || quietLine });
         if (p.moment.line && !quietLine) alef.say(p.moment.line, { voice: true, important: true });
@@ -634,12 +832,71 @@ export function startAlef(): () => void {
         if (b) alef.react('headsUp', { block: b, inMin: Math.max(1, Math.round((b.startMs - clock.now) / MINUTE)) });
       });
     });
+    // You add a block: a happy little nod (and a word, if Alef is chatty).
+    let count = taskFile.value.tasks.length;
+    const bornAt = Date.now();
+    $effect(() => {
+      const n = taskFile.value.tasks.length;
+      untrack(() => {
+        const added = n === count + 1 && Date.now() - bornAt > 5000 && !alef.busy;
+        count = n;
+        if (!added) return;
+        const t = taskFile.value.tasks.at(-1);
+        if (!t || Date.now() - t.createdAt > 5000) return;
+        const b = t.date ? view.todayBlocks.find((x) => x.taskId === t.id) ?? null : null;
+        alef.react('planned', { block: b, quiet: alef.settings.chattiness !== 'chatty' });
+      });
+    });
+    // You pick a block on the dial: Alef looks at it. You change days: it looks that way.
+    $effect(() => {
+      const key = view.selected;
+      untrack(() => {
+        const b = key ? view.blockByKey(key) : null;
+        if (!b || b.floating) return;
+        const w = view.dialFor(settings.value.preset);
+        const deg = (((b.startMs + b.endMs) / 2 - w.originMs) / w.spanMs) * 360;
+        alef.look(Math.sin((deg * Math.PI) / 180) * 0.9, -Math.cos((deg * Math.PI) / 180) * 0.9, 1600);
+      });
+    });
+    let lastDate = view.date;
+    $effect(() => {
+      const d = view.date;
+      untrack(() => {
+        if (d !== lastDate) alef.look(view.dayDir * 0.95, 0, 900);
+        lastDate = d;
+      });
+    });
+    // Dragging a block in the timeline: Alef watches, then likes where it landed.
+    let dragging = false;
+    $effect(() => {
+      const p = view.railPreview;
+      untrack(() => {
+        if (p) alef.look(0.95, 0.15, 1500);
+        else if (dragging) alef.react('moved', { quiet: alef.settings.chattiness !== 'chatty' });
+        dragging = !!p;
+      });
+    });
+    // A new look for the app or the dial: Alef notices.
+    let style = `${settings.value.lightTheme}|${settings.value.darkTheme}|${settings.value.finish}|${settings.value.preset}`;
+    $effect(() => {
+      const l = `${settings.value.lightTheme}|${settings.value.darkTheme}|${settings.value.finish}|${settings.value.preset}`;
+      untrack(() => {
+        if (l !== style && !alef.performing) alef.react('newLook', { quiet: alef.settings.chattiness !== 'chatty' });
+        style = l;
+      });
+    });
+
     // Focus sessions: Alef works alongside you.
     let wasFocus: boolean | null = null;
+    let focusKey: string | null = null;
     $effect(() => {
-      const on = !!timer.active;
+      const a = timer.active;
+      const on = !!a;
       untrack(() => {
-        if (wasFocus !== null && on !== wasFocus) alef.react(on ? 'focusStart' : 'focusEnd');
+        if (on) focusKey = a?.target?.key ?? null;
+        // Ending a session on a block that isn't ticked: "Is it done?"
+        const block = !on && focusKey ? (view.todayBlocks.find((b) => b.key === focusKey && !b.done) ?? null) : null;
+        if (wasFocus !== null && on !== wasFocus) alef.react(on ? 'focusStart' : 'focusEnd', { block });
         wasFocus = on;
       });
     });
@@ -684,6 +941,10 @@ export function startAlef(): () => void {
   const offAsk = platform.onBroadcast<{ text: string }>('alef-ask', (m) => {
     if (typeof m?.text === 'string' && m.text.trim()) void alef.ask(m.text.slice(0, 600));
   });
+  // A button under the bubble, tapped on the widget.
+  const offAct = platform.onBroadcast<{ seq: number; index: number }>('alef-act', (m) => {
+    if (Number.isFinite(m?.seq) && Number.isFinite(m?.index)) void alef.act(m.seq, m.index);
+  });
 
   scheduleIdle();
   const settleTimer = setInterval(() => {
@@ -696,6 +957,7 @@ export function startAlef(): () => void {
     alef.mirror = false;
     offTouch();
     offAsk();
+    offAct();
     root();
     offers.forEach((f) => f());
     if (idleTimer) clearTimeout(idleTimer);

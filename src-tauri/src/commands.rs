@@ -62,6 +62,27 @@ pub async fn state_save(app: AppHandle, key: String, value: String) -> Result<()
     })
 }
 
+/// Deletes one saved state file (Settings › App › Reset); a missing one is fine.
+#[tauri::command]
+pub async fn state_delete(app: AppHandle, key: String) -> Result<(), String> {
+    match std::fs::remove_file(state_path(&app, &key)?) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(err(e)),
+    }
+}
+
+/// The keys of every saved state file, so a full reset can clear them all.
+#[tauri::command]
+pub async fn state_keys(app: AppHandle) -> Result<Vec<String>, String> {
+    let dir = app.path().app_data_dir().map_err(err)?.join("state");
+    let Ok(entries) = std::fs::read_dir(dir) else { return Ok(vec![]) };
+    Ok(entries
+        .filter_map(|e| e.ok()?.file_name().into_string().ok())
+        .filter_map(|n| n.strip_suffix(".json").map(str::to_owned))
+        .collect())
+}
+
 // ---- Secrets: OS keychain / Credential Manager ---------------------------------------
 
 fn entry(account: &str) -> Result<keyring::Entry, String> {
@@ -104,6 +125,18 @@ pub async fn widget_show(app: AppHandle, show: Option<bool>) -> Result<bool, Str
 #[tauri::command]
 pub fn widget_set_layer(app: AppHandle, layer: String) -> Result<(), String> {
     widget::set_layer(&app, Layer::parse(&layer)?)
+}
+
+/// Moves and resizes the widget in one step on the main thread (physical pixels), so a wing
+/// opening on the left doesn't show a frame where the window moved but hasn't grown yet.
+#[tauri::command]
+pub fn widget_frame(app: AppHandle, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
+    let w = app.get_webview_window(widget::LABEL).ok_or("widget is not open")?;
+    app.run_on_main_thread(move || {
+        let _ = w.set_size(tauri::PhysicalSize::new(width, height));
+        let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+    })
+    .map_err(err)
 }
 
 /// Async for the same reason as widget_show: building a window from a sync command can

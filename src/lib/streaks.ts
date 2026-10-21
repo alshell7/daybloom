@@ -1,11 +1,13 @@
 // Forgiving streaks. A "rhythm" day is any day you finished something. Every 7 counted days
 // earns a rest day (max 2 banked); a missed day quietly spends one instead of breaking the
 // run. Routines get their own "in a row" counts, where a "let it go" is neutral, not a break.
+// What counts as finished is the History tab's list (lib/history.ts).
 
 import { categoryColor } from './engine/categories';
 import { occurrencesBetween } from './engine/recurrence';
 import { addDays, atMinutes, isoOf } from './engine/time';
 import type { ISODate, Task } from './engine/types';
+import { completedItems, counts, sourcesFor, type DoneSources } from './history';
 
 export const MILESTONES = [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
 const REST_EVERY = 7;
@@ -24,19 +26,16 @@ export interface Rhythm {
   beads: { date: ISODate; state: BeadState }[];
 }
 
-/** Dates on which something was finished (task occurrences or backlog items). */
-export function doneDates(tasks: Task[]): Set<ISODate> {
-  const out = new Set<ISODate>();
-  for (const t of tasks) {
-    for (const d of t.completions) out.add(d);
-    if (t.date === null && t.doneAt) out.add(isoOf(t.doneAt));
-  }
-  return out;
+/** Dates up to `nowMs` on which something was finished (as the history lists it). */
+export function doneDates(src: Task[] | DoneSources, nowMs: number): Set<ISODate> {
+  const today = isoOf(nowMs);
+  const items = completedItems(sourcesFor(src, null, today), null, today, nowMs);
+  return new Set(items.filter(counts).map((i) => i.date));
 }
 
-export function rhythm(tasks: Task[], nowMs: number): Rhythm {
+export function rhythm(tasks: Task[] | DoneSources, nowMs: number): Rhythm {
   const today = isoOf(nowMs);
-  const done = doneDates(tasks);
+  const done = doneDates(tasks, nowMs);
   const first = [...done].filter((d) => d <= today).sort()[0];
   const states = new Map<ISODate, BeadState>();
   let run = 0;

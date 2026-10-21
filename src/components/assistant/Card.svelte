@@ -1,8 +1,10 @@
 <script lang="ts">
   // One answer: the warm line, then the card its result kind calls for. Cards read live state
-  // (blocks, timer, clock) so they stay true after they appear.
+  // (blocks, timer, clock) so they stay true after they appear. An AI service's own UI
+  // (components/genui/, loaded lazily) comes right under the line and stands in for the day card.
   import type { Entry } from '../../lib/assistant/session.svelte';
   import { session } from '../../lib/assistant/session.svelte';
+  import { loadGenUi } from '../../lib/ai/genui/load';
   import Icon from '../../lib/Icon.svelte';
   import BlockCard from './BlockCard.svelte';
   import CalmCard from './CalmCard.svelte';
@@ -30,12 +32,17 @@
 
 <div class="answer" class:undone={entry.undone}>
   {#if r.say}<p class="a-say">{r.say}</p>{/if}
+  {#if entry.ui}
+    {#await loadGenUi() then g}
+      <g.default source={entry.ui} at={entry.at} onask={(t) => void session.ask(t)} />
+    {:catch}{/await}
+  {/if}
 
   {#if card.kind === 'now'}
     <NowCard />
   {:else if card.kind === 'timer'}
     <TimerCard />
-  {:else if card.kind === 'day'}
+  {:else if card.kind === 'day' && !entry.ui}
     <DayCard {card} />
   {:else if card.kind === 'summary'}
     <SummaryCard {card} />

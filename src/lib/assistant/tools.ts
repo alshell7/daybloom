@@ -9,6 +9,7 @@
 
 import { adjust, suggest, toggleDone } from '../actions';
 import { backlog, busyFor, dueLabel, freeSpans, itemsIn, openItems, sortItems, windowFor, type ListId } from '../backlog';
+import { describeRhythm, rhythm as breathRhythm, rhythmLength } from '../breath.svelte';
 import { blockKey, blocksInRange, eventBlock, floatingBlocks, freeGaps, parseBlockKey, taskBlocks } from '../engine/blocks';
 import { categoryColor } from '../engine/categories';
 import { describeRecurrence, occurrencesBetween } from '../engine/recurrence';
@@ -41,7 +42,8 @@ import { settings } from '../stores/settings.svelte';
 import { taskFile, tasks, uid } from '../stores/tasks.svelte';
 import { timer, timerFile } from '../stores/timer.svelte';
 import { view } from '../stores/view.svelte';
-import { landingPad } from '../addons/landings/pad.svelte';
+import { busyBetween, freeSlot } from '../busy';
+import { trash, trashOccurrence, trashTask } from '../stores/trash.svelte';
 import { THEME_BY_ID, THEMES, type ThemeId } from '../themes';
 import { decide, hits, rank, type Candidate, type Embedder } from './match';
 import type { ToolSchema } from './types';
@@ -226,13 +228,18 @@ function snapshot(id: string): Undo {
   return () => restoreTask(snap);
 }
 
-/** Start (minutes) of the first free stretch on `date` that fits `minutes`, from now or wake. */
+/**
+ * Start (minutes) of the first free stretch on `date` that fits `minutes`, from now or wake,
+ * in waking hours; calendar events and salah are busy (lib/busy.ts). A full day falls back to
+ * the first free stretch before midnight, then to now.
+ */
 export function firstFree(date: ISODate, minutes: number, now: number): number {
+  const slot = freeSlot(date, minutes, now, { days: 1 });
+  if (slot && slot.date === date) return slot.start;
   const wakeMs = atMinutes(date, settings.value.wake);
   const from = Math.max(wakeMs, date === isoOf(now) ? ceil5(now) : wakeMs);
   const end = startOfDayMs(addDays(date, 1));
-  const busy = landingPad(blocksInRange(taskFile.value.tasks, view.events, startOfDayMs(date), end, dark()));
-  const gap = freeGaps(busy, from, end, minutes * MINUTE).find((g) => g.endMs - g.startMs >= minutes * MINUTE);
+  const gap = freeGaps(busyBetween(startOfDayMs(date), end), from, end, minutes * MINUTE).find((g) => g.endMs - g.startMs >= minutes * MINUTE);
   return Math.min(1435, round5(minutesOfDay(gap ? gap.startMs : from)));
 }
 
@@ -299,11 +306,15 @@ export function removeTarget(keyOrId: string, all = false): Undo | null {
   const id = p ? p.taskId : keyOrId;
   const t = tasks.get(id);
   if (!t) return null;
-  const undo = snapshot(id);
-  if (p && t.recurrence && !all) tasks.removeOccurrence(id, p.date);
-  else tasks.remove(id);
+  const before = clone(t);
+  // Into the Trash for 30 days; Undo takes it back out (and clears the deletion for sync).
+  const kept = p && t.recurrence && !all ? trashOccurrence(id, p.date) : trashTask(id);
   if (view.selected === keyOrId) view.selected = null;
-  return undo;
+  return () => {
+    if (tasks.get(id)) restoreTask(before);
+    else tasks.restore(before);
+    trash.drop(kept);
+  };
 }
 
 /** The plan proposal for a day (re-run with `shuffle` for another arrangement). */
@@ -642,8 +653,7 @@ export const TOOLS: ToolDef[] = [
       } else if (a.day && a.day !== b.date) start = b.floating ? null : round5(minutesOfDay(b.startMs));
       else {
         // "move it later" / nothing said: the next free gap today that fits it.
-        const busy = dayBlocksOf(today).timed.filter((x) => x.key !== b.key);
-        const gap = freeGaps(busy, ceil5(Math.max(ctx.now, b.startMs + MINUTE)), startOfDayMs(addDays(today, 1)), len * MINUTE).find((g) => g.endMs - g.startMs >= len * MINUTE);
+        const gap = freeGaps(busyBetween(startOfDayMs(today), startOfDayMs(addDays(today, 1)), { except: b.key }), ceil5(Math.max(ctx.now, b.startMs + MINUTE)), startOfDayMs(addDays(today, 1)), len * MINUTE).find((g) => g.endMs - g.startMs >= len * MINUTE);
         if (!gap) {
           return { say: `No free gap left today for ${quote(b.title)}. Tomorrow?`, card: { kind: 'note', icon: 'calendar', chips: [{ label: 'Move to tomorrow', icon: 'move-later', call: { tool: 'move_block', args: { key: b.key, day: addDays(b.date, 1), norm: true } } }] } };
         }
@@ -934,7 +944,7 @@ export const TOOLS: ToolDef[] = [
     label: () => 'Breathe for a minute',
     run: (_a, ctx) => {
       view.breatheAt = ctx.now;
-      return { say: 'Breathe with the dial for a minute: in for 4, hold for 4, out for 6.', card: { kind: 'breathe' }, undo: () => (view.breatheAt = 0) };
+      return { say: `Breathe with the dial for ${rhythmLength(breathRhythm())}: ${describeRhythm(breathRhythm())}.`, card: { kind: 'breathe' }, undo: () => (view.breatheAt = 0) };
     },
   },
   {
@@ -1311,7 +1321,7 @@ export const TOOLS: ToolDef[] = [
         repeat: S('How it repeats, e.g. daily, weekdays, every monday'),
       },
       [
-        R`^(?:add|schedule|put|book|block(?: out| off)?|create|set up|pencil(?: in)?|plan in|slot(?: in)?|insert|new|pop|stick|squeeze(?: in)?|remind me|i have|i've got|i need to|i have to|i gotta|gotta)\b`,
+        R`^(?:add|schedule|put|book|block(?: out| off)?|create|set up|pencil(?: in)?|plan in|slot(?: in)?|insert|new|pop|stick|squeeze(?: in)?|fit(?: in)?|remind me|i have|i've got|i need to|i have to|i gotta|gotta)\b`,
         R`\b(?:at|@) ?\d{1,2}(?::\d{2})? ?(?:am|pm)?\b`,
         R`\b\d{1,2}(?::\d{2})? ?(?:am|pm)\b`,
         R`\b\d{1,2}:\d{2}\b`,
@@ -1333,10 +1343,12 @@ export const TOOLS: ToolDef[] = [
     run: (a, ctx) => {
       if (a.later && a.time == null) return toolByName('add_to_backlog')!.run({ ...a, norm: true }, ctx);
       const today = isoOf(ctx.now);
-      const date = a.day ?? today;
       const minutes = clampDur(a.minutes ?? 30);
-      const guessed = a.time == null && !a.anytime;
-      const start = a.anytime ? null : (a.time ?? firstFree(date, minutes, ctx.now));
+      const guessed = a.time == null && !a.anytime && !a.repeat;
+      // No time said: the first free stretch that fits, on a later day if this one is full.
+      const slot = guessed ? freeSlot(a.day ?? today, minutes, ctx.now) : null;
+      const date = slot?.date ?? a.day ?? today;
+      const start = a.anytime ? null : (a.time ?? slot?.start ?? firstFree(date, minutes, ctx.now));
       const title = (a.title ?? '').trim();
       const hint = suggest(title);
       const t = tasks.create({ title, date, start, duration: minutes, recurrence: a.repeat ?? null, icon: hint?.icon, category: hint?.category, alerts: [5] });
@@ -1346,7 +1358,8 @@ export const TOOLS: ToolDef[] = [
       let say: string;
       if (t.recurrence) say = `Added ${name} · ${describeRecurrence(t.recurrence, t.date).toLowerCase()}${start !== null ? ` at ${fmtMin(start)}` : ''}.`;
       else if (start === null) say = `Added ${name} ${dayPhrase(date, today)}, any time.`;
-      else if (guessed) say = `Added ${name} in the next free gap ${dayPhrase(date, today)}, ${fmtMin(start)}–${fmtMin(start + minutes)}.`;
+      else if (slot?.moved) say = `${cap(dayWord(a.day ?? today, today))} is full, so I put ${name} in the first free time ${dayPhrase(date, today)}, ${fmtMin(start)}–${fmtMin(start + minutes)}.`;
+      else if (guessed) say = `Added ${name} in your next free time ${dayPhrase(date, today)}, ${fmtMin(start)}–${fmtMin(start + minutes)}.`;
       else say = `Added ${name} ${dayPhrase(date, today)}, ${fmtMin(start)}–${fmtMin(start + minutes)}.`;
       if (!title) say += ' Give it a name?';
       else if (!t.recurrence && date === today && start !== null && atMinutes(date, start + minutes) <= ctx.now) say += ' That time has already passed today.';

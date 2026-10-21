@@ -1,5 +1,11 @@
 import { platform } from '../platform';
 
+/** A reset is clearing the saved files: nothing writes again until the window reloads. */
+let frozen = false;
+export function freezeSaves() {
+  frozen = true;
+}
+
 /**
  * A deeply reactive value mirrored to disk (native) or localStorage (browser),
  * and kept in sync across windows (main ↔ widget) without echo loops.
@@ -24,6 +30,7 @@ export function persisted<T extends object>(key: string, initial: T, migrate: (r
 
   function flush() {
     timer = null;
+    if (frozen) return;
     const json = JSON.stringify($state.snapshot(state.value));
     if (json === lastWritten) return;
     lastWritten = json;

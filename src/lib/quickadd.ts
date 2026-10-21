@@ -27,6 +27,10 @@
 // - "later today"/"sometime today" mean today; otherwise "later"/"someday" sends the
 //   task to the Later tray and drops any time.
 // - Said twice (two times, two dates)? The first wins and the rest stay in the title.
+// - Alarms: "alarm …" at the start, "set an alarm (for)", "with/as an alarm" and "wake me
+//   (up)" make the block ring (only with a time). An alarm means the *next* such time: a
+//   wake-up with a bare hour is in the morning, another bare hour is whichever of am/pm comes
+//   first, and a time already gone today rings tomorrow. "Smoke alarm" mid-title is just words.
 
 import { addDays, todayISO, weekday } from './engine/time';
 import type { ISODate, Minutes, Recurrence } from './engine/types';
@@ -39,8 +43,10 @@ export interface QuickParse {
   duration: Minutes | null;
   recurrence: Recurrence | null;
   anytime: boolean;
+  /** Ring as an alarm ("alarm at 7am", "wake me at 6:30"); only with a time. */
+  alarm: boolean;
   /** Spans of the input that were understood, for highlighting: [startIndex, endIndex, kind] */
-  tokens: [number, number, 'time' | 'date' | 'duration' | 'repeat' | 'later'][];
+  tokens: [number, number, 'time' | 'date' | 'duration' | 'repeat' | 'later' | 'alarm'][];
 }
 
 type Kind = QuickParse['tokens'][number][2];
@@ -97,6 +103,8 @@ const PART_RE = /\b(?:(at|in\s+the|this|later)\s+)?(noon|midday|midnight|morning
 const DUR_RE = new RegExp(R`\b(?:for\s+)?${DUR}`, 'gi');
 const LATER_RE = /\b(?:later|some\s?day|sometime|no\s+date)\b/gi;
 const ANYTIME_RE = /\b(?:at\s+)?any\s?time\b/gi;
+// Alarm: "set an alarm (for)", "with/as an alarm", a leading "alarm (for)", "wake me (up)".
+const ALARM_RE = /\b(?:(set|add|make)\s+(?:an?\s+|my\s+)?alarm(?:\s+for\b)?|(with|as)\s+an?\s+alarm|alarm(?:\s+for\b)?|(wake)\s+me(?:\s+up)?)\b/gi;
 
 // ── Clock arithmetic ──────────────────────────────────────────────────────────
 
@@ -204,6 +212,7 @@ interface State {
   duration: Minutes | null;
   later: boolean;
   anytime: boolean;
+  alarm: 'alarm' | 'wake' | null;
 }
 
 export function parseQuick(text: string, nowMs: number, nowMinutes: Minutes): QuickParse {
@@ -211,14 +220,14 @@ export function parseQuick(text: string, nowMs: number, nowMinutes: Minutes): Qu
   try {
     return parse(src, nowMs, nowMinutes);
   } catch {
-    return { title: tidy(src), date: todayISO(nowMs), start: null, hasTime: false, duration: null, recurrence: null, anytime: false, tokens: [] };
+    return { title: tidy(src), date: todayISO(nowMs), start: null, hasTime: false, duration: null, recurrence: null, anytime: false, alarm: false, tokens: [] };
   }
 }
 
 function parse(src: string, nowMs: number, nowMinutes: Minutes): QuickParse {
   const today = todayISO(nowMs);
   const tokens: QuickParse['tokens'] = [];
-  const s: State = { recurrence: null, dateOf: null, start: null, amb: null, part: null, relDays: 0, duration: null, later: false, anytime: false };
+  const s: State = { recurrence: null, dateOf: null, start: null, amb: null, part: null, relDays: 0, duration: null, later: false, anytime: false, alarm: null };
 
   /** Glued to the previous word, or the "30" of "10:30" / "5" of "1.5". */
   const glued = (i: number) => /\w$|\d[:.]$/.test(src.slice(Math.max(0, i - 2), i));
@@ -243,6 +252,12 @@ function parse(src: string, nowMs: number, nowMinutes: Minutes): QuickParse {
     if (s.dateOf) return false;
     s.dateOf = f;
   };
+
+  // Alarm — a leading "alarm" only, so "Check the smoke alarm" stays a title.
+  scan(ALARM_RE, 'alarm', (m) => {
+    if (s.alarm || (!m[1] && !m[2] && !m[3] && !atStart(m.index))) return false;
+    s.alarm = m[3] ? 'wake' : 'alarm';
+  });
 
   // Repeat — first, so "every fri" isn't read as a one-off Friday.
   scan(WEEKPART_RE, 'repeat', (m) => repeat('weekly', 1, /weekday/i.test(m[0]) ? [1, 2, 3, 4, 5] : [0, 6]));
@@ -319,11 +334,21 @@ function parse(src: string, nowMs: number, nowMinutes: Minutes): QuickParse {
   else if (s.amb && partPm !== null && s.amb.h !== 12) start = candidates(s.amb)[partPm ? 1 : 0];
   if (s.later || s.anytime) start = null;
 
+  // An alarm is for the next such time (see the notes at the top).
+  let alarmTomorrow = false;
+  if (s.alarm && start !== null) {
+    if (s.amb && partPm === null && s.amb.h !== 12) {
+      const [am, pm] = candidates(s.amb);
+      start = s.alarm === 'wake' || am > nowMinutes ? am : pm > nowMinutes ? pm : am;
+    }
+    alarmTomorrow = !s.dateOf && !s.recurrence && !s.relDays && start <= nowMinutes;
+  }
+
   let date: ISODate | null = null;
   if (!s.later) {
     if (s.dateOf) date = s.dateOf(start);
     else if (s.recurrence?.byWeekday) date = firstMatching(today, s.recurrence.byWeekday);
-    else date = addDays(today, s.relDays || (start === 0 ? 1 : 0));
+    else date = addDays(today, s.relDays || (start === 0 || alarmTomorrow ? 1 : 0));
   }
 
   tokens.sort((x, y) => x[0] - y[0]);
@@ -336,13 +361,14 @@ function parse(src: string, nowMs: number, nowMinutes: Minutes): QuickParse {
   rest += src.slice(pos);
 
   return {
-    title: tidy(rest),
+    title: tidy(rest) || (s.alarm === 'wake' ? 'Wake up' : s.alarm ? 'Alarm' : ''),
     date,
     start,
     hasTime: start !== null,
     duration: s.duration,
     recurrence: s.recurrence,
     anytime: s.anytime,
+    alarm: !!s.alarm && start !== null,
     tokens,
   };
 }

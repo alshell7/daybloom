@@ -12,6 +12,7 @@ import { view } from '../../stores/view.svelte';
 import { alefFile, migrateAlef } from './alef.svelte';
 import { answer } from './conversation';
 import type { ProviderId } from './llm';
+import { aiFile } from '../../ai/hub.svelte';
 
 const TODAY = '2026-10-19';
 const NOW = atMinutes(TODAY, 10 * 60 + 40);
@@ -40,9 +41,8 @@ describe.runIf(process.env.ALEF_LIVE === '1')('alef: live conversation', () => {
   for (const c of cases) {
     it(`plans with ${c.provider}`, async () => {
       alefFile.value = migrateAlef(null);
-      alefFile.value.settings.brain = c.provider;
-      alefFile.value.settings.configs = { [c.provider]: { model: c.model, ...(c.accountId ? { accountId: c.accountId() } : {}) } };
-      alefFile.value.settings.consent = { [c.provider]: Date.now() };
+      aiFile.value.services = { [c.provider]: { model: c.model, consent: Date.now(), ...(c.accountId ? { accountId: c.accountId() } : {}) } };
+      aiFile.value.use.alef.think = { via: c.provider };
       vi.spyOn(platform.secrets, 'get').mockResolvedValue(c.key());
       const a = await answer('Add a 30 minute walk at 4pm today, please.', { history: [], aiReady: true });
       const walk = taskFile.value.tasks.find((t) => /walk/i.test(t.title));

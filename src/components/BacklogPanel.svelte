@@ -3,6 +3,7 @@
 
   // Remembered while the app runs, so reopening the panel lands where you left it.
   const prefs = $state<{ tab: ListId; sort: SortMode; nudgeHiddenOn: string }>({ tab: 'inbox', sort: 'manual', nudgeHiddenOn: '' });
+  import { trashFile } from '../lib/stores/trash.svelte';
 </script>
 
 <script lang="ts">
@@ -388,9 +389,14 @@
                     Drag a row onto the dial to place it. <kbd>↑</kbd><kbd>↓</kbd> move · <kbd>⏎</kbd> rename · <kbd>Space</kbd> done · <kbd>T</kbd> today
                   </p>
                 {:else}
-                  <button class="btn btn-quiet clear-done" onclick={() => backlog.clearDone()}>
-                    <Icon name="archive" size={15} />Clear {tally.done} finished
-                  </button>
+                  <div class="done-foot">
+                    <button class="btn btn-quiet clear-done" onclick={() => backlog.clearDone()}>
+                      <Icon name="archive" size={15} />Clear {tally.done} finished
+                    </button>
+                    <button class="btn btn-quiet clear-done" onclick={() => (view.sheet = { kind: 'insights', tab: 'done' })}>
+                      Everything you've done<Icon name="chevron-right" size={15} />
+                    </button>
+                  </div>
                 {/if}
               {:else if filtered && tally[prefs.tab]}
                 <div class="empty">
@@ -431,6 +437,9 @@
           {#if freeToday >= 5 * MINUTE}<b>{formatDuration(freeToday)}</b> free today{:else}The day is full{/if}
         </span>
         <span class="grow"></span>
+        {#if trashFile.value.items.length}
+          <button class="btn btn-quiet" onclick={() => (view.sheet = { kind: 'trash' })} title="Deleted items wait here for 30 days"><Icon name="trash-ui" size={15} />Trash <span class="tnum">{trashFile.value.items.length}</span></button>
+        {/if}
         <button class="btn btn-primary" onclick={() => openPlan()}><Icon name="wand-sparkles" size={15} />Plan my day</button>
       {/if}
     {/snippet}
@@ -538,6 +547,14 @@
     height: 32px;
     padding: 0 12px;
     font-size: var(--t-xs);
+  }
+  .done-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  .done-foot .clear-done + .clear-done {
+    margin: var(--s-2) -6px 0 0;
   }
 
   .empty {

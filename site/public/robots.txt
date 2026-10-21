@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://alshell7.github.io/daybloom/sitemap.xml

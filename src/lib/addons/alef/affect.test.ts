@@ -29,12 +29,23 @@ describe('alef: affect', () => {
     expect(coreOf({ v: 0, a: 0 })).toBe('inactive');
   });
 
-  it('feels the day: a good day lifts the mood, open check-ins and late nights lower it', () => {
+  it('feels the day: wins lift the mood; open check-ins make it attentive, never sad', () => {
     expect(moodTarget({ ...base, doneRatio: 1 }).v).toBeGreaterThan(0.4);
-    expect(moodTarget({ ...base, doneRatio: 0.2, openCheckIns: 4 }).v).toBeLessThan(-0.3);
+    const slipped = moodTarget({ ...base, doneRatio: 0.2, openCheckIns: 4, overrunMin: 30 });
+    expect(slipped.v).toBeGreaterThan(0.1);
+    expect(slipped.a).toBeGreaterThan(0.3);
     expect(moodTarget({ ...base, awake: false }).a).toBeLessThan(-0.6);
-    expect(moodTarget({ ...base, overrunMin: 30 }).a).toBeGreaterThan(0.4);
     expect(moodTarget({ ...base, idleMin: 40 }).a).toBeLessThan(-0.4);
+  });
+
+  it('never shows disappointment about your plans', () => {
+    for (const ev of ['checkIn', 'missed', 'manyMissed', 'overrun', 'overdue', 'pushedAgain', 'ignored'] as const) {
+      for (const x of [{ v: -0.9, a: 0.8 }, { v: 0, a: 0 }, { v: 0.9, a: -0.8 }]) {
+        const b = behaviorForEvent(ev, impulse(x, ev));
+        expect(['sad', 'miserable', 'disappointed', 'disgusted', 'glaring', 'angry', 'grumpy', 'afraid', 'frustrated']).not.toContain(b);
+      }
+      expect(impulse({ v: 0, a: 0 }, ev).v).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it('lets emotions fade back into the mood', () => {
@@ -52,7 +63,7 @@ describe('alef: affect', () => {
     expect(behaviorForEvent('done', { v: 0.1, a: 0 })).toBe('pleased');
     expect(behaviorForEvent('thinking', { v: 0, a: 0 })).toBe('spinning');
     expect(behaviorForEvent('pokeTooMuch', { v: 0, a: 0 })).toBe('angry');
-    expect(behaviorForEvent('manyMissed', { v: -0.8, a: 0 })).toBe('miserable');
+    expect(behaviorForEvent('manyMissed', { v: -0.8, a: 0 })).toBe('loving');
   });
 
   it('idles kindly: blinks and looks, gets sleepy, sleeps at night', () => {

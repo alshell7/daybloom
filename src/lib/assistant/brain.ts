@@ -125,7 +125,7 @@ const TRIGGERS: { tool: string; res: RegExp[] }[] = TOOLS.map((t) => ({
 }));
 
 const QUESTION = /^(?:what|when|how|where|why|who|which|is|are|do|does|did|can|could|should|will|would|am)\b/;
-const CREATE_VERB = /^(?:add|schedule|put|book|block|create|set up|pencil|plan in|slot|insert|new|pop|stick|squeeze)\b/;
+const CREATE_VERB = /^(?:add|schedule|put|book|block|create|set up|pencil|plan in|slot|insert|new|pop|stick|squeeze|fit)\b/;
 
 /** Extra conditions a trigger match must meet. */
 const FREE_TIME = /\bfree\b|\bwhen (?:can|could|do) i (?:fit|squeeze|have)\b|\b(?:gaps?|availab)/;
@@ -162,6 +162,8 @@ export function refine(tool: string, p: Prepped, now: number, source: Source): s
     if (!said && /^(?:i need to|i have to|i gotta|gotta|remind me)\b/.test(p.low)) return 'add_to_backlog';
   }
   if (tool === 'start_timer' && source !== 'trigger' && CLOCK_TIME.test(p.low)) return 'create_block';
+  // "Add reading in my free time", "find time for the gym": put it there, don't just list the gaps.
+  if (tool === 'find_free_time' && !QUESTION.test(p.low) && (CREATE_VERB.test(p.low) || /^(?:find|make)\s+(?:me\s+)?(?:some\s+)?(?:time|room|space)\s+(?:to|for)\s+\S|^fit\s+\S/.test(p.low)) && createArgs({}, p.text, now).title) return 'create_block';
   if (['plan_my_day', 'show_day', 'whats_now', 'when_is'].includes(tool) && /\b(?:free|gaps?|available|availability)\b/.test(p.low)) return 'find_free_time';
   return tool;
 }
@@ -523,7 +525,10 @@ export function dayIn(text: string, now = clock.now): ISODate | null {
 }
 
 const CREATE_LEAD =
-  /^(?:add|schedule|put|book|block(?:\s+(?:out|off))?|create|make|set\s+up|pencil(?:\s+in)?|plan\s+in|slot(?:\s+in)?|insert|new(?:\s+block)?|pop|stick|squeeze(?:\s+in)?|remind\s+me\s+(?:to|about)|remind\s+me|remember\s+to|i\s+have\s+to|i\s+have|i've\s+got\s+to|i've\s+got|i\s+need\s+to|i\s+gotta|gotta)\s+(?:(?:a|an)\s+)?/i;
+  /^(?:(?:find|make)\s+(?:me\s+)?(?:some\s+)?(?:time|room|space)\s+(?:to|for)|fit(?:\s+in)?|add|schedule|put|book|block(?:\s+(?:out|off))?|create|make|set\s+up|pencil(?:\s+in)?|plan\s+in|slot(?:\s+in)?|insert|new(?:\s+block)?|pop|stick|squeeze(?:\s+in)?|remind\s+me\s+(?:to|about)|remind\s+me|remember\s+to|i\s+have\s+to|i\s+have|i've\s+got\s+to|i've\s+got|i\s+need\s+to|i\s+gotta|gotta)\s+(?:(?:a|an)\s+)?(?:(?:new\s+)?(?:task|block|reminder)\s+(?:to|for|about)\s+)?/i;
+/** "…in my free time", "…when I'm free": place it in the first free time (the default with no time said). */
+const FREE_SLOT =
+  /\s*\b(?:in(?:to)?|during|at)\s+(?:my|a|the|some|any|an)?\s*(?:next\s+)?(?:free|spare|open|empty)\s+(?:time|slot|gap|moment|window|stretch|hour|minute)s?\b|\s*\bwhen(?:ever)?\s+i(?:'m|\s+am)\s+free\b|\s*\b(?:somewhere|sometime|wherever)\s+(?:free|it fits)\b|\s*\bin\s+(?:a|the|my)\s+(?:next\s+)?gap\b|\s*\bwhere(?:ever)?\s+(?:it|there(?:'s| is) room)\s+fits?\b|\s*\bwhen(?:ever)?\s+there(?:'s| is)\s+(?:time|room)\b/gi;
 const CREATE_TAIL = /\s+(?:to|on|in|into)\s+(?:my|the)\s+(?:day|dial|calendar|schedule|plan)$|\s+(?:to|on)\s+(?:today|tomorrow)$/i;
 const BACKLOG_LEAD =
   /^(?:i\s+need\s+to|i\s+have\s+to|i\s+gotta|gotta|i\s+should|need\s+to|remember\s+to|remember|don'?t\s+forget\s+(?:to|about)|don'?t\s+forget|do\s+not\s+forget(?:\s+to)?|remind\s+me\s+(?:to|about)|remind\s+me|add|put|capture|note|jot(?:\s+down)?|save|park|todo|to-?do|later)\s*:?\s*/i;
@@ -572,7 +577,7 @@ function pickTitle(fromText: string | null, raw: unknown, text: string): string 
 
 function createArgs(raw: Args | Record<string, unknown>, text: string, now: number): Args {
   const r = raw as Record<string, unknown>;
-  const body = stripLead(text, CREATE_LEAD).replace(CREATE_TAIL, '');
+  const body = stripLead(text.replace(FREE_SLOT, ' ').replace(/\s+/g, ' ').trim(), CREATE_LEAD).replace(CREATE_TAIL, '');
   const q = parseQuick(body, now, nowMinutes(now));
   const explicitDay = q.tokens.some((t) => t[2] === 'date');
   const later = q.date === null;

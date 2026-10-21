@@ -2,6 +2,10 @@
 // −1..1) and arousal (how active, −1..1) — on two timescales: a slow mood that follows how
 // the day is going, and quick emotions that events add and that fade back into the mood.
 // Where the pair lands picks one of 8 core states; events and states pick a behaviour. Pure.
+//
+// Alef is on your side. Plans that slip, run long or wait unticked never make it sad, sulky or
+// cross with you: they make it attentive and warm, ready with a small next step. Only its own
+// moments (too many pokes, a brain it can't reach) get a grumble, and that one is playful.
 
 import { BEHAVIORS, BY_CORE, type BehaviorId, type CoreState } from './behaviors';
 
@@ -37,23 +41,27 @@ export type AffectEvent =
   | 'checkIn' | 'missed' | 'manyMissed' | 'overrun' | 'overdue' | 'pushedAgain' | 'ignored'
   | 'poke' | 'pokeAgain' | 'pokeTooMuch' | 'thanks'
   | 'listening' | 'thinking' | 'answered' | 'unsure' | 'failed'
-  | 'greet' | 'loud' | 'prayer' | 'landing';
+  | 'greet' | 'loud' | 'prayer' | 'landing'
+  | 'planned' | 'unplanned' | 'moved' | 'newLook' | 'welcomeBack' | 'milestone' | 'nudge' | 'started';
 
 const clamp = (x: number) => Math.max(-1, Math.min(1, x));
 
-/** Where the mood heads, from how the day is going. */
+/**
+ * Where the mood heads, from how the day is going. Wins lift it; what's still open never
+ * lowers it below a warm baseline (open check-ins and overruns make Alef attentive instead).
+ */
 export function moodTarget(s: Signals): Affect {
-  let v = 0.12;
-  if (s.doneRatio !== null) v += (s.doneRatio - 0.5) * 0.7;
-  v -= Math.min(s.openCheckIns, 4) * 0.08;
+  let v = 0.2;
+  if (s.doneRatio !== null) v += Math.max(0, s.doneRatio - 0.25) * 0.55;
   v += (Math.min(s.streak, 7) / 7) * 0.12;
-  if (s.overrunMin > 0) v -= Math.min(0.2, s.overrunMin / 100);
+  if (s.inFocus) v += 0.08;
   let a = 0;
   if (!s.awake) a = -0.75;
   else {
     if (s.inFocus) a -= 0.15;
     if (s.nextInMin !== null && s.nextInMin <= 10) a += 0.3;
-    if (s.overrunMin > 0) a += Math.min(0.45, 0.15 + s.overrunMin / 60);
+    if (s.openCheckIns > 0) a += Math.min(0.2, s.openCheckIns * 0.06);
+    if (s.overrunMin > 0) a += Math.min(0.3, 0.1 + s.overrunMin / 90);
     if (s.idleMin > 10) a -= Math.min(0.55, (s.idleMin - 10) / 30);
     if (s.hour >= 21 || s.hour < 6) a -= 0.25;
   }
@@ -77,13 +85,14 @@ const IMPULSE: Record<AffectEvent, Affect> = {
   focusStart: { v: 0.15, a: -0.2 },
   focusEnd: { v: 0.35, a: 0.15 },
   lastMinute: { v: 0, a: 0.45 },
-  checkIn: { v: -0.02, a: 0.2 },
-  missed: { v: -0.3, a: -0.05 },
-  manyMissed: { v: -0.55, a: -0.2 },
-  overrun: { v: -0.2, a: 0.4 },
-  overdue: { v: -0.35, a: 0.45 },
-  pushedAgain: { v: -0.35, a: 0.25 },
-  ignored: { v: -0.25, a: 0.05 },
+  // Your plans slipping: warmth and attention, never disappointment.
+  checkIn: { v: 0.05, a: 0.2 },
+  missed: { v: 0.1, a: 0.1 },
+  manyMissed: { v: 0.15, a: 0.15 },
+  overrun: { v: 0, a: 0.25 },
+  overdue: { v: 0.05, a: 0.25 },
+  pushedAgain: { v: 0.05, a: 0.1 },
+  ignored: { v: 0, a: -0.1 },
   poke: { v: 0.3, a: 0.3 },
   pokeAgain: { v: -0.2, a: 0.2 },
   pokeTooMuch: { v: -0.45, a: 0.55 },
@@ -97,6 +106,14 @@ const IMPULSE: Record<AffectEvent, Affect> = {
   loud: { v: -0.1, a: 0.6 },
   prayer: { v: 0.3, a: -0.3 },
   landing: { v: 0.25, a: -0.25 },
+  planned: { v: 0.25, a: 0.25 },
+  unplanned: { v: 0, a: 0.1 },
+  moved: { v: 0.05, a: 0.15 },
+  newLook: { v: 0.4, a: 0.45 },
+  welcomeBack: { v: 0.4, a: 0.35 },
+  milestone: { v: 0.8, a: 0.5 },
+  nudge: { v: 0.15, a: 0.2 },
+  started: { v: 0.45, a: 0.3 },
 };
 
 export function impulse(cur: Affect, ev: AffectEvent): Affect {
@@ -129,12 +146,12 @@ export const EVENT_BEHAVIOR: Record<AffectEvent, BehaviorId | ((x: Affect) => Be
   focusEnd: 'glad',
   lastMinute: 'racing',
   checkIn: 'curious',
-  missed: 'disappointed',
-  manyMissed: (x) => (x.v < -0.6 ? 'miserable' : 'sad'),
-  overrun: 'pacing',
-  overdue: 'afraid',
-  pushedAgain: 'disgusted',
-  ignored: 'glaring',
+  missed: 'loving',
+  manyMissed: 'loving',
+  overrun: 'curious',
+  overdue: 'curious',
+  pushedAgain: 'contemplating',
+  ignored: 'content',
   poke: 'delighted',
   pokeAgain: 'grumpy',
   pokeTooMuch: 'angry',
@@ -148,6 +165,14 @@ export const EVENT_BEHAVIOR: Record<AffectEvent, BehaviorId | ((x: Affect) => Be
   loud: 'startled',
   prayer: 'contemplating',
   landing: 'content',
+  planned: (x) => (x.v > 0.4 ? 'happy' : 'pleased'),
+  unplanned: 'curious',
+  moved: 'curious',
+  newLook: 'amazed',
+  welcomeBack: 'excited',
+  milestone: 'loving',
+  nudge: 'curious',
+  started: 'excited',
 };
 
 export function behaviorForEvent(ev: AffectEvent, after: Affect): BehaviorId {
@@ -169,11 +194,11 @@ export function idleBehavior(x: Affect, seed: number, o: { night: boolean; idleM
     case 'pleasant-inactive':
       return pick(['content', 'blinking', 'contemplating', 'glad']);
     case 'unpleasant-inactive':
-      return o.idleMin > 12 ? 'bored' : pick(['blinking', 'grumpy', 'bored']);
+      return o.idleMin > 12 ? 'bored' : pick(['blinking', 'contemplating', 'looking']);
     case 'pleasant':
       return pick(['blinking', 'pleased', 'looking', 'happy']);
     case 'unpleasant':
-      return pick(['blinking', 'disappointed', 'looking']);
+      return pick(['blinking', 'contemplating', 'looking']);
     case 'active':
       return pick(['looking', 'curious', 'blinking']);
     case 'pleasant-active':

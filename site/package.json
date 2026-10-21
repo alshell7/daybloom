@@ -1,0 +1,35 @@
+{
+  "name": "daybloom-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "The public website for Daybloom, a visual day planner and timer for macOS and Windows.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "release-info": "node scripts/release-info.mjs",
+    "build": "node scripts/release-info.mjs && vite build && vite build --ssr src/entry-server.tsx --outDir dist-ssr && node scripts/prerender.mjs",
+    "preview": "vite preview",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "media": "node scripts/optimize-media.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/lexend": "5.3.0",
+    "canvas-confetti": "1.9.4",
+    "clsx": "2.1.1",
+    "lucide-react": "1.52.0",
+    "motion": "14.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/canvas-confetti": "1.9.0",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.3"
+  }
+}

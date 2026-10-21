@@ -1,0 +1,40 @@
+{
+  "name": "daybloom-promo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Daybloom promo video, made with Framefields",
+  "type": "module",
+  "dependencies": {
+    "framefields": "2.3.2"
+  },
+  "allowScripts": {
+    "skia-canvas": true,
+    "sharp": false,
+    "webgpu": false,
+    "onnxruntime-node": false,
+    "node-av": false,
+    "esbuild": false,
+    "protobufjs": false,
+    "fsevents": false
+  },
+  "packageManager": "npm@11.17.0",
+  "devDependencies": {
+    "@expo-google-fonts/lexend": "0.4.1",
+    "@types/node": "24.9.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "icons": "tsx scripts/gen-icons.ts",
+    "audio": "tsx scripts/make-audio.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "scene": "tsx src/render.ts scene",
+    "grid": "tsx src/render.ts grid",
+    "frames": "tsx src/render.ts frames",
+    "stills": "tsx src/render.ts stills",
+    "preview": "tsx src/render.ts preview",
+    "render": "tsx src/render.ts video",
+    "render:60": "PROMO_FPS=60 tsx src/render.ts video",
+    "square": "sh scripts/square.sh"
+  }
+}

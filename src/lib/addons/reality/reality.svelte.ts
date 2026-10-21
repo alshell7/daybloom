@@ -13,6 +13,7 @@ import { taskFile } from '../../stores/tasks.svelte';
 import { timer, timerFile } from '../../stores/timer.svelte';
 import { isOn } from '../registry';
 import { trackerFile } from '../tracker/tracker.svelte';
+import { completedItems } from '../../history';
 import { estimate, MAX_SAMPLES, migrateReality, suggest, tickMinutes, type Estimate, type RealityFile, type Sample, type SampleSource } from './reality';
 
 export { migrateReality, type RealityFile };
@@ -53,15 +54,13 @@ function record(task: Task, date: ISODate, doneAt: number) {
   realityFile.value.samples = [...realityFile.value.samples.filter((x) => x.id !== id), s].slice(-MAX_SAMPLES);
 }
 
-/** Every finished occurrence, as `taskId@date` → when it was ticked. */
+/** Every finished occurrence of your own (the history's list, ticks with a time), as `taskId@date` → when it was ticked. */
 function finished(tasks: Task[]): Map<string, { task: Task; date: ISODate; at: number }> {
   const out = new Map<string, { task: Task; date: ISODate; at: number }>();
-  for (const t of tasks) {
-    if (t.date === null) {
-      if (t.doneAt) out.set(`${t.id}@${isoOf(t.doneAt)}`, { task: t, date: isoOf(t.doneAt), at: t.doneAt });
-      continue;
-    }
-    for (const [date, at] of Object.entries(t.completedAt ?? {})) out.set(`${t.id}@${date}`, { task: t, date, at });
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  for (const it of completedItems({ tasks }, null, '9999-12-31')) {
+    const task = byId.get(it.taskId);
+    if (task && it.doneAt != null) out.set(`${task.id}@${it.date}`, { task, date: it.date, at: it.doneAt });
   }
   return out;
 }

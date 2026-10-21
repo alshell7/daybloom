@@ -8,7 +8,7 @@
   import Icon from '../../lib/Icon.svelte';
   import { platform } from '../../lib/platform';
   import { view } from '../../lib/stores/view.svelte';
-  import { micAdvice, voice } from '../../lib/voice/voice.svelte';
+  import { micAdvice, micSettingsUrl, voice } from '../../lib/voice/voice.svelte';
   import Card from '../assistant/Card.svelte';
   import VoiceRing from './VoiceRing.svelte';
 
@@ -160,7 +160,12 @@
           <p class="say">{voice.error}</p>
           {#if voice.problem}<p class="say quiet">{micAdvice(voice.problem, platform.os)}</p>{/if}
           <div class="acts">
-            <button class="btn-light" onclick={() => voice.start('overlay', { handsFree: true })}>Try again</button>
+            {#if voice.problem === 'denied' && micSettingsUrl(platform.os)}
+              <button class="btn-light" onclick={() => void platform.openExternal(micSettingsUrl(platform.os)!).catch(() => {})}><Icon name="settings" size={14} stroke={2.2} /> Open microphone settings</button>
+              <button class="btn-ghost" onclick={() => voice.start('overlay', { handsFree: true })}>Try again</button>
+            {:else}
+              <button class="btn-light" onclick={() => voice.start('overlay', { handsFree: true })}>Try again</button>
+            {/if}
             <button class="btn-ghost" onclick={() => voice.cancel()}>Close</button>
           </div>
         {:else}

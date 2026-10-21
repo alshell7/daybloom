@@ -46,6 +46,8 @@ class Nudges {
     if (!c || c.kind !== 'task' || c.done) return null;
     if (clock.now - c.startMs > 5 * MINUTE || clock.now < c.startMs) return null;
     if (dismissedToday().includes(`start:${c.key}`)) return null;
+    // An alarm block has its own ringing card.
+    if (taskOf(c)?.alarm) return null;
     return c;
   });
 

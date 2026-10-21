@@ -11,6 +11,7 @@ import { view } from './stores/view.svelte';
 import { nudges } from './nudges.svelte';
 import { toggleDone } from './actions';
 import { shownTitle } from './privacy';
+import { alarms, hasAlarm, startAlarms } from './alarms.svelte';
 
 export function startScheduler() {
   const fired = new Set<string>();
@@ -21,6 +22,10 @@ export function startScheduler() {
 
   return $effect.root(() => {
     $effect(() => configureSound(settings.value.sound, settings.value.volume));
+
+    // Blocks that ring as alarms (lib/alarms.svelte.ts): checked on every tick of the clock.
+    $effect(() => startAlarms());
+    $effect(() => alarms.tick(clock.now));
 
     $effect(() => {
       const now = clock.now;
@@ -44,7 +49,8 @@ export function startScheduler() {
       // A block just began.
       if (cur && !fired.has(`go:${cur.key}`)) {
         fired.add(`go:${cur.key}`);
-        if (booted && now - cur.startMs < 90_000) {
+        // An alarm block says so itself (it rings and notifies), so the soft cue stays quiet.
+        if (booted && now - cur.startMs < 90_000 && !hasAlarm(cur)) {
           sounds.begin();
           if (cfg.notify) platform.notify(`Now: ${cur.title || 'next block'}`, `${formatDuration(cur.endMs - cur.startMs)} · until ${formatTime(cur.endMs, view.hour12)}`);
         }
@@ -81,13 +87,21 @@ export function startScheduler() {
           if (timer.active?.segments.at(-1)?.kind === 'focus') timer.noteFocusDone();
           sounds.timerEnd();
           if (cfg.notify) platform.notify('Timer done', timer.active?.label ?? '');
-          const target = timer.active?.target;
-          const done = target?.key ? view.todayBlocks.find((b) => b.key === target.key)?.done : true;
-          view.say(
-            `${timer.active?.label ?? 'Timer'} · focus done`,
-            target?.key && !done ? { label: 'Mark it done', run: () => toggleDone(target.key!) } : undefined,
-            9000,
-          );
+          const a = timer.active;
+          const target = a?.target;
+          const block = target?.key ? view.todayBlocks.find((b) => b.key === target.key) : null;
+          const total = a ? a.segments.reduce((m, x) => m + x.ms, 0) : 0;
+          if (block && !block.done && total <= 5 * MINUTE) {
+            // A tiny start is done: the hard part is over, so offer to keep going (never "now finish it").
+            const keep = { minutes: 10, rhythm: 'single' as const, label: a!.label, icon: a!.icon, category: a!.category, target };
+            view.say(`You started “${block.title}”. That was the hard part.`, { label: 'Keep going · 10 min', run: () => timer.startSession(keep) }, 12000);
+          } else {
+            view.say(
+              `${a?.label ?? 'Timer'} · focus done`,
+              block && !block.done ? { label: 'Mark it done', run: () => toggleDone(block.key) } : undefined,
+              9000,
+            );
+          }
           timer.stop();
           lastTimerIndex = -1;
         }
@@ -106,14 +120,14 @@ export function startScheduler() {
         const steps: [string, boolean, () => void][] = [
           [`ci0:${b.key}`, late >= 0, () => {
             sounds.headsUp();
-            if (cfg.notify) platform.notify(`Time's up · ${b.title || 'block'}`, 'Did you finish? Tick it, give it more time, or let it go.');
+            if (cfg.notify) platform.notify(`${b.title || 'Your block'} has ended`, 'How did it go? Tick it, give it more time, or let it go. Any answer is fine.');
           }],
           [`ci1:${b.key}`, late >= 10 && cfg.nudges.overrun, () => {
             const next = view.now.current;
-            if (cfg.notify) platform.notify(next ? `${next.title} started ${formatDuration(m - next.startMs)} ago` : `Still on ${b.title}?`, next ? `Wrap up “${b.title}” when you can.` : 'A quick check-in keeps the day honest.');
+            if (cfg.notify) platform.notify(next ? `${next.title} is on now` : `Still with ${b.title}?`, next ? `Wrap up “${b.title}” when you're ready.` : 'Deep in it is fine. One tap keeps your dial up to date.');
           }],
           [`ci2:${b.key}`, late >= 30, () => {
-            if (cfg.notify) platform.notify(`“${b.title}” is waiting for a check-in`, 'Done, later, or let it go — any answer is fine.');
+            if (cfg.notify) platform.notify(`“${b.title}” whenever you're ready`, 'Done, later, or let it go. Any answer is fine.');
           }],
         ];
         for (const [id, due, fire] of steps) {

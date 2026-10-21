@@ -1,8 +1,9 @@
 <script lang="ts">
   // Talking to Alef from the desktop widget: a small field at the foot of the dial (type, or
-  // hold the mic or Space to speak) and Alef's answer in a bubble over the dial. The planner
-  // window holds the conversation (the same history, tools and brain); the widget sends what you
-  // said and shows what Alef says back.
+  // hold the mic or Space to speak) and Alef's answer in a bubble over the dial, or (with `wing`)
+  // in the wing beside it, which the widget opens itself (components/widget). The planner window
+  // holds the conversation (the same history, tools and brain); the widget sends what you said
+  // and shows what Alef says back.
   import { onMount, tick, untrack } from 'svelte';
   import { cubicOut } from 'svelte/easing';
   import { fly, scale } from 'svelte/transition';
@@ -13,7 +14,25 @@
   import { voice } from '../../../lib/voice/voice.svelte';
   import MicButton from '../../voice/MicButton.svelte';
 
-  let { start = '', bar = true, onclose, ink, face }: { start?: string; bar?: boolean; onclose: () => void; ink: string; face: string } = $props();
+  let {
+    start = '',
+    bar = true,
+    wing = false,
+    onask,
+    onclose,
+    ink,
+    face,
+  }: {
+    start?: string;
+    bar?: boolean;
+    /** Alef's answers show in the widget's wing: here, only the field. */
+    wing?: boolean;
+    /** You asked Alef something from here (typed or said). */
+    onask?: () => void;
+    onclose: () => void;
+    ink: string;
+    face: string;
+  } = $props();
 
   let text = $state(untrack(() => start));
   let field = $state<HTMLInputElement>();
@@ -39,6 +58,7 @@
     text = '';
     sent = true;
     reply = null;
+    onask?.();
     void platform.broadcast('alef-ask', { text: t });
   }
 
@@ -59,6 +79,7 @@
     untrack(() => {
       sent = true;
       reply = null;
+      onask?.();
       void platform.broadcast('alef-ask', { text: voice.final });
     });
   });
@@ -75,14 +96,22 @@
 </script>
 
 <div class="talk" style:--ink={ink} style:--face={face} role="presentation" onpointerdown={(e) => e.stopPropagation()} onkeydown={key}>
-  {#if thinking || shown || needsModel}
+  {#if (!wing && (thinking || shown)) || needsModel}
     <div class="reply" role="status" onpointerenter={() => alef.holdBubble(true)} onpointerleave={() => alef.holdBubble(false)} in:scale={{ start: 0.85, duration: rm ? 0 : 320, easing: cubicOut }} aria-live="polite">
       {#if needsModel}
-        To talk, get the speech model in Daybloom first: Settings › Voice.
+        To talk, get the speech model in Daybloom first: Settings › AI.
       {:else if thinking && !reply}
         <span class="dots" aria-label="Alef is thinking"><i></i><i></i><i></i></span>
       {:else}
         {shown}
+        {#if alef.bubble?.offers?.length && alef.bubble.text === shown}
+          {@const b = alef.bubble}
+          <span class="offers">
+            {#each b.offers ?? [] as o, i (o.id + i)}
+              <button class="offer" onclick={() => void platform.broadcast('alef-act', { seq: b.seq, index: i })}><Icon name={o.icon} size={11} stroke={2.3} /> {o.label}</button>
+            {/each}
+          </span>
+        {/if}
       {/if}
     </div>
   {/if}
@@ -96,6 +125,30 @@
 </div>
 
 <style>
+  .offers {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .offer {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .offer:hover {
+    background: color-mix(in srgb, var(--ink) 12%, transparent);
+  }
   .talk {
     position: absolute;
     inset: 0;

@@ -8,7 +8,7 @@
   import { clock } from '../../lib/stores/clock.svelte';
   import { taskFile } from '../../lib/stores/tasks.svelte';
   import { view } from '../../lib/stores/view.svelte';
-  import { BREATH, breath } from '../../lib/breath.svelte';
+  import { breath } from '../../lib/breath.svelte';
 
   let { kind }: { kind: 'breathe' | 'winddown' } = $props();
 
@@ -16,7 +16,7 @@
   const st = $derived(breath.state);
   const on = $derived(!!st);
   const phase = $derived({ word: st?.word ?? 'Breathe in', scale: st && (st.id === 'in' || st.id === 'hold') ? 1 : 0.62 });
-  const phaseLen = $derived(BREATH.find((p) => p.id === st?.id)?.ms ?? 4000);
+  const phaseLen = $derived(st?.ms ?? 4000);
   const secs = $derived(st?.secondsLeft ?? 4);
   const round = $derived(st?.round ?? 1);
 
@@ -30,7 +30,7 @@
         <span class="orb" style:transform={`scale(${phase.scale})`} style:transition-duration={view.reducedMotion ? '0ms' : `${phaseLen}ms`}></span>
         <div class="txt" aria-live="polite">
           <strong class="a-title">{phase.word}</strong>
-          <span class="a-meta tnum">{secs} · round {round} of 4</span>
+          <span class="a-meta tnum">{secs} · round {round} of {breath.rhythm.rounds}</span>
         </div>
       </div>
       <div class="a-actions"><button class="a-chip quiet" onclick={() => (view.breatheAt = 0)}>Stop</button></div>

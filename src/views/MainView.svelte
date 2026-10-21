@@ -20,6 +20,7 @@
   import Coach from '../components/Coach.svelte';
   import DayRail from '../components/DayRail.svelte';
   import { layout, railDrag } from '../lib/stores/layout.svelte';
+  import { timelineWide } from '../lib/addons/views/views.svelte';
   import FocusMode from '../components/FocusMode.svelte';
   import PresetBar from '../components/PresetBar.svelte';
   import SettingsSheet from '../components/SettingsSheet.svelte';
@@ -30,6 +31,8 @@
   import AssistantPanel from '../components/assistant/AssistantPanel.svelte';
   import Sparks from '../components/Sparks.svelte';
   import Toast from '../components/Toast.svelte';
+  import UpdateChip from '../components/UpdateChip.svelte';
+  import AlarmRing from '../components/AlarmRing.svelte';
   import VoiceDock from '../components/voice/VoiceDock.svelte';
   import FocusLauncher from '../components/focus/FocusLauncher.svelte';
   import AddonsPanel from '../components/addons/AddonsPanel.svelte';
@@ -56,6 +59,8 @@
   import AlefFace from '../components/addons/alef/AlefFace.svelte';
   import AlefPosture from '../components/addons/alef/AlefPosture.svelte';
   import AlefPanel from '../components/addons/alef/AlefPanel.svelte';
+  import TrashPanel from '../components/trash/TrashPanel.svelte';
+  import ResetPanel from '../components/ResetPanel.svelte';
   import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
   import { ACTS } from '../lib/addons/alef/behaviors';
 
@@ -75,7 +80,13 @@
   const timed = $derived(presetId === 'timer60' || presetId === 'chrono');
   const ts = $derived(timer.active ? timer.status(clock.now) : null);
 
-  const dialBlocks = $derived(timed && timer.active ? [...view.timerBlocks] : view.pool);
+  // A block being dragged in the timeline (list or Gantt) moves on the dial as you drag it.
+  const dialBlocks = $derived.by(() => {
+    if (timed && timer.active) return [...view.timerBlocks];
+    const p = view.railPreview;
+    if (!p) return view.pool;
+    return view.pool.map((b) => (b.key === p.key ? { ...b, startMs: p.startMs, endMs: p.endMs } : b)).sort((a, b) => a.startMs - b.startMs || b.endMs - a.endMs);
+  });
 
   const wedge = $derived.by(() => {
     if (!timed) return null;
@@ -262,6 +273,8 @@
     led={alefFile.value.settings.led}
         reduced={view.reducedMotion}
     bubble={alef.bubble}
+    attend={alef.glance}
+    onoffer={(seq, i) => void alef.act(seq, i)}
     onpoke={() => alef.poke()}
     ontouch={(k) => alef.touch(k)}
     onhold={(on) => alef.holdBubble(on)}
@@ -286,6 +299,7 @@
     class:custom={railDrag.active ? !railDrag.auto : layout.value.railWidth > 0}
     class:resizing={railDrag.active}
     class:settling={railDrag.settling}
+    class:wide={timelineWide()}
     style:--rail-user={railDrag.active ? `${railDrag.width}px` : layout.value.railWidth ? `${layout.value.railWidth}px` : null}
   >
     <section class="dial-col" aria-label="Dial">
@@ -320,6 +334,7 @@
           prayerBloom={waqt.bloom}
           lift={alefOnDial && alef.performing ? ACTS[alef.perf.id].lift : 0}
           screen={alefOnDial ? { led: alef.led, glow: alef.glow, palette: alef.screenFor(view.finish) } : null}
+          worldZones={settings.value.worldClock.onDial ? settings.value.worldClock.zones : []}
         >
           <Readout
             state={view.now}
@@ -334,6 +349,7 @@
             breath={view.breathing ? breath.state : null}
             onbreathe={(on) => (view.breatheAt = on ? clock.now : 0)}
             face={alefOnDial ? alefFace : undefined}
+            ontally={() => (view.sheet = { kind: 'insights', tab: 'done', date: view.date })}
           />
         </Dial>
         </AlefPosture>
@@ -364,13 +380,17 @@
   {#if isOn('landings')}<LandingsPanel /><LandingCard />{/if}
   {#if isOn('retro')}<RetroPanel />{/if}
   {#if isOn('alef')}<AlefPanel />{/if}
+  <TrashPanel />
+  <ResetPanel />
   <WhatsNew />
   <TrackerPrompts />
   {#if !view.focus && !view.sheet}
     <Nudges />
   {/if}
   <Sparks />
+  <UpdateChip />
   <Toast />
+  <AlarmRing />
   <VoiceDock />
   {#if view.focus}
     <FocusMode />
@@ -407,6 +427,14 @@
   }
   .stage.settling {
     transition: grid-template-columns var(--dur-3) var(--ease-settle);
+  }
+  /* Timeline views addon: a board or a Gantt chart takes most of the stage; the dial keeps a
+     column of its own. */
+  .stage.wide {
+    --rail: max(320px, calc(100vw - clamp(280px, 27vw, 400px)));
+  }
+  .stage.wide .dial-col {
+    padding-inline: var(--s-4);
   }
   .dial-col {
     display: grid;

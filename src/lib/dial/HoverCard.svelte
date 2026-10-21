@@ -23,7 +23,7 @@
   const acked = $derived(!!task?.acks?.includes(block.date));
 
   const status = $derived.by(() => {
-    if (block.event?.provider === 'salah') return { tone: 'quiet', icon: 'moon', text: block.event.calendarName ?? 'Salah' };
+    if (block.event?.provider === 'salah') return { tone: 'quiet', icon: 'mihrab', text: block.event.calendarName ?? 'Salah' };
     if (block.kind === 'event') {
       const meet = block.event ? meetingOf(block.event) : null;
       const who = peopleLine(block.event?.attendees);

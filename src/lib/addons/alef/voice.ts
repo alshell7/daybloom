@@ -71,6 +71,16 @@ export async function speak(text: string, mode: VoiceMode, o: { pitch: number; v
   return systemVoice(words, o);
 }
 
+/** Say ready-made speech (another voice's samples) in Alef's small speaker, stoppable by hush(). */
+export function playSpoken(words: string, pcm: { samples: Float32Array; rate: number }, o: { pitch: number; volume: number }): Spoken | null {
+  hush();
+  const out = audioOut();
+  if (!out) return null;
+  const r = playPcm(pcm, out, o);
+  stopCurrent = r.stop;
+  return { starts: paced(words, r.total), total: r.total };
+}
+
 /**
  * Play the spoken voice like Alef's own: a little higher and quicker (a small robot, not a
  * grown-up), through the same small speaker as its chirps.

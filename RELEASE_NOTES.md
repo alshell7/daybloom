@@ -8,6 +8,51 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ## Next
 
+### New
+
+- **AI, set up once** — Settings › AI holds every AI service in one place: add a key and a model once, agree once, then choose what each part of Daybloom uses to think, listen and speak. Alef, Ask Daybloom, Make it smaller and voice input each pick a service and a model, or stay on this device.
+- **Ask Daybloom with AI** — choose an AI service for Ask Daybloom and it plans with your day and Daybloom's tools; one Undo takes back everything it changed.
+- **Voice input with AI** — choose a listening service (such as OpenAI) to turn your voice into words; Whistle on this device stays the fallback.
+- **Alarms** — set any timed block to ring as an alarm, with its own tone if you like. It comes to the front with Stop, Snooze and Start now, and rings out by itself. Pick the tone, volume, snooze and gentle start in Settings › Rhythm › Alarm. Quick add understands “alarm at 7am” and “wake me at 6:30”.
+- **World clock** — compare your time with up to two other cities. Their day and night show as thin rings around the dial, with dawn and dusk shaded and each city's time beside it. Pin cities from the time-zone chip or in Settings › Rhythm › World clock.
+- **Tick or skip calendar events** — meetings and other events get a tick in the timeline, like your blocks, and count in your week. Skip one you won't attend: it steps back and its time is free for plans. Your calendar itself stays as it is.
+- **What you've done** — a new Done tab in Your week lists everything you finished, day by day: blocks, backlog tasks, calendar events and salah, each with its time, with search and filters. Open it from "3 of 5 done" in the timeline, from the dial, or from the backlog. Change your mind with "Not done after all", and Undo. Your week, badges, your rhythm and Retrospection count from the same list.
+- **The month at a glance** — click the date in the top bar, the calendar button, or press M: every day of the month is a tiny dial of its blocks. Move by month, jump to today, or type “fri”, “next week” or “12 nov” to go there. Browse other weeks in the week strip without leaving the day you're on.
+- **A top bar that fits** — at any window width, buttons that don't fit move into a tidy More menu, grouped, and come back as the window grows. Choose which buttons show in Settings › Screen › Top bar.
+- **A clearer update card** — a new version shows at the bottom right with what it brings, one button to update and restart, and its progress.
+- **Box breathing** — Breathe on the dial is now box breathing: in, hold, out and rest, each the same length (3–6 seconds), or the calmer 4·4·6·2 rhythm. A soft sphere grows and glows with each breath, a bead of light travels a ring round the four phases, and a real-sounding breath (made on your computer) follows it — or gentle tones, or silence. Choose in Settings › Rhythm › Breathe.
+- **Long words on the widget** — long titles slide gently under the dial's round edge. Click one, or let Alef answer, and the words open in a wing beside the dial, on the side with room, typing out Alef's replies. Set it up with a live preview in Settings › Screen › Desktop widget.
+- **Answers you can tap** — with an AI service, Alef and Ask Daybloom can answer with small cards as well as words: a plan with tick boxes to place in one go, free times with “Add here”, a block with Done and Start 2 min, first steps, quick replies and charts of your week.
+- **A clean start** — the sample day is easy to clear: at the end of getting started, with one tap once you plan your own blocks, or in Settings › App.
+- **Reset Daybloom** — in Settings › App, choose what to clear: blocks, progress, settings, addons and their data, AI services and keys, calendars, sync, downloaded models — or everything. Save a copy first, then hold to confirm.
+- **Trash** — deleted blocks and backlog items wait in the Trash for 30 days. Restore one with a tap, or delete it forever. Open it from the backlog or Settings › App.
+- **Help me start** — when one of your blocks begins, Daybloom has one tiny, concrete first step ready for it — like “open the Q3 numbers sheet” or “pull out the dish soap” — added as the block's first step, with a warm word and one tap to start it as a 2- or 5-minute focus. Try another idea, or say “Not now” and it lets go. When the short focus ends, the step is ticked: you started. With an AI service for Getting started in Settings › AI, the step fits your exact task and notes; without one, it comes from ready-made first steps. Alef offers the same step when it's on. Turn it off in Settings › Rhythm › Gentle support.
+
+### Addons
+
+- **Timeline views** — a new addon that shows your day as a Board or a Gantt chart. On the Board, drag blocks between Later, Today, Now and Done, or across the week; a block from Later goes to the first free time. On the Gantt chart, see a day, three days or a week side by side, and drag to move, stretch or paint blocks along the hours. Calendar events and salah stay in place.
+- **A new Addons screen** — addons sit in calm groups you can search and filter, with their details beside the list, each with a small animated scene of what it does. Switching one on gives a little hop and spark.
+- **Alef, on your side** — Alef now reacts as things happen: it nods when you add a block, watches while you drag one, looks at the block you pick and notices a new look. It offers one small next step at the right moments (start for two minutes, make it smaller, ten more minutes, move it, a fresh start), never a scolding look. With an AI brain it writes its own hellos, check-ins and cheers, shows what it's doing while it works with your day, and its feelings change as it talks. Your last conversation is still there next time.
+- **Waqt: mark salah in one tap** — tick a prayer right in the timeline: on time while its time lasts, made up after. Hold or right-click the tick to choose in jamaat, late or qasr. Or tap the salah on the dial and choose On time, In jamaat or Made up right there.
+- **Waqt: your salah in charts** — a headline of what's going well, the week as stacks of five, the month as a calm grid, a ring per prayer with its run of on-time days, the share on time week by week, and how soon after the adhan you usually mark it.
+- **Alef watches you, everywhere** — its eyes follow the pointer anywhere on your screen, on the dial and on the widget, with no extra permission.
+- **Alef's voice from an AI service** — Alef can speak in a voice from an AI service, through its own small speaker.
+- **Make it smaller with AI** — with an AI service chosen, the steps fit your exact task and your moment: its notes and the steps it already has, the time before your next block, and how long tasks like it really take you. Each step says when it's done, a practical tip comes with them, and any step can be made smaller again. The built-in ideas still show at once.
+- **Reality check with AI** — choose an AI service for Reality check in Settings › AI. When you set a block's length, it suggests a realistic one from your own record, with the reason (“your report blocks run about 40% long”) and a tip. In Reality check, practical tips look at your record and today's plan, each with a one-tap fix: give a repeating task its real length, or move a block to tomorrow so today fits.
+
+### Fixes
+
+- **Free time is really free** — adding something “in my free time”, planning your day and moving a block now step around calendar events and salah (also when salah blocks are hidden on the dial), stay within your waking hours, and move to the next day when today is full. Alef and AI apps (MCP) see the same free time.
+- **“Add reading in my free time”** — now adds it to your next free time instead of only listing the gaps.
+- **Microphone on Windows** — if the microphone was blocked once, it works again. Daybloom asks Windows itself, and a button opens the microphone settings when they are off.
+- **Deleted blocks stay deleted** — the sample day no longer comes back after you clear your blocks, and Clear all is remembered by sync.
+- **Twenty themes** — ten new palettes (Dawn, Sakura, Sand, Sky, Lemon, Dusk, Ocean, Ember, Cobalt and Bordeaux) and eleven new dial finishes (Ceramic, Lilac, Blossom, Sandstone, Azure, Champagne, Twilight, Lagoon, Copper, Sunray and Claret), grouped Light and Dark with live mini-dials. Every theme and finish is checked for readable contrast.
+- **Calmer blocks** — no more stripes or star patterns. Your blocks are solid, calendar events are clear glass with one crisp edge, and salah glows softly. Skipped events fade to an outline, and blocks whose time passed get a quiet dashed edge, never red.
+- **Dragging in the timeline** — the dial now shows the block moving as you drag it.
+- **Alef on the widget** — its sounds and voice play on the widget at once when the planner is closed, instead of seconds later.
+- **Waqt's icon** — Waqt now has its own mihrab icon, so it no longer looks like the dark-mode moon.
+- **Kinder words** — check-ins ask how it went, and reminders never say time's up.
+
 ## 0.1.13
 
 ### New
