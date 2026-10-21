@@ -63,6 +63,9 @@ windows = { version = "0.62", features = [
 [profile.dev]
 # Keep incremental debug builds quick; dependencies get light optimisation.
 incremental = true
+# Line tables are enough for readable backtraces, and keep debug builds (and the Android
+# debug APK) a fraction of the size.
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 1

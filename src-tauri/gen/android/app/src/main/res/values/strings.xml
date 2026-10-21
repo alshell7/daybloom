@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name">"Daybloom"</string>
     <string name="main_activity_title">"Daybloom"</string>
+    <string name="widget_dial_name">Daybloom dial</string>
+    <string name="widget_dial_desc">The next 12 hours on a clock face, with what is on now and next</string>
+    <string name="widget_alef_name">Alef</string>
+    <string name="widget_alef_desc">Alef, with one small next step for the block that is on</string>
+    <string name="widget_done">Done</string>
+    <string name="widget_start">Start 2 min</string>
 </resources>

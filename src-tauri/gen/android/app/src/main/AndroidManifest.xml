@@ -67,6 +67,29 @@
             </intent-filter>
         </receiver>
 
+        <!-- Home-screen widgets (Widgets.kt). -->
+        <receiver
+            android:name=".device.DialWidget"
+            android:exported="false"
+            android:label="@string/widget_dial_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_dial_info" />
+        </receiver>
+        <receiver
+            android:name=".device.AlefWidget"
+            android:exported="false"
+            android:label="@string/widget_alef_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_alef_info" />
+        </receiver>
+        <receiver
+            android:name=".device.WidgetReceiver"
+            android:exported="false" />
+
         <provider
           android:name="androidx.core.content.FileProvider"
           android:authorities="${applicationId}.fileprovider"

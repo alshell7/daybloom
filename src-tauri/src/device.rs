@@ -37,6 +37,9 @@ const METHODS: &[&str] = &[
     "focusHide",
     "reminderAccess",
     "openSettings",
+    "widgets",
+    "widgetPending",
+    "pinWidget",
 ];
 
 pub async fn call<R: Runtime, T: DeserializeOwned>(app: &AppHandle<R>, method: &str, args: impl Serialize) -> Result<T, String> {

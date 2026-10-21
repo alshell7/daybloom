@@ -78,6 +78,18 @@ class SettingsArgs {
 }
 
 @InvokeArg
+class WidgetArgs {
+  /** The snapshot, as JSON text (see src/lib/native/widgets.svelte.ts). */
+  var data: String = ""
+}
+
+@InvokeArg
+class PinArgs {
+  /** dial | alef */
+  var kind: String = "dial"
+}
+
+@InvokeArg
 class BarsArgs {
   /** The app is showing a dark theme, so the bars need light icons. */
   var dark: Boolean = false
@@ -141,8 +153,23 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /** A widget's button that opened the app, until the planner takes it. */
+  private var pendingAction: JSObject? = null
+
+  private fun actionOf(intent: Intent?): JSObject? {
+    val action = intent?.getStringExtra("daybloom.action") ?: return null
+    intent.removeExtra("daybloom.action")
+    return JSObject().put("action", action).put("key", intent.getStringExtra("daybloom.key") ?: "")
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    val a = actionOf(intent) ?: return
+    webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybloom:intent',{detail:$a}))", null)
+  }
+
   override fun load(webView: WebView) {
     this.webView = webView
+    pendingAction = actionOf(activity.intent)
     (activity as? AppCompatActivity)?.onBackPressedDispatcher?.addCallback(activity, back)
     val density = activity.resources.displayMetrics.density
     ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
@@ -283,6 +310,35 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
     activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     invoke.resolve()
+  }
+
+  /** A new snapshot for the home-screen widgets; they redraw at once. */
+  @Command
+  fun widgets(invoke: Invoke) {
+    WidgetData.save(activity, invoke.parseArgs(WidgetArgs::class.java).data)
+    WidgetData.updateAll(activity)
+    invoke.resolve()
+  }
+
+  /** Asks the launcher to put a widget on the home screen (it shows its own confirmation). */
+  @Command
+  fun pinWidget(invoke: Invoke) {
+    val kind = invoke.parseArgs(PinArgs::class.java).kind
+    val m = android.appwidget.AppWidgetManager.getInstance(activity)
+    val cls = if (kind == "alef") AlefWidget::class.java else DialWidget::class.java
+    val ok = m.isRequestPinAppWidgetSupported && m.requestPinAppWidget(android.content.ComponentName(activity, cls), null, null)
+    invoke.resolve(JSObject().put("asked", ok))
+  }
+
+  /** What happened while the planner was closed: blocks ticked on a widget, a button pressed. */
+  @Command
+  fun widgetPending(invoke: Invoke) {
+    val done = org.json.JSONArray()
+    for (k in WidgetData.takeDone(activity)) done.put(k)
+    val r = JSObject().put("done", done)
+    pendingAction?.let { r.put("intent", it) }
+    pendingAction = null
+    invoke.resolve(r)
   }
 
   /** Privacy mode: keep Daybloom out of screenshots, recordings and the app switcher's preview. */
