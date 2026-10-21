@@ -67,7 +67,7 @@
   .coach {
     position: fixed;
     right: 24px;
-    bottom: 24px;
+    bottom: calc(24px + var(--safe-bottom));
     z-index: 40;
     width: min(340px, calc(100vw - 48px));
     padding: var(--s-4) var(--s-5) var(--s-3);

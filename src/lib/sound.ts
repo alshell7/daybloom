@@ -1,3 +1,4 @@
+import { haptic } from './haptics';
 // Every sound is synthesised on the fly with WebAudio: no assets, ~zero weight.
 // Sounds are soft, short and never startle: slow attacks, low gain, no sharp highs.
 
@@ -106,11 +107,13 @@ export function detent() {
 export const sounds = {
   /** Block finished: a rising fifth. */
   done() {
+    haptic('done');
     bell(659.25, 0, 1.4, 0.2);
     bell(987.77, 0.09, 1.8, 0.16);
   },
   /** Subtask ticked: one light tap. */
   tick() {
+    haptic('tick');
     bell(1318.5, 0, 0.5, 0.08);
   },
   /** Heads-up: a single low, warm tone. */

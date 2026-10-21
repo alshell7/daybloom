@@ -39,6 +39,8 @@ export interface PlanInput {
   headsUpMin: number;
   alarm: { tone: string; snooze: number; ringFor: number; gentle: boolean; volume: number };
   hour12: boolean;
+  /** How a block's name shows (privacy mode can hide names behind their category). */
+  name?: (b: Block) => string;
   /** Waqt, when the addon is on and has a place. */
   prayers?: PrayerTime[];
   waqtRemind?: { before: number; atAdhan: boolean; beforeJamaat: number };
@@ -58,7 +60,7 @@ export function planReminders(p: PlanInput): NativeReminder[] {
   for (let i = 0; i < timed.length; i++) {
     const b = timed[i];
     if (b.done) continue;
-    const name = cap(b.title || (b.kind === 'task' ? 'Your next block' : 'An event'));
+    const name = cap((p.name ? p.name(b) : b.title) || (b.kind === 'task' ? 'Your next block' : 'An event'));
     const task = b.kind === 'task' ? p.taskOf(b) : null;
 
     if (task?.alarm && soon(b.startMs)) {
@@ -87,7 +89,7 @@ export function planReminders(p: PlanInput): NativeReminder[] {
       const at = b.endMs - ms;
       if (ms > 0 && b.endMs - b.startMs > ms * 1.5 && soon(at)) {
         const next = timed.slice(i + 1).find((n) => n.startMs >= b.endMs - MINUTE && !n.done);
-        out.push({ id: `hu:${b.key}`, at, kind: 'heads', title: `${formatDuration(ms)} left · ${name}`, body: next ? `Next up: ${cap(next.title)}` : 'Time to start wrapping up.' });
+        out.push({ id: `hu:${b.key}`, at, kind: 'heads', title: `${formatDuration(ms)} left · ${name}`, body: next ? `Next up: ${cap(p.name ? p.name(next) : next.title)}` : 'Time to start wrapping up.' });
       }
     }
   }

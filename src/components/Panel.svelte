@@ -103,7 +103,7 @@
     z-index: 30;
     top: 64px;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(12px + var(--safe-bottom));
     width: min(400px, calc(100vw - 24px));
     display: grid;
     grid-template-rows: auto 1fr auto;

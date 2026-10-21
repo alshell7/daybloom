@@ -48,6 +48,7 @@
   import FinishPicker from './FinishPicker.svelte';
   import ThemeGallery from './ThemeGallery.svelte';
   import SyncSettings from './SyncSettings.svelte';
+  import PhoneSettings from './settings/PhoneSettings.svelte';
   import ScreenPicker from './ScreenPicker.svelte';
   import AlarmSettings from './settings/AlarmSettings.svelte';
   import BreathSettings from './settings/BreathSettings.svelte';
@@ -68,7 +69,9 @@
   const tabs = [
     { id: 'look', label: 'Look', icon: 'palette', blurb: 'Theme, dial and reading comfort', sections: ['theme', 'dial', 'comfort'] },
     { id: 'rhythm', label: 'Rhythm', icon: 'clock', blurb: 'Your waking day, world clock, alerts, alarms and gentle nudges', sections: ['time', 'world', 'transitions', 'alarm', 'breathe', 'support'] },
-    { id: 'screen', label: 'Screen', icon: 'monitor', blurb: 'The top bar, screen cues, the desktop widget and privacy', sections: ['topbar', 'cues', 'widget', 'privacy'] },
+    platform.isMobile
+      ? { id: 'screen', label: 'Phone', icon: 'smartphone', blurb: 'The top bar, reminders and alarms, widgets and privacy', sections: ['topbar', 'phone', 'privacy'] }
+      : { id: 'screen', label: 'Screen', icon: 'monitor', blurb: 'The top bar, screen cues, the desktop widget and privacy', sections: ['topbar', 'cues', 'widget', 'privacy'] },
     { id: 'ai', label: 'AI', icon: 'brain-circuit', blurb: 'Set up AI once, then choose what each part of Daybloom uses', sections: ['ai', 'assistant'] },
     { id: 'connect', label: 'Connect', icon: 'link', blurb: 'Calendars, sync and addons', sections: ['calendars', 'sync', 'addons'] },
     { id: 'app', label: 'App', icon: 'settings', blurb: 'Updates, your data and keys', sections: ['updates', 'data'] },
@@ -88,6 +91,7 @@
     cues: 'screen cues glow edge bar hud focus colour color',
     widget: 'desktop widget layer top float menu bar timer launch login startup wing long titles slide marquee typing replies',
     privacy: 'privacy screenshots screen recording hide names secret',
+    phone: 'phone android reminders alarms notifications on time exact lock screen full screen battery background widget home screen dial alef usage access tracker',
     assistant: 'voice input talk speech microphone mic language hotkey hold v dictation tones assistant',
     calendars: 'calendars google ics link events',
     sync: 'sync github cloudflare d1 database backup devices token repository encrypt encryption master password recovery key vault phone',
@@ -337,7 +341,10 @@
         {#if shows('topbar')}
         <TopBarSettings />
         {/if}
-        {#if shows('cues')}
+        {#if platform.isMobile && shows('phone')}
+        <PhoneSettings />
+        {/if}
+        {#if !platform.isMobile && shows('cues')}
         <section>
           <h3>Screen cues</h3>
           <p class="hint top">Quiet signals at the edge of your screen that keep the time in view — they never take a click or the keyboard.</p>
@@ -425,7 +432,7 @@
           <p class="hint">Turning one on shows a few seconds' preview. The HUD is a lighter companion to the widget: use either, or both.</p>
         </section>
         {/if}
-        {#if shows('widget')}
+        {#if !platform.isMobile && shows('widget')}
         <section>
           <h3>Desktop widget</h3>
           <label class="row">
@@ -478,14 +485,18 @@
         <section>
           <h3>Privacy</h3>
           <label class="row">
-            <span class="lbl"><Icon name="eye-off" size={15} /> Privacy mode <small>keep Daybloom out of screenshots, screen recordings and screen sharing · <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd></small></span>
+            <span class="lbl"><Icon name="eye-off" size={15} /> Privacy mode <small>keep Daybloom out of screenshots, screen recordings and screen sharing{#if !platform.isMobile} · <kbd>⇧</kbd><kbd>⌘</kbd><kbd>P</kbd>{/if}</small></span>
             <input type="checkbox" class="switch" bind:checked={settings.value.privacy.on} />
           </label>
           <label class="row">
-            <span class="lbl"><Icon name="shield" size={15} /> Hide block names <small>on the widget, the HUD and the menu bar while privacy mode is on</small></span>
+            <span class="lbl"><Icon name="shield" size={15} /> Hide block names <small>{platform.isMobile ? 'on your home-screen widgets and in notifications while privacy mode is on' : 'on the widget, the HUD and the menu bar while privacy mode is on'}</small></span>
             <input type="checkbox" class="switch" bind:checked={settings.value.privacy.hideNames} disabled={!s.privacy.on} />
           </label>
+          {#if platform.isMobile}
+          <p class="hint">Android leaves Daybloom out of screenshots, screen recordings and the recent-apps preview.</p>
+          {:else}
           <p class="hint">{platform.os === 'windows' ? 'Windows leaves protected windows out of captures (they show as empty).' : 'macOS leaves protected windows out of screenshots. Some screen recorders can still capture them, so also hide block names when you share your screen.'} You can also switch it from the {platform.os === 'mac' ? 'menu bar' : 'tray'} icon.</p>
+          {/if}
         </section>
         {/if}
         {#if query && tabMatches('ai')}<p class="grp">AI</p>{/if}

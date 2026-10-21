@@ -327,7 +327,7 @@
   .dock {
     position: fixed;
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + var(--safe-bottom));
     z-index: 61;
     display: grid;
     gap: 8px;

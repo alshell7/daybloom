@@ -48,12 +48,15 @@ class AlarmActivity : AppCompatActivity() {
       setPadding(dp(32f), dp(48f), dp(32f), dp(48f))
       background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.parseColor("#141B26"), Color.parseColor("#0B0F16")))
     }
+    // Lexend, the app's own type (res/font, SIL Open Font License).
+    val lexend = androidx.core.content.res.ResourcesCompat.getFont(this, resources.getIdentifier("lexend", "font", packageName))
+    fun face(weight: Int): Typeface = if (lexend != null && android.os.Build.VERSION.SDK_INT >= 28) Typeface.create(lexend, weight, false) else (lexend ?: Typeface.DEFAULT)
     fun text(s: String, sp: Float, color: String, bold: Boolean = false) = TextView(this).apply {
       text = s
       setTextColor(Color.parseColor(color))
       setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
       gravity = Gravity.CENTER
-      if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+      typeface = face(if (bold) 500 else 300)
     }
     root.addView(text(DateFormat.getTimeFormat(this).format(Date()), 64f, "#F4F7FB"))
     root.addView(View(this), LinearLayout.LayoutParams(1, dp(18f)))
@@ -67,6 +70,7 @@ class AlarmActivity : AppCompatActivity() {
       isAllCaps = false
       setTextColor(Color.parseColor(ink))
       setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+      typeface = face(500)
       background = GradientDrawable().apply {
         cornerRadius = dp(28f).toFloat()
         setColor(Color.parseColor(fill))

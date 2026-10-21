@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { haptic } from '../haptics';
   import type { Snippet } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -496,6 +497,10 @@
       ? { a0: toDeg(drag.preview.startMs), a1: toDeg(drag.preview.endMs), ms: drag.preview.endMs - drag.preview.startMs }
       : null,
   );
+  // A phone: a soft tick each time the sweep snaps to the next five minutes.
+  $effect(() => {
+    if (ghost?.ms) haptic('snap');
+  });
   const dragLabel = $derived.by(() => {
     if (!drag?.moved) return null;
     const p = drag.preview;

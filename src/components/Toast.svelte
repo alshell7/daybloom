@@ -28,7 +28,7 @@
   .dock {
     position: fixed;
     right: 16px;
-    bottom: calc(16px + var(--lift, 0px));
+    bottom: calc(16px + var(--safe-bottom) + var(--lift, 0px));
     width: min(400px, calc(100vw - 32px));
     transition: bottom var(--dur-3) var(--ease-out);
     display: grid;

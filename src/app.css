@@ -143,6 +143,15 @@ html.widget-mode {
 html[data-device='phone'] #app {
   padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
 }
+/* Touch screens: no keys to press, so no shortcut hints. */
+@media (hover: none) and (pointer: coarse) {
+  kbd {
+    display: none !important;
+  }
+}
+html[data-device='phone'] kbd {
+  display: none !important;
+}
 html[data-device='phone'] body {
   /* No rubber-band scroll of the whole page, no grey flash on tap. */
   overscroll-behavior: none;

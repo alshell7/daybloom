@@ -173,7 +173,7 @@
   .card {
     position: fixed;
     right: 16px;
-    bottom: 16px;
+    bottom: calc(16px + var(--safe-bottom));
     z-index: 62;
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) auto;

@@ -14,6 +14,7 @@ import { settings } from '../stores/settings.svelte';
 import { taskFile } from '../stores/tasks.svelte';
 import { timer } from '../stores/timer.svelte';
 import { view } from '../stores/view.svelte';
+import { shownTitle } from '../privacy';
 import { alarmFile } from '../alarms.svelte';
 import { deviceCall } from './device.svelte';
 import { PLAN_HOURS, planReminders, type PrayerTime } from './reminders';
@@ -51,6 +52,7 @@ export function startReminders(): () => void {
       headsUpMin: settings.value.headsUp,
       alarm: settings.value.alarm,
       hour12: view.hour12,
+      name: (b) => shownTitle(b.title, b.category),
       prayers: w?.prayers,
       waqtRemind: w?.remind,
       snoozed: alarmFile.value.snoozed.map((s) => ({ key: s.key, title: s.title, at: s.at, startMs: s.startMs, tone: s.tone })),
@@ -99,6 +101,7 @@ export function startReminders(): () => void {
       void JSON.stringify(settings.value.alarm);
       void settings.value.notify;
       void settings.value.headsUp;
+      void JSON.stringify(settings.value.privacy);
       void view.events.length;
       void view.hour12;
       void alarmFile.value.snoozed.length;

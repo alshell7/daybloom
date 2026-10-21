@@ -250,7 +250,7 @@
   .stack {
     position: fixed;
     left: 20px;
-    bottom: 20px;
+    bottom: calc(20px + var(--safe-bottom));
     z-index: 35;
     width: min(340px, calc(100vw - 40px));
     pointer-events: none;
