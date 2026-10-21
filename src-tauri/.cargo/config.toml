@@ -1,0 +1,8 @@
+# MinGW exports every symbol of a DLL by default, and the app's cdylib (needed by Android) has
+# more than its 65k limit; export none instead (nothing calls into it on Windows).
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-Wl,--exclude-all-symbols"]
+
+# Android 15+ devices may use 16 KB memory pages; NDK 27 still links for 4 KB unless told.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

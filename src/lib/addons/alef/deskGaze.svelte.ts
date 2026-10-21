@@ -21,7 +21,8 @@ class DeskGaze {
 
   /** A face starts watching; returns the stop. */
   use(): () => void {
-    if (!platform.isNative) return () => {};
+    // A phone has no pointer to follow across the screen.
+    if (!platform.isNative || platform.isMobile) return () => {};
     if (this.#users++ === 0) void this.#start();
     return () => {
       if (--this.#users === 0) this.#stop();

@@ -9,9 +9,10 @@ rust-version = "1.77.2"
 
 [lib]
 # The `_lib` suffix avoids a name clash with the binary on Windows (cargo#8519).
-# Desktop only needs the rlib; a cdylib also trips MinGW's 65k-export limit on Windows.
+# Android loads the app as a shared library (cdylib). On Windows a cdylib would trip MinGW's
+# 65k-export limit; .cargo/config.toml tells MinGW to export nothing by default.
 name = "daybloom_lib"
-crate-type = ["rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7", features = [] }
@@ -19,13 +20,8 @@ tauri-build = { version = "2.7", features = [] }
 [dependencies]
 tauri = { version = "2.12", features = ["tray-icon", "macos-private-api", "image-png"] }
 tauri-plugin-notification = "2.7"
-tauri-plugin-autostart = "2.7"
 tauri-plugin-opener = "2.7"
 tauri-plugin-http = "2.8"
-tauri-plugin-window-state = "2.5"
-tauri-plugin-single-instance = "2.5"
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Needle weights store (src/assistant.rs): the same reqwest/sha2 tauri-plugin-http already builds.
@@ -35,6 +31,15 @@ sha2 = "0.10"
 # MCP addon token (src/mcp.rs). The version tauri already builds.
 getrandom = "0.3"
 keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+# Desktop only: a phone has no login items, single instance, window geometry or self-updater
+# (Android updates through a new APK; see the Android plugin).
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2.7"
+tauri-plugin-window-state = "2.5"
+tauri-plugin-single-instance = "2.5"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 # Time Tracker activity sensing (src/activity.rs). The versions tauri already builds.
 [target.'cfg(target_os = "macos")'.dependencies]

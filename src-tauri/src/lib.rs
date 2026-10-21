@@ -1,23 +1,33 @@
 mod activity;
 mod assistant;
+// The desktop's extra windows and its tray / menu bar. A phone has one window and none of these.
+#[cfg(desktop)]
 mod capture;
 mod commands;
 mod export;
 mod mcp;
 mod mic;
 mod oauth;
+#[cfg(desktop)]
 mod overlay;
 mod privacy;
+#[cfg(desktop)]
 mod tray;
+#[cfg(desktop)]
 mod widget;
 
+#[cfg(desktop)]
 use tauri::{AppHandle, Manager, WindowEvent};
+#[cfg(desktop)]
 use tauri_plugin_autostart::MacosLauncher;
+#[cfg(desktop)]
 use tauri_plugin_window_state::StateFlags;
 
+#[cfg(desktop)]
 pub(crate) const MAIN: &str = "main";
 
 /// Brings the main window to the front, restoring it if hidden or minimised.
+#[cfg(desktop)]
 pub(crate) fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN) {
         let _ = w.show();
@@ -49,6 +59,7 @@ pub(crate) fn set_webview_visible(w: &tauri::WebviewWindow, visible: bool) {
 /// window is shown normally and the foreground goes straight back to the previous window, all
 /// on the main thread (where Tauri runs window calls synchronously), and `then` runs after.
 /// Elsewhere a plain show leaves the focus alone.
+#[cfg(desktop)]
 pub(crate) fn show_quietly(w: &tauri::WebviewWindow, then: impl FnOnce() + Send + 'static) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -86,13 +97,17 @@ pub fn run() {
         mcp::stdio_relay(&args);
         return;
     }
-    let app = tauri::Builder::default()
-        // Must be registered first so a second launch never gets further than this.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| show_main(app)))
+    let builder = tauri::Builder::default();
+    // Must be registered first so a second launch never gets further than this.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| show_main(app)));
+    let builder = builder
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_http::init());
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         // Self-updates from the public release feed; every download is verified against
         // the minisign public key in tauri.conf.json before it is installed.
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -105,21 +120,24 @@ pub fn run() {
                 .with_denylist(&[overlay::LABEL, capture::LABEL])
                 .build(),
         )
+        .manage(widget::LayerState::default());
+    let builder = builder
         .manage(oauth::Listeners::default())
         .manage(assistant::Weights::default())
-        .manage(widget::LayerState::default())
         .manage(privacy::Privacy::default())
         .manage(mcp::Mcp::default())
         .on_permission_request(|_, kind| mic::answer(kind))
-        .setup(|app| {
-            tray::create(app.handle())?;
+        .setup(|_app| {
+            #[cfg(desktop)]
+            tray::create(_app.handle())?;
             #[cfg(windows)]
-            if let Some(w) = app.get_webview_window(MAIN) {
+            if let Some(w) = _app.get_webview_window(MAIN) {
                 mic::forget_block(&w);
             }
             Ok(())
-        })
-        .on_window_event(|window, event| match event {
+        });
+    #[cfg(desktop)]
+    let builder = builder.on_window_event(|window, event| match event {
             // The planner hides instead of quitting; Daybloom lives on in the tray / menu bar.
             // The widget really closes, releasing its webview until it is shown again.
             WindowEvent::CloseRequested { api, .. }
@@ -147,8 +165,9 @@ pub fn run() {
                 widget::changed(window.app_handle());
             }
             _ => {}
-        })
-        .invoke_handler(tauri::generate_handler![
+        });
+    #[cfg(desktop)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
             commands::state_load,
             commands::state_save,
             commands::state_delete,
@@ -180,9 +199,33 @@ pub fn run() {
             assistant::assistant_weights_download,
             assistant::assistant_weights_read,
             assistant::assistant_weights_forget,
-        ])
-        .build(tauri::generate_context!())
-        .expect("error while building Daybloom");
+        ]);
+    // A phone: the same app minus the desktop's extra windows, tray and dock.
+    #[cfg(mobile)]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        commands::state_load,
+        commands::state_save,
+        commands::state_delete,
+        commands::state_keys,
+        commands::secret_get,
+        commands::secret_set,
+        commands::secret_delete,
+        commands::privacy_set,
+        mcp::mcp_set,
+        mcp::mcp_status,
+        mcp::mcp_reply,
+        export::export_save,
+        activity::activity_idle_seconds,
+        activity::activity_foreground,
+        commands::system_hour12,
+        oauth::oauth_listen,
+        oauth::oauth_wait,
+        assistant::assistant_weights_status,
+        assistant::assistant_weights_download,
+        assistant::assistant_weights_read,
+        assistant::assistant_weights_forget,
+    ]);
+    let app = builder.build(tauri::generate_context!()).expect("error while building Daybloom");
 
     app.run(|_app, _event| {
         // Dock icon clicked (macOS): always surface the planner, even if the widget is showing.

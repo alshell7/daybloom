@@ -29,7 +29,8 @@ export async function loadVersion() {
 }
 
 export async function checkForUpdates(manual = false) {
-  if (!platform.isNative) {
+  // The phone app updates through a new APK, not the desktop updater.
+  if (!platform.isNative || platform.isMobile) {
     if (manual) updates.status = 'none';
     return;
   }

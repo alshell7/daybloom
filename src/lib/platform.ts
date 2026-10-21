@@ -54,6 +54,10 @@ export interface McpRequest {
 export type TrayAction = 'new-block' | 'focus-now' | 'open-settings';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+/** The Android (or iOS) app: one window, no tray, dock, widget or screen cues. */
+const isMobile = isTauri && typeof navigator !== 'undefined' && /android|iphone|ipad/i.test(navigator.userAgent);
+/** The computer app, with its extra windows and tray. */
+const isDesktop = isTauri && !isMobile;
 
 export type WindowLabel = 'main' | 'widget' | 'overlay' | 'capture';
 
@@ -85,6 +89,8 @@ const channel: BroadcastChannel | null =
 
 export const platform = {
   isNative: isTauri,
+  /** The phone app (Android). Desktop-only calls below quietly do nothing there. */
+  isMobile,
   os: detectOS(),
 
   async load(key: string): Promise<string | null> {
@@ -243,10 +249,10 @@ export const platform = {
 
   /** The quick-capture card (also opened from the tray / menu bar). */
   async openCapture(): Promise<void> {
-    if (isTauri) await invoke('capture_show');
+    if (isDesktop) await invoke('capture_show');
   },
   async closeCapture(): Promise<void> {
-    if (isTauri) await invoke('capture_close');
+    if (isDesktop) await invoke('capture_close');
   },
 
   /** Ask the planner window to do what a tray item does (from the widget, say). */
@@ -270,6 +276,7 @@ export const platform = {
   },
 
   async showWidget(show?: boolean): Promise<boolean> {
+    if (isMobile) return false;
     if (isTauri) return invoke<boolean>('widget_show', { show: show ?? null });
     if (show !== false) window.open(`${location.pathname}?view=widget`, 'daybloom-widget', 'width=300,height=300');
     return show !== false;
@@ -312,41 +319,41 @@ export const platform = {
 
   /** Screen cues window (edge glow, time bar, HUD). Desktop only. */
   async showOverlay(show: boolean): Promise<boolean> {
-    if (isTauri) return invoke<boolean>('overlay_show', { show });
+    if (isDesktop) return invoke<boolean>('overlay_show', { show });
     return false;
   },
 
   /** The display the cues cover, and its work area. Null in a browser. */
   async screenMetrics(): Promise<ScreenMetrics | null> {
-    if (isTauri) return invoke<ScreenMetrics | null>('overlay_metrics');
+    if (isDesktop) return invoke<ScreenMetrics | null>('overlay_metrics');
     return null;
   },
 
   async setWidgetLayer(layer: WidgetLayer): Promise<void> {
-    if (isTauri) await invoke('widget_set_layer', { layer });
+    if (isDesktop) await invoke('widget_set_layer', { layer });
   },
 
   async showMain(): Promise<void> {
-    if (isTauri) await invoke('main_show');
-    else window.open(location.pathname, 'daybloom-main');
+    if (isDesktop) await invoke('main_show');
+    else if (!isTauri) window.open(location.pathname, 'daybloom-main');
   },
 
   /** Begin dragging the current (frameless) window. */
   async startDrag(): Promise<void> {
-    if (!isTauri) return;
+    if (!isDesktop) return;
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     await getCurrentWindow().startDragging();
   },
 
   /** Take keyboard focus (the widget, when you start typing to Alef). */
   async focusSelf(): Promise<void> {
-    if (!isTauri) return;
+    if (!isDesktop) return;
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     await getCurrentWindow().setFocus();
   },
 
   async hideSelf(): Promise<void> {
-    if (!isTauri) return;
+    if (!isDesktop) return;
     // The widget goes through the native command so the tray checkmark stays in sync.
     if (windowLabel() === 'widget') {
       await invoke('widget_show', { show: false });
@@ -373,15 +380,15 @@ export const platform = {
 
   /** The menu-bar text and tooltip, and the menu's Now / Next lines. */
   async setTrayStatus(title: string | null, tooltip: string, now = '', next = ''): Promise<void> {
-    if (isTauri) await invoke('set_tray_status', { title, tooltip, now, next });
+    if (isDesktop) await invoke('set_tray_status', { title, tooltip, now, next });
   },
 
   async setDockVisible(visible: boolean): Promise<void> {
-    if (isTauri) await invoke('set_dock_visible', { visible });
+    if (isDesktop) await invoke('set_dock_visible', { visible });
   },
 
   async setLaunchAtLogin(on: boolean): Promise<void> {
-    if (!isTauri) return;
+    if (!isDesktop) return;
     const a = await import('@tauri-apps/plugin-autostart');
     if (on) await a.enable();
     else await a.disable();
@@ -444,9 +451,12 @@ export const platform = {
   },
 };
 
-function detectOS(): 'mac' | 'windows' | 'linux' | 'other' {
+function detectOS(): 'mac' | 'windows' | 'linux' | 'android' | 'ios' | 'other' {
   if (typeof navigator === 'undefined') return 'other';
   const p = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+  // Before "linux" and "mac": Android says Linux, and iPadOS says Macintosh.
+  if (p.includes('android')) return 'android';
+  if (/iphone|ipad|ipod/.test(p) || (p.includes('mac') && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1)) return 'ios';
   if (p.includes('mac')) return 'mac';
   if (p.includes('win')) return 'windows';
   if (p.includes('linux')) return 'linux';

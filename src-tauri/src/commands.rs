@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tauri::{AppHandle, Manager};
 
+#[cfg(desktop)]
 use crate::widget::{self, Layer};
 
 const KEYRING_SERVICE: &str = "app.daybloom.desktop";
@@ -117,11 +118,13 @@ pub async fn secret_delete(account: String) -> Result<(), String> {
 
 /// Async on purpose: building a webview window from a synchronous command deadlocks
 /// WebView2 on Windows (the frame appears, the webview never loads).
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn widget_show(app: AppHandle, show: Option<bool>) -> Result<bool, String> {
     widget::set_visible(&app, show)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn widget_set_layer(app: AppHandle, layer: String) -> Result<(), String> {
     widget::set_layer(&app, Layer::parse(&layer)?)
@@ -129,6 +132,7 @@ pub fn widget_set_layer(app: AppHandle, layer: String) -> Result<(), String> {
 
 /// Moves and resizes the widget in one step on the main thread (physical pixels), so a wing
 /// opening on the left doesn't show a frame where the window moved but hasn't grown yet.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn widget_frame(app: AppHandle, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
     let w = app.get_webview_window(widget::LABEL).ok_or("widget is not open")?;
@@ -141,17 +145,20 @@ pub fn widget_frame(app: AppHandle, x: i32, y: i32, width: u32, height: u32) -> 
 
 /// Async for the same reason as widget_show: building a window from a sync command can
 /// deadlock WebView2 on Windows.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn overlay_show(app: AppHandle, show: bool) -> Result<bool, String> {
     crate::overlay::set_visible(&app, show)
 }
 
 /// The quick-capture card (async: it builds a window).
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn capture_show(app: AppHandle) -> Result<(), String> {
     crate::capture::show(&app)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn capture_close(app: AppHandle) -> Result<(), String> {
     crate::capture::close(&app)
@@ -163,16 +170,19 @@ pub fn privacy_set(app: AppHandle, on: bool) {
     crate::privacy::set(&app, on);
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn overlay_metrics(app: AppHandle) -> Option<crate::overlay::Metrics> {
     crate::overlay::metrics(&app)
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn main_show(app: AppHandle) {
     crate::show_main(&app);
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn set_tray_status(app: AppHandle, title: Option<String>, tooltip: String, now: Option<String>, next: Option<String>) -> Result<(), String> {
     let tray = app.tray_by_id(crate::tray::ID).ok_or("tray not ready")?;
@@ -221,6 +231,7 @@ fn system_time_format() -> Option<String> {
     None
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub fn set_dock_visible(app: AppHandle, visible: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]

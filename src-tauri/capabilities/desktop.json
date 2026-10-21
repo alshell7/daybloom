@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "What only a computer has: the tray / menu bar, moving and layering the extra windows, open at login, remembered window geometry and self-updates.",
+  "platforms": ["macOS", "windows", "linux"],
+  "windows": [
+    "main",
+    "widget",
+    "overlay",
+    "capture"
+  ],
+  "permissions": [
+    "core:tray:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-start-resize-dragging",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-always-on-bottom",
+    "core:window:allow-set-ignore-cursor-events",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-inner-size",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "window-state:default",
+    "updater:default",
+    "process:allow-restart"
+  ]
+}
