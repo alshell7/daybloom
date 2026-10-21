@@ -1,32 +1,18 @@
 // A small client for the GitHub Contents API: just what sync needs (read a repo,
-// list a folder, read a file, write a file with optimistic concurrency). Errors come
-// back as `GitHubError` with a kind and a message that's safe to show — the token is
-// never part of one.
+// list a folder, read, write and delete a file with optimistic concurrency). Errors come
+// back as `GitHubError` (a `SyncError`) with a kind and a message that's safe to show —
+// the token is never part of one. `githubRemote` presents one folder as a `SyncRemote`.
 
-export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+import { SyncError, type FetchLike, type SyncErrorKind, type SyncRemote } from './remote';
 
-export type GitHubErrorKind =
-  | 'auth' // 401: bad, expired or revoked token
-  | 'forbidden' // 403: token lacks a permission
-  | 'not-found' // 404: no such repo, or the token can't see it
-  | 'branch' // the branch doesn't exist
-  | 'conflict' // 409/422: the file changed since we read it
-  | 'rate-limit' // 403/429 with the limit exhausted
-  | 'network' // fetch itself failed (offline, DNS, TLS)
-  | 'server' // 5xx
-  | 'invalid'; // anything else GitHub refused, or a file we can't read
+export type { FetchLike } from './remote';
 
-export class GitHubError extends Error {
-  readonly kind: GitHubErrorKind;
-  readonly status: number;
-  /** For `rate-limit`: when GitHub says we may try again (epoch ms). */
-  readonly retryAt: number | null;
+export type GitHubErrorKind = Exclude<SyncErrorKind, 'locked' | 'vault'>;
+
+export class GitHubError extends SyncError {
   constructor(kind: GitHubErrorKind, message: string, status = 0, retryAt: number | null = null) {
-    super(message);
+    super(kind, message, status, retryAt);
     this.name = 'GitHubError';
-    this.kind = kind;
-    this.status = status;
-    this.retryAt = retryAt;
   }
 }
 
@@ -110,6 +96,8 @@ export interface GitHubClient {
   getFile(path: string): Promise<RemoteFile | null>;
   /** Create (`sha` null) or update a file. Throws `conflict` when `sha` is stale. */
   putFile(path: string, text: string, sha: string | null, message: string): Promise<{ sha: string }>;
+  /** Delete a file at `sha`. A file that's already gone is fine. */
+  deleteFile(path: string, sha: string, message: string): Promise<void>;
   /** Requests sent so far (handy for tests and for keeping an eye on the rate limit). */
   readonly requests: number;
 }
@@ -138,7 +126,7 @@ export function createGitHubClient(o: GitHubClientOptions): GitHubClient {
     return `${repoUrl}/contents${p ? `/${p}` : ''}${withRef ? `?ref=${encodeURIComponent(o.branch)}` : ''}`;
   };
 
-  async function request(method: 'GET' | 'PUT', url: string, body?: unknown): Promise<Reply> {
+  async function request(method: 'GET' | 'PUT' | 'DELETE', url: string, body?: unknown): Promise<Reply> {
     const headers: Record<string, string> = {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${o.token}`,
@@ -287,6 +275,32 @@ export function createGitHubClient(o: GitHubClientOptions): GitHubClient {
       emptyRepo = false;
       return { sha: String(r.body?.content?.sha ?? '') };
     },
+
+    async deleteFile(path, sha, message) {
+      const r = await request('DELETE', contentsUrl(path, false), { message, sha, branch: o.branch });
+      if (r.status === 200 || r.status === 404) return;
+      fail(r, 'write');
+    },
+  };
+}
+
+/** One folder of a repo as a flat space of files. `onList` sees every entry, folders too. */
+export function githubRemote(gh: GitHubClient, folder: string, message: () => string, onList?: (entries: DirEntry[]) => void): SyncRemote {
+  const at = (name: string) => (folder ? `${folder}/${name}` : name);
+  return {
+    async list() {
+      const entries = await gh.listDir(folder);
+      onList?.(entries);
+      return entries.filter((e) => e.type === 'file').map((e) => ({ name: e.name, version: e.sha }));
+    },
+    async get(name) {
+      const f = await gh.getFile(at(name));
+      return f ? { text: f.text, version: f.sha } : null;
+    },
+    async put(name, text, version) {
+      return { version: (await gh.putFile(at(name), text, version, message())).sha };
+    },
+    remove: (name, version) => gh.deleteFile(at(name), version, message()),
   };
 }
 

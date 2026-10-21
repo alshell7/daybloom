@@ -181,14 +181,14 @@ function mergeRecord(b: Obj | undefined, l: Obj | undefined, r: Obj | undefined,
   return out;
 }
 
-function mergeValue(b: unknown, l: unknown, r: unknown, hasBase: boolean, preferLocal: boolean): unknown {
+export function mergeValue(b: unknown, l: unknown, r: unknown, hasBase: boolean, preferLocal: boolean): unknown {
   if (deepEqual(l, r)) return clone(r);
   if (isPlainObject(l) && isPlainObject(r)) return mergeRecord(isPlainObject(b) ? b : undefined, l, r, hasBase, preferLocal);
   return clone(pick(b, l, r, hasBase, preferLocal));
 }
 
 /** Union of both sides, minus anything either side removed since the base. Remote order first. */
-function mergeSet(b: unknown, l: unknown, r: unknown): unknown[] | undefined {
+export function mergeSet(b: unknown, l: unknown, r: unknown): unknown[] | undefined {
   if (l === undefined && r === undefined) return undefined;
   const B = new Set(arr(b));
   const L = new Set(arr(l));

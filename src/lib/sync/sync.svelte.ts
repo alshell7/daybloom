@@ -1,293 +1,66 @@
-// GitHub sync: keeps tasks, shared settings, progress and addon data the same on every
-// computer by reading and writing small JSON files in a private repo the user owns.
+// Sync: keeps tasks, settings, progress, addon data, the Trash, the AI setup and more the
+// same on every device, through a service the user owns. Two can run, alone or together:
 //
-//   <folder>/tasks.json        tasks + tombstones
-//   <folder>/settings.json     the allow-listed settings (see SHARED_SETTINGS)
-//   <folder>/progress.json     earned badges
-//   <folder>/streaks.json      last celebrated rhythm milestone
-//   <folder>/work.json         the Work addon (see ./addons.ts)
-//   <folder>/tracker.json      the Time Tracker addon
-//   <folder>/crumbs.json       the Breadcrumbs addon
-//   <folder>/reality.json      the Reality check addon
-//   <folder>/waqt.json         the Waqt addon (settings and prayed marks)
-//   <folder>/device-<id>.json  a heartbeat per computer (name, last sync)
+//   GitHub Sync     small JSON files in a private repo (optionally sealed with the vault,
+//                   in a `vault` folder beside the plain one)
+//   Cloudflare D1   a table in the user's own D1 database, always sealed with the vault
 //
-// An addon file is only written once some computer has used that addon. The MCP addon
-// never syncs: its key and activity list belong to one computer.
-//
-// Each sync lists the folder once, fetches only files whose sha moved, three-way merges
-// them against the snapshot from the last sync (`sync-base-<file>`), writes back only
-// what changed (with the sha, so a concurrent write from another device is detected and
-// re-merged) and applies the result to the stores. Only the main window ever syncs.
+// One master password guards both: the vault (./vault.ts) is shared, so a device unlocked
+// once syncs everything, and secrets (AI keys, calendar links) travel only inside it. The
+// engine (./engine.svelte.ts) does the work; this file says where each service keeps its
+// data and binds the engine to the app's stores, keychain and native fetch. Only the main
+// window ever syncs.
 
 import { untrack } from 'svelte';
+import { migrateAlef, alefFile } from '../addons/alef/alef.svelte';
+import { crumbsFile } from '../addons/crumbs/crumbs.svelte';
+import { landingsFile, migrateLandings } from '../addons/landings/pad.svelte';
+import { realityFile } from '../addons/reality/reality.svelte';
+import { migrateRetro, retroFile } from '../addons/retro/retro.svelte';
+import { trackerFile } from '../addons/tracker/tracker.svelte';
+import { waqtFile } from '../addons/waqt/waqt.svelte';
+import { loadWork, workFile } from '../addons/work/work.svelte';
+import { aiFile, DEFAULT_AI, migrateAi } from '../ai/hub.svelte';
 import { platform, windowLabel } from '../platform';
+import { eventStateFile, migrateEventStates } from '../stores/eventStates.svelte';
 import { progressFile } from '../stores/progress.svelte';
 import { settings } from '../stores/settings.svelte';
 import { streakFile } from '../stores/streaks.svelte';
 import { taskFile } from '../stores/tasks.svelte';
-import { crumbsFile } from '../addons/crumbs/crumbs.svelte';
-import type { CrumbsFile } from '../addons/crumbs/migrate';
-import type { RealityFile } from '../addons/reality/reality';
-import { realityFile } from '../addons/reality/reality.svelte';
-import { trackerFile } from '../addons/tracker/tracker.svelte';
-import type { TrackerFile } from '../addons/tracker/types';
-import type { WaqtFile } from '../addons/waqt/types';
-import { waqtFile } from '../addons/waqt/waqt.svelte';
-import type { WorkData } from '../addons/work/types';
-import { loadWork, workFile } from '../addons/work/work.svelte';
-import type { Task } from '../engine/types';
+import { migrateTrash, trashFile } from '../stores/trash.svelte';
+import type { Binding, SecretStore, Synced, SyncStores } from './codecs';
+import { createD1Account, createD1Client, validAccountId, validDatabaseId, D1_DEFAULT_NAME, type D1Client, type D1Database } from './d1';
 import {
-  applySharedTracker,
-  crumbsUnused,
-  mergeCrumbsFiles,
-  mergeRealityFiles,
-  mergeTrackerFiles,
-  mergeWaqtFiles,
-  mergeWorkFiles,
-  parseCrumbsFile,
-  parseRealityFile,
-  parseWaqtFile,
-  parseWorkFile,
-  pickSharedTracker,
-  realityUnused,
-  trackerUnused,
-  waqtUnused,
-  workUnused,
-  type SharedTrackerFile,
-} from './addons';
-import { createGitHubClient, GitHubError, parseRepo, type DirEntry, type FetchLike, type GitHubClient, type RepoInfo } from './github';
-import {
-  applySharedSettings,
-  deepEqual,
-  mergeProgressFiles,
-  mergeSettingsFiles,
-  mergeStreakFiles,
-  mergeTaskFiles,
-  parseProgressFile,
-  parseSettingsFile,
-  parseStreakFile,
-  parseTaskFile,
-  pickSharedSettings,
-  type ProgressFileData,
-  type StreakFileData,
-  type Tombstone,
-} from './merge';
+  createLock,
+  createSyncEngine,
+  secureVaultKeeper,
+  type CommonConfig,
+  type SyncBackend,
+  type SyncDeps,
+  type TestResult,
+} from './engine.svelte';
+import { createGitHubClient, githubRemote, parseRepo, type GitHubClient, type RepoInfo } from './github';
+import { deepEqual } from './merge';
 
-/** Keychain account holding the personal access token. */
+export type { Binding, SyncStores } from './codecs';
+export type { DeviceInfo, SyncStatus } from './engine.svelte';
+export { SETTLE_MS, SYNC_INTERVAL_MS } from './engine.svelte';
+
+/** Keychain account holding the GitHub personal access token. */
 export const TOKEN_ACCOUNT = 'github-sync';
 export const CONFIG_KEY = 'sync-config';
 export const BASE_PREFIX = 'sync-base-';
 export const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new';
 
-export const SYNC_INTERVAL_MS = 5 * 60_000;
-/** Quiet time after the last local change before syncing it. */
-export const SETTLE_MS = 20_000;
-/** Focus / visibility only syncs if the last sync is at least this old. */
-const FOCUS_GAP_MS = 60_000;
-/** Refresh this device's heartbeat at least this often… */
-const HEARTBEAT_MS = 6 * 3_600_000;
-/** …or, when this sync wrote data anyway, if it's older than this. */
-const HEARTBEAT_ON_WRITE_MS = 15 * 60_000;
-/** Back-off before each attempt at writing one file (sha conflicts). */
-const ATTEMPT_DELAYS = [0, 400, 1500];
+/** Keychain account holding the Cloudflare API token. */
+export const D1_TOKEN_ACCOUNT = 'd1-sync';
+export const D1_CONFIG_KEY = 'sync-d1-config';
+export const D1_BASE_PREFIX = 'sync-d1-base-';
 
-const DATA_FILES = ['tasks.json', 'settings.json', 'progress.json', 'streaks.json', 'work.json', 'tracker.json', 'crumbs.json', 'reality.json', 'waqt.json'];
-const BASE_KEYS = ['tasks', 'settings', 'progress', 'streaks', 'work', 'tracker', 'crumbs', 'reality', 'waqt'] as const;
-type BaseKey = (typeof BASE_KEYS)[number];
-
-export interface DeviceInfo {
-  id: string;
-  name: string;
-  os: string;
-  /** When that computer last wrote its heartbeat (ms). */
-  lastSyncAt: number;
-  sha?: string;
-}
-
-export interface SyncConfig {
-  enabled: boolean;
-  /** `owner/name`. */
-  repo: string;
-  branch: string;
-  /** Folder in the repo, without slashes at the ends ('' = repo root). */
-  folder: string;
-  deviceId: string;
-  deviceName: string;
-  lastSyncAt: number | null;
-  /** The repo@branch:folder this device last finished a sync with. Different → first sync. */
-  syncedLoc: string | null;
-  /** First sync with a repo that already has data: adopt the repo's copy, or combine. */
-  join: 'replace' | 'merge';
-  /** From the last connection test. */
-  repoPrivate: boolean | null;
-  devices: DeviceInfo[];
-}
-
-export type SyncStatus =
-  | { state: 'idle' }
-  | { state: 'syncing' }
-  | { state: 'ok'; lastSyncAt: number }
-  | { state: 'error'; message: string; kind: string };
-
-export interface TestResult {
-  repo: RepoInfo;
-  /** The folder already holds Daybloom data. */
-  hasData: boolean;
-  deviceCount: number;
-}
-
-/** How the service reads and writes one store. `read` must return a plain copy. */
-export interface Binding<T> {
-  read(): T;
-  write(value: T): void;
-}
-
-export interface SyncStores {
-  tasks: Binding<{ version: 1; tasks: Task[]; deleted?: Tombstone[] }>;
-  settings: Binding<object>;
-  progress: Binding<{ version: 1; unlocked: { id: string; at: number }[]; viewedAt: number }>;
-  streaks: Binding<{ celebrated: number }>;
-  /** The Work addon's whole file ('addon-work'). */
-  work: Binding<WorkData>;
-  /** The Time Tracker addon's whole file ('addon-tracker'). */
-  tracker: Binding<TrackerFile>;
-  /** The Breadcrumbs addon's whole file ('addon-crumbs'). */
-  crumbs: Binding<CrumbsFile>;
-  /** The Reality check addon's whole file ('addon-reality'). */
-  reality: Binding<RealityFile>;
-  /** The Waqt addon's whole file ('addon-waqt'). */
-  waqt: Binding<WaqtFile>;
-  /**
-   * Calls back after any change to the synced stores, but only while `active()` is true
-   * (so nothing is watched for people who never turn sync on). Returns a stop function.
-   */
-  watch?(onChange: () => void, active: () => boolean): () => void;
-}
-
-export interface SyncDeps {
-  fetch: FetchLike;
-  storage: { load(key: string): Promise<string | null>; save(key: string, value: string): Promise<void> };
-  secrets: { get(account: string): Promise<string | null>; set(account: string, value: string): Promise<void>; delete(account: string): Promise<void> };
-  stores(): SyncStores | Promise<SyncStores>;
-  os?: string;
-  /** False in windows that must never sync (the widget). */
-  canSync?: () => boolean;
-  now?: () => number;
-  sleep?: (ms: number) => Promise<void>;
-  newId?: () => string;
-}
-
-interface BaseRecord<T> {
-  loc: string;
-  sha: string | null;
-  at: number;
-  data: T;
-}
-
-interface Codec<T> {
-  key: BaseKey;
-  file: string;
-  /** On a first sync that chose "use the repo's", take the repo's copy as is. */
-  replaceOnJoin: boolean;
-  /** For an addon: true when this device never used it, so a missing repo file stays missing. */
-  unused?(v: T): boolean;
-  read(): T;
-  write(v: T): void;
-  parse(raw: unknown): T;
-  merge(base: T | null, local: T, remote: T, baseAt?: number): T;
-}
-
-function codecs(s: SyncStores): Codec<any>[] {
-  const tasks: Codec<ReturnType<typeof parseTaskFile>> = {
-    key: 'tasks',
-    file: 'tasks.json',
-    replaceOnJoin: true,
-    read: () => parseTaskFile(s.tasks.read()),
-    write: (v) => s.tasks.write(v),
-    parse: parseTaskFile,
-    merge: (b, l, r, at) => mergeTaskFiles(b, l, r, { baseAt: at }),
-  };
-  const shared: Codec<ReturnType<typeof parseSettingsFile>> = {
-    key: 'settings',
-    file: 'settings.json',
-    replaceOnJoin: true,
-    read: () => ({ version: 1, settings: pickSharedSettings(s.settings.read()) }),
-    write: (v) => s.settings.write(applySharedSettings(s.settings.read(), v.settings)),
-    parse: parseSettingsFile,
-    merge: mergeSettingsFiles,
-  };
-  const progress: Codec<ProgressFileData> = {
-    key: 'progress',
-    file: 'progress.json',
-    replaceOnJoin: false,
-    read: () => parseProgressFile(s.progress.read()),
-    write: (v) => s.progress.write({ ...s.progress.read(), unlocked: v.unlocked }),
-    parse: parseProgressFile,
-    merge: mergeProgressFiles,
-  };
-  const streaks: Codec<StreakFileData> = {
-    key: 'streaks',
-    file: 'streaks.json',
-    replaceOnJoin: false,
-    read: () => parseStreakFile(s.streaks.read()),
-    write: (v) => s.streaks.write({ ...s.streaks.read(), celebrated: v.celebrated }),
-    parse: parseStreakFile,
-    merge: mergeStreakFiles,
-  };
-  const work: Codec<WorkData> = {
-    key: 'work',
-    file: 'work.json',
-    replaceOnJoin: true,
-    unused: workUnused,
-    read: () => parseWorkFile(s.work.read()),
-    write: (v) => s.work.write(v),
-    parse: parseWorkFile,
-    merge: mergeWorkFiles,
-  };
-  // App and title tracking stay out of tracker.json, so computers that differ never rewrite it.
-  const tracker: Codec<SharedTrackerFile> = {
-    key: 'tracker',
-    file: 'tracker.json',
-    replaceOnJoin: true,
-    unused: trackerUnused,
-    read: () => pickSharedTracker(s.tracker.read()),
-    write: (v) => s.tracker.write(applySharedTracker(s.tracker.read(), v)),
-    parse: pickSharedTracker,
-    merge: (b, l, r) => pickSharedTracker(mergeTrackerFiles(b, l, r)),
-  };
-  const crumbs: Codec<CrumbsFile> = {
-    key: 'crumbs',
-    file: 'crumbs.json',
-    replaceOnJoin: true,
-    unused: crumbsUnused,
-    read: () => parseCrumbsFile(s.crumbs.read()),
-    write: (v) => s.crumbs.write(v),
-    parse: parseCrumbsFile,
-    merge: mergeCrumbsFiles,
-  };
-  const reality: Codec<RealityFile> = {
-    key: 'reality',
-    file: 'reality.json',
-    replaceOnJoin: true,
-    unused: realityUnused,
-    read: () => parseRealityFile(s.reality.read()),
-    write: (v) => s.reality.write(v),
-    parse: parseRealityFile,
-    merge: mergeRealityFiles,
-  };
-  const waqt: Codec<WaqtFile> = {
-    key: 'waqt',
-    file: 'waqt.json',
-    replaceOnJoin: true,
-    unused: waqtUnused,
-    read: () => parseWaqtFile(s.waqt.read()),
-    write: (v) => s.waqt.write(v),
-    parse: parseWaqtFile,
-    merge: mergeWaqtFiles,
-  };
-  return [tasks, shared, progress, streaks, work, tracker, crumbs, reality, waqt];
-}
+/** Keychain account holding the unlocked vault (its key and public record). */
+export const VAULT_ACCOUNT = 'sync-vault';
+/** The folder, inside the sync folder, where a sealed repo keeps its files. */
+export const VAULT_DIR = 'vault';
 
 export function normalizeFolder(input: string): string {
   return (input ?? '')
@@ -299,539 +72,178 @@ export function normalizeFolder(input: string): string {
 }
 
 const joinPath = (folder: string, file: string) => (folder ? `${folder}/${file}` : file);
-const serialize = (data: unknown) => `${JSON.stringify(data, null, 2)}\n`;
-const deviceIdOf = (name: string) => /^device-([A-Za-z0-9_-]{1,64})\.json$/.exec(name)?.[1] ?? null;
 
 function defaultDeviceName(os?: string) {
-  return os === 'mac' ? 'Mac' : os === 'windows' ? 'Windows PC' : os === 'linux' ? 'Linux PC' : 'This computer';
+  return os === 'mac' ? 'Mac' : os === 'windows' ? 'Windows PC' : os === 'android' ? 'Android phone' : os === 'linux' ? 'Linux PC' : 'This computer';
 }
 
-function randomId() {
-  const c = (globalThis as any).crypto;
-  if (c?.randomUUID) return (c.randomUUID() as string).replace(/-/g, '').slice(0, 12);
-  return Math.random().toString(36).slice(2, 14);
+// -- GitHub ------------------------------------------------------------------
+
+export interface GitHubPlace {
+  /** `owner/name`. */
+  repo: string;
+  branch: string;
+  /** Folder in the repo, without slashes at the ends ('' = repo root). */
+  folder: string;
+  /** From the last connection test. */
+  repoPrivate: boolean | null;
 }
 
-function defaultConfig(): SyncConfig {
-  return {
-    enabled: false,
-    repo: '',
-    branch: 'main',
-    folder: 'daybloom',
-    deviceId: '',
-    deviceName: '',
-    lastSyncAt: null,
-    syncedLoc: null,
-    join: 'replace',
-    repoPrivate: null,
-    devices: [],
-  };
+export type SyncConfig = CommonConfig & GitHubPlace;
+
+export const githubBackend: SyncBackend<GitHubPlace, RepoInfo> = {
+  id: 'github',
+  service: 'GitHub',
+  configKey: CONFIG_KEY,
+  basePrefix: BASE_PREFIX,
+  tokenAccount: TOKEN_ACCOUNT,
+  alwaysSealed: false,
+  defaults: () => ({ repo: '', branch: 'main', folder: 'daybloom', repoPrivate: null }),
+  normalize(c, p) {
+    if (p.repo !== undefined) {
+      const ref = parseRepo(p.repo);
+      c.repo = ref ? `${ref.owner}/${ref.repo}` : p.repo.trim();
+    }
+    if (p.branch !== undefined) c.branch = p.branch.trim() || 'main';
+    if (p.folder !== undefined) c.folder = normalizeFolder(p.folder);
+    if (p.repo !== undefined || p.branch !== undefined || p.folder !== undefined) c.repoPrivate = c.repoPrivate ?? null;
+  },
+  location(c) {
+    const ref = parseRepo(c.repo);
+    return ref ? `${ref.owner.toLowerCase()}/${ref.repo.toLowerCase()}@${c.branch}:${normalizeFolder(c.folder)}` : '';
+  },
+  started: (c) => !!c.repo,
+  checkToken: (v) => (/\s/.test(v) || v.length < 20 ? "That doesn't look like a GitHub token." : null),
+  setupHint: (_c, hasToken) => (hasToken ? 'Enter the repo as owner/name to start syncing.' : 'Paste a token to start syncing.'),
+  connect(c, token, ctx, sealed) {
+    const ref = parseRepo(c.repo);
+    if (!ref) return null;
+    const key = `${token}\n${ref.owner}/${ref.repo}@${c.branch}`;
+    let gh = ctx.cache.get(key) as GitHubClient | undefined;
+    if (!gh) {
+      ctx.cache.clear();
+      gh = createGitHubClient({ ...ref, branch: c.branch, token, fetch: ctx.fetch, now: ctx.now });
+      ctx.cache.set(key, gh);
+    }
+    const folder = normalizeFolder(c.folder);
+    const client = gh;
+    let vaultNearby = false;
+    const plain = githubRemote(client, folder, ctx.message, (entries) => {
+      vaultNearby = entries.some((e) => e.type === 'dir' && e.name === VAULT_DIR);
+    });
+    return {
+      remote: sealed ? githubRemote(client, joinPath(folder, VAULT_DIR), ctx.message) : plain,
+      plain: sealed ? plain : undefined,
+      sealedNearby: sealed ? undefined : () => vaultNearby,
+      probe: () => client.getRepo(),
+    };
+  },
+  learned(c, info) {
+    c.repoPrivate = info.private;
+  },
+  defaultDeviceName,
+};
+
+// -- Cloudflare D1 -------------------------------------------------------------
+
+export interface D1Place {
+  /** The 32-character account ID from the Cloudflare dashboard. */
+  accountId: string;
+  databaseId: string;
+  /** For showing; refreshed by each connection test. */
+  databaseName: string;
 }
 
-/** Where a config points; base snapshots only count for the place they came from. */
-function locationOf(c: SyncConfig): string {
-  const ref = parseRepo(c.repo);
-  return ref ? `${ref.owner.toLowerCase()}/${ref.repo.toLowerCase()}@${c.branch}:${normalizeFolder(c.folder)}` : '';
+export type D1Config = CommonConfig & D1Place;
+
+export const d1Backend: SyncBackend<D1Place, D1Database> = {
+  id: 'd1',
+  service: 'Cloudflare D1',
+  configKey: D1_CONFIG_KEY,
+  basePrefix: D1_BASE_PREFIX,
+  tokenAccount: D1_TOKEN_ACCOUNT,
+  alwaysSealed: true,
+  defaults: () => ({ accountId: '', databaseId: '', databaseName: '' }),
+  normalize(c, p) {
+    if (p.accountId !== undefined) c.accountId = p.accountId.trim().toLowerCase();
+    if (p.databaseId !== undefined) c.databaseId = p.databaseId.trim().toLowerCase();
+    if (p.databaseName !== undefined) c.databaseName = p.databaseName.trim().slice(0, 80);
+  },
+  location: (c) => (validAccountId(c.accountId) && validDatabaseId(c.databaseId) ? `d1:${c.accountId}/${c.databaseId}` : ''),
+  started: (c) => !!c.accountId,
+  checkToken: (v) => (/\s/.test(v) || v.length < 30 ? "That doesn't look like a Cloudflare API token." : null),
+  setupHint(c, hasToken) {
+    if (!hasToken) return 'Paste a Cloudflare API token to start syncing.';
+    if (!validAccountId(c.accountId)) return 'Enter your Cloudflare account ID (32 letters and digits).';
+    return 'Pick or create a database to sync with.';
+  },
+  connect(c, token, ctx) {
+    if (!validAccountId(c.accountId) || !validDatabaseId(c.databaseId)) return null;
+    const key = `${token}\n${c.accountId}/${c.databaseId}`;
+    let d = ctx.cache.get(key) as D1Client | undefined;
+    if (!d) {
+      ctx.cache.clear();
+      d = createD1Client({ accountId: c.accountId, databaseId: c.databaseId, token, fetch: ctx.fetch, now: ctx.now, device: ctx.deviceId });
+      ctx.cache.set(key, d);
+    }
+    const db = d;
+    return { remote: db, probe: () => db.info(), prepare: () => db.ensureSchema(), erase: () => db.erase() };
+  },
+  learned(c, info) {
+    if (info.name) c.databaseName = info.name;
+  },
+  defaultDeviceName,
+};
+
+// -- services ----------------------------------------------------------------
+
+export interface GitHubTestResult extends TestResult<RepoInfo> {
+  repo: RepoInfo;
+}
+/** What GitHub Sync's connection test reports (the name the settings already use). */
+export type { GitHubTestResult as TestResult };
+
+/** GitHub Sync. */
+export function createSyncService(deps: SyncDeps) {
+  const engine = createSyncEngine(githubBackend, deps);
+  const test = engine.test;
+  // Assigned onto the engine (not spread), so its live getters stay live.
+  return Object.assign(engine, {
+    /** Checks the token can see the repo; reports privacy and whether data is already there. */
+    async test(): Promise<GitHubTestResult> {
+      const r = await test();
+      return { ...r, repo: r.info };
+    },
+  }) as Omit<typeof engine, 'test'> & { test(): Promise<GitHubTestResult> };
 }
 
-function formatClock(ms: number) {
-  try {
-    return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  } catch {
-    return '';
-  }
+/** Cloudflare D1 sync, plus the account calls its settings need. */
+export function createD1Service(deps: SyncDeps) {
+  const engine = createSyncEngine(d1Backend, deps);
+  const account = () => engine.withToken(async (token) => createD1Account({ accountId: engine.config.accountId, token, fetch: deps.fetch, now: deps.now }));
+  return Object.assign(engine, {
+    /** The account's databases, so one can be picked. */
+    async databases(): Promise<D1Database[]> {
+      if (!validAccountId(engine.config.accountId)) throw new Error('Enter your Cloudflare account ID first.');
+      return (await account()).databases();
+    },
+    /** Creates a database for Daybloom (or reuses one with that name) and picks it. */
+    async createDatabase(name = D1_DEFAULT_NAME): Promise<D1Database> {
+      if (!validAccountId(engine.config.accountId)) throw new Error('Enter your Cloudflare account ID first.');
+      const acc = await account();
+      const existing = (await acc.databases()).find((d) => d.name === name);
+      const db = existing ?? (await acc.create(name));
+      await engine.configure({ databaseId: db.id, databaseName: db.name });
+      return db;
+    },
+  });
 }
-
-/** Problems a retry won't fix on its own: wait for the user (token, repo, branch, file). */
-const NEEDS_USER = new Set(['auth', 'forbidden', 'not-found', 'branch', 'invalid', 'setup']);
 
 export type SyncService = ReturnType<typeof createSyncService>;
-
-export function createSyncService(deps: SyncDeps) {
-  const now = deps.now ?? Date.now;
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const newId = deps.newId ?? randomId;
-  const canSync = deps.canSync ?? (() => true);
-
-  const state = $state({
-    config: defaultConfig(),
-    status: { state: 'idle' } as SyncStatus,
-    hasToken: false,
-    ready: false,
-  });
-
-  // The token lives in the keychain and in this closure — never in reactive state or on disk.
-  let token: string | null = null;
-  let client: { key: string; gh: GitHubClient } | null = null;
-  let inited: Promise<void> | null = null;
-  let running: Promise<void> | null = null;
-  let paused = false;
-  let blockedUntil = 0;
-  const bases = new Map<BaseKey, BaseRecord<unknown> | null>();
-
-  function init(): Promise<void> {
-    return (inited ??= (async () => {
-      let cfg = defaultConfig();
-      try {
-        const raw = await deps.storage.load(CONFIG_KEY);
-        if (raw) cfg = { ...cfg, ...JSON.parse(raw) };
-      } catch {
-        /* unreadable: start over */
-      }
-      if (!Array.isArray(cfg.devices)) cfg.devices = [];
-      // Saved with the first configure(), so nothing is written for people who never sync.
-      if (!cfg.deviceId) cfg.deviceId = newId();
-      if (!cfg.deviceName) cfg.deviceName = defaultDeviceName(deps.os);
-      state.config = cfg;
-      // No keychain access at all for people who never set sync up.
-      if (cfg.repo) token = (await deps.secrets.get(TOKEN_ACCOUNT).catch(() => null)) || null;
-      state.hasToken = !!token;
-      if (cfg.enabled && cfg.lastSyncAt) state.status = { state: 'ok', lastSyncAt: cfg.lastSyncAt };
-      state.ready = true;
-    })());
-  }
-
-  async function persistConfig() {
-    await deps.storage.save(CONFIG_KEY, JSON.stringify($state.snapshot(state.config))).catch(() => {});
-  }
-
-  function github(): GitHubClient | null {
-    const ref = parseRepo(state.config.repo);
-    if (!ref || !token) return null;
-    const key = `${token}\n${ref.owner}/${ref.repo}@${state.config.branch}`;
-    if (client?.key !== key) {
-      client = { key, gh: createGitHubClient({ ...ref, branch: state.config.branch, token, fetch: deps.fetch, now }) };
-    }
-    return client.gh;
-  }
-
-  // -- base snapshots -------------------------------------------------------
-
-  async function loadBase<T>(c: Codec<T>, loc: string): Promise<BaseRecord<T> | null> {
-    if (!bases.has(c.key)) {
-      let rec: BaseRecord<unknown> | null = null;
-      try {
-        const raw = await deps.storage.load(BASE_PREFIX + c.key);
-        if (raw) rec = JSON.parse(raw);
-      } catch {
-        rec = null;
-      }
-      bases.set(c.key, rec);
-    }
-    const rec = bases.get(c.key);
-    if (!rec || rec.loc !== loc) return null;
-    return { ...rec, data: c.parse(rec.data) };
-  }
-
-  async function saveBase<T>(c: Codec<T>, rec: BaseRecord<T>) {
-    const prev = bases.get(c.key);
-    if (prev && prev.loc === rec.loc && prev.sha === rec.sha && deepEqual(c.parse(prev.data), rec.data)) return;
-    bases.set(c.key, rec);
-    await deps.storage.save(BASE_PREFIX + c.key, JSON.stringify(rec));
-  }
-
-  /** Whether anything local differs from what was last synced. */
-  async function isDirty(): Promise<boolean> {
-    const loc = locationOf(state.config);
-    const stores = await deps.stores();
-    for (const c of codecs(stores)) {
-      const base = await loadBase(c, loc);
-      if (!base || !deepEqual(c.read(), base.data)) return true;
-    }
-    return false;
-  }
-
-  // -- one sync -------------------------------------------------------------
-
-  function commitMessage() {
-    return `Daybloom sync from ${state.config.deviceName || 'a computer'}`;
-  }
-
-  function parseRemote<T>(c: Codec<T>, text: string): T {
-    try {
-      return c.parse(JSON.parse(text));
-    } catch {
-      throw new GitHubError('invalid', `${c.file} in the repo isn't valid JSON. Fix or delete it on GitHub and Daybloom will write it again.`);
-    }
-  }
-
-  /** Merge one file with the repo, write it back if needed, apply it here. True if it wrote. */
-  async function syncFile<T>(gh: GitHubClient, c: Codec<T>, folder: string, loc: string, listedSha: string | null, replace: boolean): Promise<boolean> {
-    const path = joinPath(folder, c.file);
-    const base = await loadBase(c, loc);
-    let remoteSha = listedSha;
-    // undefined = not fetched yet; null = not in the repo.
-    let remote: T | null | undefined = listedSha === null ? null : base && base.sha === listedSha ? base.data : undefined;
-
-    for (let attempt = 0; attempt < ATTEMPT_DELAYS.length; attempt++) {
-      if (attempt > 0) {
-        await sleep(ATTEMPT_DELAYS[attempt]);
-        remote = undefined;
-      }
-      if (remote === undefined) {
-        const f = await gh.getFile(path);
-        remoteSha = f?.sha ?? null;
-        remote = f ? parseRemote(c, f.text) : null;
-      }
-      const local = c.read();
-      if (remote === null && c.unused?.(local)) {
-        // Nothing here and nothing there: no empty file. The base records that both were empty.
-        await saveBase(c, { loc, sha: null, at: now(), data: local });
-        return false;
-      }
-      let merged: T;
-      if (remote === null) merged = local;
-      else if (!base && replace && c.replaceOnJoin) merged = remote;
-      else merged = c.merge(base?.data ?? null, local, remote, base?.at);
-
-      let sha = remoteSha;
-      let wrote = false;
-      if (remote === null || !deepEqual(merged, remote)) {
-        try {
-          sha = (await gh.putFile(path, serialize(merged), remoteSha, commitMessage())).sha || null;
-          wrote = true;
-        } catch (e) {
-          if (e instanceof GitHubError && e.kind === 'conflict') continue;
-          throw e;
-        }
-      }
-      // Fold in anything changed here while we were on the network, then apply.
-      const current = c.read();
-      const next = deepEqual(current, local) ? merged : c.merge(local, current, merged);
-      if (!deepEqual(next, current)) c.write(next);
-      await saveBase(c, { loc, sha, at: now(), data: merged });
-      return wrote;
-    }
-    throw new GitHubError('conflict', 'Another computer kept saving at the same moment. Daybloom will try again shortly.', 409);
-  }
-
-  async function syncDevices(gh: GitHubClient, folder: string, listing: DirEntry[], wrote: boolean) {
-    const cfg = state.config;
-    const known = new Map(cfg.devices.map((d) => [d.id, d]));
-    const devices: DeviceInfo[] = [];
-    let mineSha: string | null = null;
-    for (const e of listing) {
-      const id = e.type === 'file' ? deviceIdOf(e.name) : null;
-      if (!id) continue;
-      if (id === cfg.deviceId) mineSha = e.sha;
-      const k = known.get(id);
-      if (k && k.sha === e.sha) {
-        devices.push(k);
-        continue;
-      }
-      try {
-        const f = await gh.getFile(e.path);
-        if (!f) continue;
-        const raw = JSON.parse(f.text);
-        devices.push({
-          id,
-          name: typeof raw?.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 60) : 'A computer',
-          os: typeof raw?.os === 'string' ? raw.os : 'other',
-          lastSyncAt: Number(raw?.lastSyncAt) || 0,
-          sha: f.sha,
-        });
-      } catch (err) {
-        if (err instanceof GitHubError && (NEEDS_USER.has(err.kind) || err.kind === 'rate-limit')) throw err;
-      }
-    }
-
-    const t = now();
-    const i = devices.findIndex((d) => d.id === cfg.deviceId);
-    const mine = i >= 0 ? devices[i] : null;
-    const age = mine ? t - mine.lastSyncAt : Infinity;
-    if (!mine || mine.name !== cfg.deviceName || age > HEARTBEAT_MS || (wrote && age > HEARTBEAT_ON_WRITE_MS)) {
-      const info = { id: cfg.deviceId, name: cfg.deviceName, os: deps.os ?? 'other', lastSyncAt: t };
-      try {
-        const res = await gh.putFile(
-          joinPath(folder, `device-${cfg.deviceId}.json`),
-          serialize({ app: 'daybloom', ...info }),
-          mineSha,
-          commitMessage(),
-        );
-        const d = { ...info, sha: res.sha };
-        if (i >= 0) devices[i] = d;
-        else devices.push(d);
-      } catch (err) {
-        // A heartbeat can wait for the next sync; only problems the user must fix surface.
-        if (err instanceof GitHubError && (NEEDS_USER.has(err.kind) || err.kind === 'rate-limit')) throw err;
-      }
-    }
-    devices.sort((a, z) => (a.id === cfg.deviceId ? -1 : z.id === cfg.deviceId ? 1 : z.lastSyncAt - a.lastSyncAt || a.id.localeCompare(z.id)));
-    cfg.devices = devices;
-  }
-
-  function setError(e: unknown) {
-    if (e instanceof GitHubError) {
-      let message = e.message;
-      if (e.kind === 'rate-limit') {
-        blockedUntil = e.retryAt ?? now() + 60_000;
-        const at = formatClock(blockedUntil);
-        message = `GitHub asked Daybloom to slow down. ${at ? `Trying again after ${at}.` : 'Trying again soon.'}`;
-      }
-      if (NEEDS_USER.has(e.kind)) paused = true;
-      state.status = { state: 'error', kind: e.kind, message };
-      return;
-    }
-    const message = e instanceof Error && e.message ? e.message : 'Something went wrong while syncing.';
-    state.status = { state: 'error', kind: 'other', message };
-  }
-
-  async function syncOnce() {
-    await init();
-    const cfg = state.config;
-    if (!cfg.enabled || !canSync()) return;
-    const gh = github();
-    if (!gh) {
-      paused = true;
-      state.status = {
-        state: 'error',
-        kind: 'setup',
-        message: token ? 'Enter the repo as owner/name to start syncing.' : 'Paste a token to start syncing.',
-      };
-      return;
-    }
-    if (now() < blockedUntil) {
-      state.status = {
-        state: 'error',
-        kind: 'rate-limit',
-        message: `GitHub asked Daybloom to slow down. Trying again after ${formatClock(blockedUntil)}.`,
-      };
-      return;
-    }
-    state.status = { state: 'syncing' };
-    try {
-      const stores = await deps.stores();
-      const loc = locationOf(cfg);
-      const folder = normalizeFolder(cfg.folder);
-      const replace = cfg.join === 'replace' && cfg.syncedLoc !== loc;
-      const listing = await gh.listDir(folder);
-      const shaOf = (file: string) => listing.find((e) => e.type === 'file' && e.name === file)?.sha ?? null;
-      let wrote = false;
-      for (const c of codecs(stores)) {
-        if (await syncFile(gh, c, folder, loc, shaOf(c.file), replace)) wrote = true;
-      }
-      await syncDevices(gh, folder, listing, wrote);
-      if (locationOf(state.config) !== loc) return; // moved to another repo meanwhile
-      const at = now();
-      cfg.lastSyncAt = at;
-      cfg.syncedLoc = loc;
-      paused = false;
-      blockedUntil = 0;
-      await persistConfig();
-      state.status = { state: 'ok', lastSyncAt: at };
-    } catch (e) {
-      setError(e);
-    }
-  }
-
-  function run(): Promise<void> {
-    if (running) return running;
-    running = (async () => {
-      try {
-        await syncOnce();
-      } finally {
-        running = null;
-      }
-    })();
-    return running;
-  }
-
-  /** Background trigger: stays quiet while a problem waits for the user. */
-  function auto() {
-    if (!state.ready || !state.config.enabled || paused || now() < blockedUntil) return;
-    void run();
-  }
-
-  // -- public actions -------------------------------------------------------
-
-  async function configure(patch: Partial<Pick<SyncConfig, 'repo' | 'branch' | 'folder' | 'deviceName'>>) {
-    await init();
-    const c = state.config;
-    const before = locationOf(c);
-    if (patch.repo !== undefined) {
-      const ref = parseRepo(patch.repo);
-      c.repo = ref ? `${ref.owner}/${ref.repo}` : patch.repo.trim();
-    }
-    if (patch.branch !== undefined) c.branch = patch.branch.trim() || 'main';
-    if (patch.folder !== undefined) c.folder = normalizeFolder(patch.folder);
-    if (patch.deviceName !== undefined) c.deviceName = patch.deviceName.trim().slice(0, 60) || defaultDeviceName(deps.os);
-    if (locationOf(c) !== before) {
-      // A different place: nothing synced there yet, and it needs a fresh go-ahead.
-      c.enabled = false;
-      c.devices = [];
-      c.lastSyncAt = null;
-      c.repoPrivate = null;
-      client = null;
-      paused = false;
-      blockedUntil = 0;
-      state.status = { state: 'idle' };
-    }
-    await persistConfig();
-  }
-
-  async function saveToken(value: string) {
-    await init();
-    const v = value.trim();
-    if (!v) throw new Error('Paste a token first.');
-    if (/\s/.test(v) || v.length < 20) throw new Error("That doesn't look like a GitHub token.");
-    await deps.secrets.set(TOKEN_ACCOUNT, v);
-    token = v;
-    client = null;
-    paused = false;
-    state.hasToken = true;
-    if (state.status.state === 'error') state.status = { state: 'idle' };
-  }
-
-  /** Checks the token can see the repo; reports privacy and whether data is already there. */
-  async function test(): Promise<TestResult> {
-    await init();
-    const gh = github();
-    if (!gh) throw new Error(token ? 'Enter the repo as owner/name.' : 'Paste a token first.');
-    const repo = await gh.getRepo();
-    const listing = await gh.listDir(normalizeFolder(state.config.folder));
-    const files = new Set(listing.filter((e) => e.type === 'file').map((e) => e.name));
-    state.config.repoPrivate = repo.private;
-    await persistConfig();
-    paused = false;
-    return {
-      repo,
-      hasData: DATA_FILES.some((f) => files.has(f)),
-      deviceCount: listing.filter((e) => e.type === 'file' && deviceIdOf(e.name)).length,
-    };
-  }
-
-  async function enable(on: boolean, join?: 'replace' | 'merge') {
-    await init();
-    state.config.enabled = on;
-    if (join) state.config.join = join;
-    paused = false;
-    await persistConfig();
-    if (on) await run();
-    else {
-      await running?.catch(() => {});
-      state.status = { state: 'idle' };
-    }
-  }
-
-  /** Manual "Sync now": also retries after a problem that paused background syncs. */
-  function syncNow(): Promise<void> {
-    paused = false;
-    return run();
-  }
-
-  /** Forget the token and every sync snapshot on this computer. The repo is left as it is. */
-  async function disconnect() {
-    await init();
-    await running?.catch(() => {});
-    token = null;
-    client = null;
-    state.hasToken = false;
-    await deps.secrets.delete(TOKEN_ACCOUNT).catch(() => {});
-    bases.clear();
-    for (const k of BASE_KEYS) await deps.storage.save(BASE_PREFIX + k, '').catch(() => {});
-    const { deviceId, deviceName, repo, branch, folder } = state.config;
-    state.config = { ...defaultConfig(), deviceId, deviceName, repo, branch, folder };
-    paused = false;
-    blockedUntil = 0;
-    state.status = { state: 'idle' };
-    await persistConfig();
-  }
-
-  /** Background syncing: on start, every 5 min, after local changes settle, on focus/online. */
-  function start(): () => void {
-    let stopped = false;
-    let settle: ReturnType<typeof setTimeout> | null = null;
-    let unwatch: (() => void) | undefined;
-
-    const interval = setInterval(auto, SYNC_INTERVAL_MS);
-    const onFocus = () => {
-      if (now() - (state.config.lastSyncAt ?? 0) > FOCUS_GAP_MS) auto();
-    };
-    const onOnline = () => {
-      if (state.status.state === 'error' && state.status.kind === 'network') state.status = { state: 'idle' };
-      auto();
-    };
-    const onVisibility = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') onFocus();
-    };
-    const hasWindow = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
-    if (hasWindow) {
-      window.addEventListener('focus', onFocus);
-      window.addEventListener('online', onOnline);
-      document.addEventListener('visibilitychange', onVisibility);
-    }
-
-    Promise.resolve(deps.stores())
-      .then((s) => {
-        if (stopped) return;
-        unwatch = s.watch?.(
-          () => {
-            if (settle) clearTimeout(settle);
-            settle = setTimeout(async () => {
-              settle = null;
-              if (stopped || !state.config.enabled) return;
-              if (await isDirty().catch(() => true)) auto();
-            }, SETTLE_MS);
-          },
-          () => state.ready && state.config.enabled,
-        );
-      })
-      .catch(() => {});
-
-    init().then(() => {
-      if (!stopped) auto();
-    });
-
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-      if (settle) clearTimeout(settle);
-      unwatch?.();
-      if (hasWindow) {
-        window.removeEventListener('focus', onFocus);
-        window.removeEventListener('online', onOnline);
-        document.removeEventListener('visibilitychange', onVisibility);
-      }
-    };
-  }
-
-  return {
-    get config(): Readonly<SyncConfig> {
-      return state.config;
-    },
-    get status(): SyncStatus {
-      return state.status;
-    },
-    get hasToken() {
-      return state.hasToken;
-    },
-    get ready() {
-      return state.ready;
-    },
-    get devices(): readonly DeviceInfo[] {
-      return state.config.devices;
-    },
-    /** True until this computer has finished one sync with the configured repo/branch/folder. */
-    get firstSync() {
-      return state.config.syncedLoc !== locationOf(state.config);
-    },
-    /** A token is saved and the repo name parses. */
-    get configured() {
-      return state.hasToken && !!parseRepo(state.config.repo);
-    },
-    init,
-    configure,
-    saveToken,
-    test,
-    enable,
-    syncNow,
-    disconnect,
-    start,
-  };
-}
+export type D1Service = ReturnType<typeof createD1Service>;
 
 // ---------------------------------------------------------------------------
-// The app's instance, bound to the real stores, keychain and native fetch.
+// The app's instances, bound to the real stores, keychain and native fetch.
 
 function plain<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
@@ -845,16 +257,25 @@ function bindApp(): Promise<SyncStores> {
     // an addon that is switched off is never loaded), so a sync never writes defaults over
     // data that's sitting on disk. The Work store starts its load on import; `loadWork`
     // shares that one rather than reading the file twice.
-    await Promise.all([
-      ...[taskFile, settings, progressFile, streakFile, trackerFile, crumbsFile, realityFile, waqtFile].filter((s) => !s.ready).map((s) => s.load()),
-      workFile.ready ? null : loadWork(),
-    ]);
+    const files = [taskFile, settings, progressFile, streakFile, trackerFile, crumbsFile, realityFile, waqtFile, trashFile, eventStateFile, aiFile, alefFile, retroFile, landingsFile];
+    await Promise.all([...files.filter((s) => !s.ready).map((s) => s.load()), workFile.ready ? null : loadWork()]);
+    const { calendarService } = await import('../calendar/service');
     const bind = <T>(s: { value: T }): Binding<T> => ({
       read: () => plain(s.value),
       write: (v) => {
         s.value = plain(v);
       },
     });
+    const synced = <T>(s: { value: T }, parse: (raw: unknown) => T, unused?: (v: T) => boolean): Synced<T> => ({ ...bind(s), parse, ...(unused ? { unused } : {}) });
+    const secrets: SecretStore = {
+      accounts: () => [
+        ...Object.keys(aiFile.value.services ?? {}).map((id) => `ai:${id}`),
+        ...calendarService.getAccounts().map((a) => (a.provider === 'ics' ? `${a.id}:url` : a.id)),
+      ],
+      get: (a) => platform.secrets.get(a),
+      set: (a, v) => platform.secrets.set(a, v),
+      delete: (a) => platform.secrets.delete(a),
+    };
     return {
       tasks: bind(taskFile),
       settings: bind(settings),
@@ -865,19 +286,18 @@ function bindApp(): Promise<SyncStores> {
       crumbs: bind(crumbsFile),
       reality: bind(realityFile),
       waqt: bind(waqtFile),
+      trash: synced(trashFile, migrateTrash),
+      eventStates: synced(eventStateFile, migrateEventStates),
+      ai: synced(aiFile, migrateAi, (v) => deepEqual(v, migrateAi(DEFAULT_AI))),
+      alef: synced(alefFile, migrateAlef),
+      retro: synced(retroFile, migrateRetro),
+      landings: synced(landingsFile, migrateLandings),
+      secrets,
       watch(onChange, active) {
         return $effect.root(() => {
           $effect(() => {
             if (!active()) return;
-            JSON.stringify(taskFile.value);
-            JSON.stringify(settings.value);
-            JSON.stringify(progressFile.value);
-            JSON.stringify(streakFile.value);
-            JSON.stringify(workFile.value);
-            JSON.stringify(trackerFile.value);
-            JSON.stringify(crumbsFile.value);
-            JSON.stringify(realityFile.value);
-            JSON.stringify(waqtFile.value);
+            for (const f of [...files, workFile]) JSON.stringify(f.value);
             untrack(onChange);
           });
         });
@@ -886,17 +306,24 @@ function bindApp(): Promise<SyncStores> {
   })());
 }
 
-export const githubSync = createSyncService({
+const appDeps: SyncDeps = {
   fetch: (input, init) => platform.fetch(input, init),
   storage: { load: (k) => platform.load(k), save: (k, v) => platform.save(k, v) },
   secrets: platform.secrets,
   stores: bindApp,
   os: platform.os,
   canSync: () => windowLabel() === 'main',
-});
+  // One vault and one sync at a time, across both services.
+  vault: secureVaultKeeper(platform.secrets, VAULT_ACCOUNT),
+  lock: createLock(),
+};
+
+export const githubSync = createSyncService(appDeps);
+export const d1Sync = createD1Service(appDeps);
 
 /** Call once from the main window after the stores have loaded. Returns a stop function. */
 export function startSync(): () => void {
   if (windowLabel() !== 'main') return () => {};
-  return githubSync.start();
+  const stops = [githubSync.start(), d1Sync.start()];
+  return () => stops.forEach((s) => s());
 }

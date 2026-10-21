@@ -24,7 +24,7 @@ export const PARTS: PartInfo[] = [
   { id: 'addons', name: 'Addons and their data', icon: 'puzzle', what: 'Work projects and bills, tracked time, breadcrumbs, Waqt marks and settings, Alef’s memory and look, and the rest.' },
   { id: 'ai', name: 'AI services and keys', icon: 'key', what: 'Your AI services, their keys in the keychain, and who uses what.' },
   { id: 'calendars', name: 'Calendars', icon: 'calendar', what: 'Connected calendars and their sign-ins. The calendars themselves stay as they are.' },
-  { id: 'sync', name: 'GitHub sync', icon: 'cloud', what: 'The sync token and snapshots on this computer. Your GitHub repository stays as it is.' },
+  { id: 'sync', name: 'Sync', icon: 'cloud', what: 'GitHub and Cloudflare D1 sync on this device: tokens, snapshots and the saved master-password key. Your repo and database stay as they are.' },
   { id: 'models', name: 'Downloaded models', icon: 'cpu', what: 'Needle, Whistle and Alef’s voice on this computer (download them again any time).' },
 ];
 
@@ -36,7 +36,7 @@ const FILES: Record<ResetPart, (all: string[]) => string[]> = {
   addons: (all) => all.filter((k) => k.startsWith('addon-')),
   ai: () => ['ai'],
   calendars: () => ['calendars', 'calendar-cache', 'calendar-google-client'],
-  sync: (all) => ['sync-config', ...all.filter((k) => k.startsWith('sync-base-'))],
+  sync: (all) => ['sync-config', 'sync-d1-config', ...all.filter((k) => k.startsWith('sync-base-') || k.startsWith('sync-d1-base-'))],
   models: () => [],
 };
 
@@ -61,8 +61,10 @@ export async function resetApp(parts: ResetPart[], everything = false): Promise<
   }
   if (chosen.has('sync')) {
     try {
-      const { githubSync } = await import('./sync/sync.svelte');
+      const { githubSync, d1Sync, VAULT_ACCOUNT } = await import('./sync/sync.svelte');
       await githubSync.disconnect();
+      await d1Sync.disconnect();
+      await platform.secrets.delete(VAULT_ACCOUNT).catch(() => {});
     } catch (e) {
       console.warn('[daybloom] reset sync', e);
     }
