@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [AI](#set-up-ai), [help to start](#get-help-to-start), [alarms](#set-an-alarm), [world clock](#compare-time-zones), [Trash](#restore-from-the-trash), [top bar](#choose-the-top-bar-buttons), [done](#see-what-youve-done), [month](#see-the-month), [start fresh](#start-fresh), [Board and Gantt](#see-the-timeline-as-a-board-or-a-gantt-chart), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync-with-github), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [AI](#set-up-ai), [help to start](#get-help-to-start), [alarms](#set-an-alarm), [world clock](#compare-time-zones), [Trash](#restore-from-the-trash), [top bar](#choose-the-top-bar-buttons), [done](#see-what-youve-done), [month](#see-the-month), [start fresh](#start-fresh), [Board and Gantt](#see-the-timeline-as-a-board-or-a-gantt-chart), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -281,6 +281,19 @@ Get the newest installers from [**Releases**](https://github.com/alshell7/dayblo
 2. Run the installer.
 3. If Microsoft Defender SmartScreen shows a warning, click **More info**.
 4. Click **Run anyway**.
+
+### Android
+
+1. On your phone, open [**Releases**](https://github.com/alshell7/daybloom/releases/latest) and download `Daybloom_<version>_android.apk`.
+2. Open the file. If Android asks, allow your browser to install apps.
+3. Tap **Install**, then **Open**.
+4. When Daybloom first has a reminder for you, Android asks to allow notifications. Tap **Allow**.
+5. To check what reminders and alarms may do, open **Settings › Phone**. Tap **Turn on** next to any item that is off.
+
+To add the widgets, open **Settings › Phone** and tap **Add the dial** or **Add Alef**.
+
+> [!NOTE]
+> The Android app updates like the computer apps: the **Update** chip shows a new version, and Android installs it after you tap **Install**.
 
 ### Updates
 
@@ -869,9 +882,21 @@ Calendar events are read-only. In the timeline they have a striped, outlined cap
 - **Events to include:** open the list and clear the box next to an event. Daybloom then hides that event and all its repeats from the dial, the timeline and tracking. All events are included at first.
 - **Checks for changes:** select how often Daybloom gets new events: 5 or 10 minutes, 30 minutes, 1 hour, 6 hours, or **Manual** (only when you click **Sync now**). Google refreshes its own calendar links only every few hours.
 
-### Sync with GitHub
+### Sync
 
-Sync keeps your blocks, settings and badges the same on all your computers. It also syncs the data of these addons: Work, Time Tracker, Breadcrumbs, Reality check and Waqt. Daybloom writes small JSON files to a private GitHub repo that you own. There is no Daybloom server.
+Sync keeps your blocks, settings and badges the same on all your devices. It also syncs the Trash, what you did with calendar events, your AI setup, and the data of these addons: Work, Time Tracker, Breadcrumbs, Reality check, Waqt, Alef, Retrospection and Soft landings. There is no Daybloom server. Use one of these services, or both:
+
+- **GitHub:** small files in a private repo that you own.
+- **Cloudflare D1:** a database in your own Cloudflare account. It is always encrypted.
+
+**The master password.** Encrypted sync seals all your files before they leave your device. Only your master password, or your recovery key, can open them. One master password serves both services.
+
+- When you set the password, Daybloom shows your **recovery key** one time. Save it in a password manager or on paper.
+- Daybloom cannot reset the password. If you lose the password and the recovery key, the copy in the cloud is lost. The data on each device stays.
+- With encryption on, your calendar subscriptions, their links and your AI keys also sync. A new device then needs only your password.
+- On a phone, you can unlock with your fingerprint. Open **Settings › Connect › Sync** and turn on **Unlock with fingerprint on this phone**.
+
+#### GitHub
 
 <img src="docs/media/sync.png" width="360" align="right" alt="The 'Sync with GitHub' section in Settings.">
 
@@ -884,7 +909,7 @@ Sync keeps your blocks, settings and badges the same on all your computers. It a
 
 **Do these steps on each computer:**
 
-1. Open **Settings › Connect › Sync with GitHub**.
+1. Open **Settings › Connect › Sync** and go to **GitHub**.
 2. Enter the repository as `owner/name`.
 3. Paste the token.
 4. Click **Test connection**.
@@ -893,10 +918,31 @@ Sync keeps your blocks, settings and badges the same on all your computers. It a
 
 Daybloom syncs a short time after each change, and every 5 minutes. The token stays in the system keychain. Settings that apply to one computer only, for example the volume and the widget position, do not sync.
 
+To encrypt the repo, turn on **Encrypt with your master password**. Daybloom moves the files, sealed, into a `vault` folder and removes the plain files. Update Daybloom on your other devices first. Git history can still have the old plain files. For a clean start, use a new repository.
+
 <br clear="right">
 
 > [!WARNING]
-> Use a private repository. In a public repository, everybody can read your tasks.
+> Use a private repository. In a public repository without encryption, everybody can read your tasks.
+
+#### Cloudflare D1
+
+**Do these steps one time:**
+
+1. On the Cloudflare dashboard, copy your **Account ID**. It is in the column on the right of your account's home page.
+2. Open **My Profile › API Tokens** and create a custom token.
+3. Give the token one permission: **Account › D1 › Edit**, for this account only.
+
+**Do these steps on each device:**
+
+1. Open **Settings › Connect › Sync** and go to **Cloudflare D1**.
+2. Enter the Account ID and paste the token. Tap **Connect**.
+3. Select **Create “daybloom-sync”**, or select a database that you already have. Daybloom uses its own table.
+4. On the first device, set your master password and save the recovery key. On other devices, enter the same password.
+5. If the database already has data, select **Use the database's** or **Combine both**.
+6. Click **Start syncing**.
+
+To pause, or to disconnect, Daybloom asks for your master password. When you disconnect, you can also erase Daybloom's data from the database.
 
 ### Find a setting
 
@@ -906,9 +952,9 @@ Push <kbd>,</kbd> or click the **Settings** button in the top bar. Settings has 
 |---|---|
 | **Look** | Theme, dial and reading comfort |
 | **Rhythm** | Your waking day, alerts and gentle support |
-| **Screen** | Screen cues, the desktop widget and privacy |
+| **Screen** | Screen cues, the desktop widget and privacy (on a phone: **Phone**, with reminders, alarms and widgets) |
 | **Voice** | The assistant and speech |
-| **Connect** | Calendars, Sync with GitHub and addons |
+| **Connect** | Calendars, sync and addons |
 | **App** | Updates, your data and keys |
 
 To find a setting fast, type a word in **Find a setting**, for example “sound” or “widget”.
@@ -938,16 +984,18 @@ To find a setting fast, type a word in **Find a setting**, for example “sound�
 
 ## Your data
 
-- Daybloom keeps all data on your computer:
+- Daybloom keeps all data on your device:
   - macOS: `~/Library/Application Support/app.daybloom.desktop/state/`
   - Windows: `%APPDATA%\app.daybloom.desktop\state\`
-- Tokens, calendar sign-ins and calendar links stay in the system keychain (macOS Keychain or Windows Credential Manager).
+  - Android: in the app's private storage.
+- Tokens, calendar sign-ins and calendar links stay in the system keychain (macOS Keychain, Windows Credential Manager, or the Android Keystore).
+- With encrypted sync, GitHub or Cloudflare keeps only sealed files. Your master password never leaves your device.
 - Work, Time Tracker, Breadcrumbs, Reality check and Waqt data stay on your computer, and sync with GitHub when you turn sync on. App activity tracking is a setting for each computer and never syncs.
 - When sync is on, your Waqt place goes to your GitHub repo with the other Waqt settings.
 - MCP data (the key and the **Activity** list) stays on this computer. It does not sync.
 - The MCP addon answers only on this computer (127.0.0.1) and only to apps that have its key. An AI app gets your plans only when it uses a tool, and each use shows in the **Activity** list.
 - Voice stays on your computer. Whistle turns speech into text locally. Daybloom does not save recordings.
-- Daybloom sends data only to services that you connect: Google Calendar, your ICS links and your GitHub repo.
+- Daybloom sends data only to services that you connect: Google Calendar, your ICS links, your GitHub repo, your Cloudflare D1 database and the AI services you add.
 - To make a backup, open **Settings › App › Your data** and click **Export**. To restore, click **Import**.
 
 <br>

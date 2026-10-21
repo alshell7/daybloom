@@ -7,6 +7,16 @@ release, in the app's update card, and once after the update.
 Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one plain sentence.`
 
 ## Next
+### New
+
+- **Daybloom on Android** — the planner, the dial and your day on your phone, drawn edge to edge, with the back gesture closing what is open. Install the APK from the release; the app tells you when a new version is ready and installs it with one tap.
+- **Reminders and alarms with the app closed** — on your phone, block starts, heads-ups, your alerts and salah times arrive on time even when Daybloom is closed. A block set to ring as an alarm rings like a clock, in its own tone and starting gently, over the lock screen with Snooze and Stop. A focus counts down in your notifications.
+- **Widgets on your home screen** — a dial of the next 12 hours with what is on now, a live countdown and Done; and Alef, with one small next step and Start 2 min. Add them in Settings › Phone.
+- **Quick add from anywhere on your phone** — share text to Daybloom, tap Quick add in your quick settings, or press and hold the app icon.
+- **Sync with Cloudflare D1** — keep your devices the same through a database in your own Cloudflare account. Everything is sealed with your master password before it leaves your device, so Cloudflare keeps only ciphertext. Use it alone or together with GitHub Sync.
+- **A master password for sync** — one password seals everything you sync. You get a recovery key when you set it; you can change the password or make a new recovery key at any time. Turning encrypted sync on or off asks for it. On a phone, your fingerprint can unlock it.
+- **Encrypted GitHub Sync** — turn on encryption in Settings › Connect › Sync and your repo keeps only sealed files.
+- **More of your day syncs** — the Trash, what you did with calendar events, your AI setup, Alef, Retrospection and Soft landings now sync too. With encryption on, your calendar subscriptions and your AI keys sync as well, so a new device needs only your password.
 
 ## 0.2.0
 ### New

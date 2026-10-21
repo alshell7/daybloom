@@ -1,7 +1,7 @@
 # Tag vX.Y.Z (npm run release) → signed installers for macOS + Windows, uploaded to a draft
-# release in this repo with the update manifest (latest.json). The release is published only
-# when both builds and the frontend checks pass; from then on installed copies see it at
-# releases/latest. Copies older than v0.1.8 still read the old feed repo, so v0.1.8 is
+# release in this repo with the update manifest (latest.json), and a signed Android APK with
+# android-latest.json. The release is published only when the builds and the frontend checks
+# pass; from then on installed copies see it at releases/latest. Copies older than v0.1.8 still read the old feed repo, so v0.1.8 is
 # mirrored there once (the `bridge` job).
 name: release
 
@@ -93,8 +93,81 @@ jobs:
       - run: npm run check
       - run: npm test
 
+  # The Android app: a signed universal APK (64- and 32-bit ARM) and android-latest.json, which
+  # installed phones read to offer the update (src/lib/native/apkUpdate.ts). Needs the upload
+  # key in the repo's secrets (ANDROID_KEYSTORE base64, ANDROID_KEYSTORE_PASSWORD,
+  # ANDROID_KEY_ALIAS); without them it says so and steps aside, so a release never waits on it.
+  android:
+    needs: bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE != '' }}
+    steps:
+      - name: No signing key yet
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::Android skipped — add ANDROID_KEYSTORE, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS to the repo's secrets."
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        if: env.HAS_KEY == 'true'
+      - name: SDK platform, build tools and NDK
+        if: env.HAS_KEY == 'true'
+        run: sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;27.1.12297006" >/dev/null
+      - uses: dtolnay/rust-toolchain@stable
+        if: env.HAS_KEY == 'true'
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+      - uses: swatinem/rust-cache@v2
+        if: env.HAS_KEY == 'true'
+        with:
+          workspaces: src-tauri -> target
+          save-if: false
+      - run: npm ci --no-audit --no-fund
+        if: env.HAS_KEY == 'true'
+      - name: The upload key (never written to the repo)
+        if: env.HAS_KEY == 'true'
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          printf 'storeFile=%s\npassword=%s\nkeyAlias=%s\n' "$RUNNER_TEMP/upload.jks" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEY_ALIAS" > src-tauri/gen/android/keystore.properties
+      - name: Build the APK
+        if: env.HAS_KEY == 'true'
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.1.12297006
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
+        run: npx tauri android build --apk --target aarch64 --target armv7
+      - name: Upload the APK and android-latest.json
+        if: env.HAS_KEY == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          APK="Daybloom_${VERSION}_android.apk"
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk "$APK"
+          SHA=$(sha256sum "$APK" | cut -d' ' -f1)
+          NOTES=$(node scripts/release-notes.mjs "$VERSION" 2>/dev/null || true)
+          URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$APK"
+          node -e 'const [v,u,s,n]=process.argv.slice(1); process.stdout.write(JSON.stringify({version:v,url:u,sha256:s,notes:n},null,2)+"\n")' "$VERSION" "$URL" "$SHA" "$NOTES" > android-latest.json
+          cat android-latest.json
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" "$APK" android-latest.json --clobber
+
   publish:
-    needs: [bundle, check]
+    needs: [bundle, check, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

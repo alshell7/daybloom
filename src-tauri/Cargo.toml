@@ -10,7 +10,7 @@ rust-version = "1.77.2"
 [lib]
 # The `_lib` suffix avoids a name clash with the binary on Windows (cargo#8519).
 # Android loads the app as a shared library (cdylib). On Windows a cdylib would trip MinGW's
-# 65k-export limit; .cargo/config.toml tells MinGW to export nothing by default.
+# 65k-export limit; build.rs tells MinGW to export nothing by default.
 name = "daybloom_lib"
 crate-type = ["cdylib", "rlib"]
 

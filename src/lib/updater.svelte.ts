@@ -29,8 +29,8 @@ export async function loadVersion() {
 }
 
 export async function checkForUpdates(manual = false) {
-  // The phone app updates through a new APK, not the desktop updater.
-  if (!platform.isNative || platform.isMobile) {
+  if (platform.isMobile) return checkPhone(manual);
+  if (!platform.isNative) {
     if (manual) updates.status = 'none';
     return;
   }
@@ -56,6 +56,38 @@ export async function checkForUpdates(manual = false) {
   }
 }
 
+/** The phone: a new APK from the Android feed, installed by Android itself. */
+async function checkPhone(manual: boolean) {
+  if (updates.status === 'downloading' || updates.status === 'installing') return;
+  updates.status = 'checking';
+  try {
+    const [{ checkApk }, { deviceCall }] = await Promise.all([import('./native/apkUpdate'), import('./native/device.svelte')]);
+    if (!updates.current) await loadVersion();
+    const r = await checkApk(updates.current, (u, i) => platform.fetch(u, i));
+    updates.checkedAt = Date.now();
+    if (!r) {
+      updates.status = 'none';
+      return;
+    }
+    pending = {
+      version: r.version,
+      body: r.notes,
+      async downloadAndInstall(cb) {
+        cb({ event: 'Started', data: { contentLength: 0 } });
+        const res = await deviceCall<{ needsPermission: boolean }>('apkUpdate', { url: r.url, sha256: r.sha256 });
+        if (res?.needsPermission) throw new Error('Allow Daybloom to install updates in the screen that just opened, then tap Install again.');
+        cb({ event: 'Finished' });
+      },
+    };
+    updates.version = r.version;
+    updates.notes = r.notes;
+    updates.status = 'available';
+  } catch (e) {
+    updates.status = manual ? 'error' : 'idle';
+    updates.error = e instanceof Error ? e.message : String(e);
+  }
+}
+
 export async function installUpdate() {
   if (!pending) return;
   updates.status = 'downloading';
@@ -73,6 +105,8 @@ export async function installUpdate() {
         updates.status = 'installing';
       }
     });
+    // A phone: Android's installer has taken over and replaces the app itself.
+    if (platform.isMobile) return;
     // Windows' installer closes the app itself; macOS swaps the bundle and we restart.
     const { relaunch } = await import('@tauri-apps/plugin-process');
     await relaunch();
