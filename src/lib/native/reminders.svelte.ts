@@ -69,8 +69,9 @@ export function startReminders(): () => void {
         body: breakTime ? 'Ready when you are.' : `${timer.active!.label || 'Focus'} · nice work.`,
       });
     }
-    // Android asks once, the first time there is something to remind you of.
-    if (items.length && !asked) {
+    // Android asks once, the first time there is something to remind you of — after getting
+    // started, so its prompt never lands on top of the welcome cards.
+    if (items.length && !asked && settings.value.onboarded) {
       asked = true;
       try {
         const n = await import('@tauri-apps/plugin-notification');
@@ -101,6 +102,7 @@ export function startReminders(): () => void {
       void JSON.stringify(settings.value.alarm);
       void settings.value.notify;
       void settings.value.headsUp;
+      void settings.value.onboarded;
       void JSON.stringify(settings.value.privacy);
       void view.events.length;
       void view.hour12;
