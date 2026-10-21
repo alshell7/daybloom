@@ -36,6 +36,8 @@ import {
   alefUnused,
   applySharedAlef,
   applySharedLandings,
+  calendarsUnused,
+  mergeCalendarFiles,
   eventStatesUnused,
   landingsUnused,
   mergeAiFiles,
@@ -48,6 +50,7 @@ import {
   pickSharedLandings,
   retroUnused,
   trashUnused,
+  type CalendarsData,
   type EventStateData,
   type SharedAlefFile,
   type SharedLandingsFile,
@@ -112,6 +115,8 @@ export interface SyncStores {
   alef?: Synced<AlefFile>;
   retro?: Synced<RetroFile>;
   landings?: Synced<LandingsFile>;
+  /** Calendar subscriptions: only with the vault on, since their links sync as secrets. */
+  calendars?: Synced<CalendarsData>;
   /** Only used when the vault is on: keys and links never sync in the clear. */
   secrets?: SecretStore;
   /**
@@ -151,6 +156,7 @@ export const DATA_FILES = [
   'alef.json',
   'retro.json',
   'landings.json',
+  'calendars.json',
   'secrets.json',
 ];
 
@@ -162,7 +168,8 @@ function plainCodec<T>(key: string, b: Synced<T>, merge: Codec<T>['merge']): Cod
   return { key, file: `${key}.json`, replaceOnJoin: true, unused: b.unused, read: () => b.parse(b.read()), write: (v) => b.write(v), parse: (raw) => b.parse(raw), merge };
 }
 
-export function codecs(s: SyncStores): Codec<any>[] {
+/** The files to sync. `sealed`: the vault is on, so calendar subscriptions join. */
+export function codecs(s: SyncStores, opts: { sealed?: boolean } = {}): Codec<any>[] {
   const tasks: Codec<ReturnType<typeof parseTaskFile>> = {
     key: 'tasks',
     file: 'tasks.json',
@@ -284,5 +291,6 @@ export function codecs(s: SyncStores): Codec<any>[] {
     };
     list.push(landings);
   }
+  if (s.calendars && opts.sealed) list.push(plainCodec('calendars', { unused: calendarsUnused, ...s.calendars }, mergeCalendarFiles));
   return list;
 }

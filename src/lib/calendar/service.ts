@@ -103,6 +103,14 @@ export interface CalendarService {
   startAutoSync(intervalMs?: number): () => void;
   /** Persisted override of the Google OAuth client (shared with other windows). `null` → `.env`. */
   setGoogleClient(config: GoogleClientConfig | null): Promise<void>;
+  /** For sync: the accounts as saved — no links, no sync state. Call after `init()`. */
+  exportAccounts(): CalendarAccount[];
+  /**
+   * For sync: take the merged account list. New accounts start syncing (their links and
+   * sign-ins arrive through the vault's secrets); ones removed elsewhere are dropped here
+   * without signing out, so the other devices keep their access.
+   */
+  applyAccounts(list: CalendarAccount[]): Promise<void>;
   dispose(): void;
 }
 
@@ -716,6 +724,41 @@ export function createCalendarService(options: CalendarServiceOptions = {}): Cal
       await persist(GOOGLE_CLIENT_KEY, stored);
       for (const a of accounts) if (a.provider === 'google') attempted.delete(a.id);
       notify();
+    },
+
+    exportAccounts() {
+      return accounts.map((a) => {
+        const { lastSyncAt: _at, error: _e, errorCode: _c, url: _u, ...rest } = storable(a);
+        return rest;
+      });
+    },
+
+    async applyAccounts(list) {
+      await init();
+      const current = new Map(accounts.map((a) => [a.id, a]));
+      const incoming = list.filter(isAccount).map((a) => storable(a));
+      const keep = new Set(incoming.map((a) => a.id));
+      let added = false;
+      // The new list goes in at once, so a read straight after sees it.
+      accounts = incoming.map((a) => {
+        const cur = current.get(a.id);
+        if (!cur) {
+          added = true;
+          attempted.delete(a.id);
+          return { ...a, ...(a.provider === 'ics' ? { urlInKeychain: true } : {}), error: null, errorCode: null };
+        }
+        return { ...cur, ...a, lastSyncAt: cur.lastSyncAt, error: cur.error ?? null, errorCode: cur.errorCode ?? null };
+      });
+      for (const id of current.keys()) {
+        if (keep.has(id)) continue;
+        cache.delete(id);
+        attempted.delete(id);
+        links.delete(id);
+        unmigrated.delete(id);
+      }
+      notify();
+      await Promise.all([saveAccounts(), saveCache()]);
+      if (added) syncInBackground();
     },
 
     dispose() {

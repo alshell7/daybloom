@@ -236,6 +236,23 @@ describe('calendar service: multiple accounts', () => {
     expect(h.store.get(CACHE_KEY)).not.toContain('dentist');
   });
 
+  it('takes another device’s account list without signing anyone out', async () => {
+    const { g, service } = await setupTwoAccounts();
+    const exported = service.exportAccounts();
+    expect(exported.map((a) => a.id)).toEqual(['google:work', 'google:home']);
+    expect(JSON.stringify(exported)).not.toMatch(/lastSyncAt|"url"/);
+    // Another device removed "home", renamed "work" and added a new account.
+    g.remote.set('google:new', { label: 'me@new.com', calendars: [{ id: 'new-main', name: 'New', color: '#aa3366', enabled: true }], events: { 'new-main': [] } });
+    const next = [{ ...exported[0], name: 'Office' }, { id: 'google:new', provider: 'google' as const, label: 'me@new.com', calendars: [{ id: 'new-main', name: 'New', color: '#aa3366', enabled: true }], enabled: true }];
+    await service.applyAccounts(next);
+    expect(service.getAccounts().map((a) => [a.id, a.name ?? a.label])).toEqual([
+      ['google:work', 'Office'],
+      ['google:new', 'me@new.com'],
+    ]);
+    expect(g.provider.disconnect).not.toHaveBeenCalled();
+    expect(titles(service.eventsBetween(...today()))).not.toContain('dentist');
+  });
+
   it('falls back to deleting the keychain entry when disconnect fails', async () => {
     const { g, service } = await setupTwoAccounts();
     vi.mocked(g.provider.disconnect).mockRejectedValueOnce(new Error('offline'));

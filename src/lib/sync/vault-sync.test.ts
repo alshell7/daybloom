@@ -12,6 +12,7 @@ import type { SecretStore, SyncStores } from './codecs';
 import { FAKE_ACCOUNT, FAKE_TOKEN, FakeD1 } from './d1.fake';
 import { createLock, memoryVaultKeeper, type SyncDeps, type VaultKeeper } from './engine.svelte';
 import { decodeBase64, encodeBase64, type FetchLike } from './github';
+import { parseCalendars, type CalendarsData } from './extra';
 import { createD1Service, createSyncService } from './sync.svelte';
 import { isSealed } from './vault';
 
@@ -73,13 +74,13 @@ class FakeRepo {
 }
 
 interface Dev {
-  data: { tasks: { version: 1; tasks: Task[]; deleted: [] }; trash: ReturnType<typeof migrateTrash>; eventStates: ReturnType<typeof migrateEventStates> };
+  data: { tasks: { version: 1; tasks: Task[]; deleted: [] }; trash: ReturnType<typeof migrateTrash>; eventStates: ReturnType<typeof migrateEventStates>; calendars: CalendarsData };
   keychain: Map<string, string>;
   deps: SyncDeps;
 }
 
 function device(fetch: FetchLike, id: string, keeper: VaultKeeper = memoryVaultKeeper()): Dev {
-  const data: Dev['data'] = { tasks: { version: 1, tasks: [], deleted: [] }, trash: migrateTrash(null), eventStates: migrateEventStates(null) };
+  const data: Dev['data'] = { tasks: { version: 1, tasks: [], deleted: [] }, trash: migrateTrash(null), eventStates: migrateEventStates(null), calendars: { version: 1, accounts: [] } };
   const rest: Record<string, unknown> = {
     settings: structuredClone(DEFAULT_SETTINGS),
     progress: { version: 1, unlocked: [], viewedAt: 0 },
@@ -93,7 +94,7 @@ function device(fetch: FetchLike, id: string, keeper: VaultKeeper = memoryVaultK
   const bind = (get: () => any, set: (v: any) => void) => ({ read: () => structuredClone(get()), write: (v: any) => set(structuredClone(v)) });
   const keychain = new Map<string, string>();
   const secrets: SecretStore = {
-    accounts: () => [...keychain.keys()].filter((k) => k.startsWith('ai:')),
+    accounts: () => [...keychain.keys()].filter((k) => k.startsWith('ai:')).concat(data.calendars.accounts.map((c) => `${c.id}:url`)),
     get: async (a) => keychain.get(a) ?? null,
     set: async (a, v) => void keychain.set(a, v),
     delete: async (a) => void keychain.delete(a),
@@ -102,6 +103,7 @@ function device(fetch: FetchLike, id: string, keeper: VaultKeeper = memoryVaultK
     tasks: bind(() => data.tasks, (v) => (data.tasks = v)),
     trash: { ...bind(() => data.trash, (v) => (data.trash = v)), parse: migrateTrash },
     eventStates: { ...bind(() => data.eventStates, (v) => (data.eventStates = v)), parse: migrateEventStates },
+    calendars: { ...bind(() => data.calendars, (v) => (data.calendars = v)), parse: parseCalendars },
     secrets,
     ...Object.fromEntries(Object.keys(rest).map((k) => [k, bind(() => rest[k], (v) => (rest[k] = v))])),
   } as SyncStores;
@@ -245,6 +247,22 @@ describe('Cloudflare D1 sync', () => {
     expect(a.data.trash.items).toEqual([]);
   });
 
+  it('a calendar and its link reach a new device together', async () => {
+    const fake = new FakeD1();
+    const db = fake.addDatabase();
+    const a = await d1Device(fake, db, 'a');
+    await a.svc.createPassword(PW);
+    a.data.calendars.accounts.push({ id: 'ics:abc', provider: 'ics', label: 'School', calendars: [{ id: 'main', name: 'School', color: '#4a8', enabled: true }], enabled: true, urlInKeychain: true });
+    a.keychain.set('ics:abc:url', 'https://example.test/private-feed-TEST.ics');
+    await a.svc.enable(true);
+    expect([...fake.files(db).values()].some((r) => r.body.includes('private-feed'))).toBe(false);
+    const b = await d1Device(fake, db, 'b');
+    await b.svc.unlock(PW);
+    await b.svc.enable(true, 'replace');
+    expect(b.data.calendars.accounts.map((c) => c.label)).toEqual(['School']);
+    expect(b.keychain.get('ics:abc:url')).toBe('https://example.test/private-feed-TEST.ics');
+  });
+
   it('disconnecting can erase the cloud copy', async () => {
     const fake = new FakeD1();
     const db = fake.addDatabase();
@@ -340,6 +358,16 @@ describe('GitHub Sync with the vault', () => {
     await b.svc.syncNow();
     expect(b.svc.config.encrypted).toBe(false);
     expect(b.data.tasks.tasks.map((x) => x.id)).toContain('t9');
+  });
+
+  it('plain GitHub never writes calendars or secrets', async () => {
+    const repo = new FakeRepo();
+    const a = await ghDevice(repo, 'a');
+    a.data.calendars.accounts.push({ id: 'ics:abc', provider: 'ics', label: 'School', calendars: [], enabled: true });
+    a.keychain.set('ai:openai', 'sk-TEST-only-key');
+    await a.svc.enable(true);
+    expect([...repo.files.keys()].filter((k) => /calendars|secrets/.test(k))).toEqual([]);
+    expect([...repo.files.values()].some((f) => f.text.includes('sk-TEST'))).toBe(false);
   });
 
   it('one vault serves both services', async () => {

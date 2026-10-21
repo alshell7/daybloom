@@ -40,6 +40,7 @@ import {
   type TestResult,
 } from './engine.svelte';
 import { createGitHubClient, githubRemote, parseRepo, type GitHubClient, type RepoInfo } from './github';
+import { parseCalendars } from './extra';
 import { deepEqual } from './merge';
 
 export type { Binding, SyncStores } from './codecs';
@@ -260,6 +261,7 @@ function bindApp(): Promise<SyncStores> {
     const files = [taskFile, settings, progressFile, streakFile, trackerFile, crumbsFile, realityFile, waqtFile, trashFile, eventStateFile, aiFile, alefFile, retroFile, landingsFile];
     await Promise.all([...files.filter((s) => !s.ready).map((s) => s.load()), workFile.ready ? null : loadWork()]);
     const { calendarService } = await import('../calendar/service');
+    await calendarService.init().catch(() => {});
     const bind = <T>(s: { value: T }): Binding<T> => ({
       read: () => plain(s.value),
       write: (v) => {
@@ -292,15 +294,27 @@ function bindApp(): Promise<SyncStores> {
       alef: synced(alefFile, migrateAlef),
       retro: synced(retroFile, migrateRetro),
       landings: synced(landingsFile, migrateLandings),
+      calendars: {
+        read: () => ({ version: 1, accounts: calendarService.exportAccounts() }),
+        write: (v) => void calendarService.applyAccounts(v.accounts),
+        parse: parseCalendars,
+      },
       secrets,
       watch(onChange, active) {
-        return $effect.root(() => {
+        const stop = $effect.root(() => {
           $effect(() => {
             if (!active()) return;
             for (const f of [...files, workFile]) JSON.stringify(f.value);
             untrack(onChange);
           });
         });
+        const off = calendarService.subscribe(() => {
+          if (active()) onChange();
+        });
+        return () => {
+          stop();
+          off();
+        };
       },
     };
   })());

@@ -367,7 +367,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
   async function isDirty(): Promise<boolean> {
     const loc = locationOf();
     const stores = await deps.stores();
-    for (const c of codecs(stores)) {
+    for (const c of codecs(stores, { sealed: sealed() })) {
       const base = await loadBase(c, loc);
       if (!base || !deepEqual(c.read(), base.data)) return true;
     }
@@ -663,7 +663,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     try {
       const stores = await deps.stores();
       const loc = locationOf(cfg);
-      const list = codecs(stores);
+      const list = codecs(stores, { sealed: !!vault });
       await conn.prepare?.();
       if (vault) {
         if ((await checkVault(conn.remote, vault, loc)) === 'off') {
@@ -684,11 +684,12 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
         return;
       }
       const versionOf = (file: string) => listing.find((e) => e.name === file)?.version ?? null;
+      // Secrets first: a calendar that arrives below finds its link already in the keychain.
+      if (vault && stores.secrets) await syncSecrets(remote, stores.secrets, loc, versionOf('secrets.json'));
       let wrote = false;
       for (const c of list) {
         if (await syncFile(remote, c, loc, versionOf(c.file), replace)) wrote = true;
       }
-      if (vault && stores.secrets) await syncSecrets(remote, stores.secrets, loc, versionOf('secrets.json'));
       await syncDevices(remote, listing, wrote);
       if (locationOf(state.config) !== loc) return; // moved to another place meanwhile
       const at = now();

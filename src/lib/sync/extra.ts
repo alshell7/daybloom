@@ -8,14 +8,23 @@ import type { AlefFile } from '../addons/alef/alef.svelte';
 import type { LandingsFile } from '../addons/landings/pad.svelte';
 import type { RetroFile } from '../addons/retro/retro.svelte';
 import type { AiFile } from '../ai/hub.svelte';
+import type { CalendarAccount } from '../calendar/types';
 import type { TrashItem } from '../stores/trash.svelte';
-import { clone, deepEqual, isPlainObject, mergeSet, mergeValue } from './merge';
+import { clone, deepEqual, mergeSet, mergeValue } from './merge';
 
 /**
  * Lists of records with ids, three ways. `stamp` (e.g. a time) breaks ties when both sides
  * changed one record; the result keeps remote order, with local-only records after.
  */
-export function mergeRecords<T>(base: readonly T[] | null, local: readonly T[], remote: readonly T[], key: (x: T) => string, stamp: (x: T) => number = () => 0): T[] {
+export function mergeRecords<T>(
+  base: readonly T[] | null,
+  local: readonly T[],
+  remote: readonly T[],
+  key: (x: T) => string,
+  stamp: (x: T) => number = () => 0,
+  /** Both sides changed one record: combine them (default: the newer stamp wins). */
+  both?: (b: T | undefined, l: T, r: T) => T,
+): T[] {
   const B = new Map((base ?? []).map((x) => [key(x), x]));
   const L = new Map(local.map((x) => [key(x), x]));
   const R = new Map(remote.map((x) => [key(x), x]));
@@ -27,7 +36,7 @@ export function mergeRecords<T>(base: readonly T[] | null, local: readonly T[], 
     if (l && r) {
       if (deepEqual(l, r) || (b && deepEqual(l, b))) out.push(clone(r));
       else if (b && deepEqual(r, b)) out.push(clone(l));
-      else out.push(clone(stamp(l) > stamp(r) ? l : r));
+      else out.push(clone(both ? both(b, l, r) : stamp(l) > stamp(r) ? l : r));
     } else if (l) {
       // Not in the remote: new here (keep), or removed there (keep only if edited here).
       if (!b || !deepEqual(l, b)) out.push(clone(l));
@@ -167,5 +176,32 @@ export function mergeLandingsFiles(base: SharedLandingsFile | null, local: Share
 
 export const landingsUnused = (f: SharedLandingsFile) => f.log.length === 0;
 
-/** Narrow helper for parse functions: a plain object or an empty one. */
-export const obj = (v: unknown): Record<string, unknown> => (isPlainObject(v) ? v : {});
+// -- calendar subscriptions -----------------------------------------------------
+// Which calendars you follow and how they look. The links and sign-ins are secrets: they
+// travel only inside the vault (secrets.json), so a plain repo never sees them.
+
+export interface CalendarsData {
+  version: 1;
+  accounts: CalendarAccount[];
+}
+
+export function parseCalendars(raw: unknown): CalendarsData {
+  const list = Array.isArray((raw as CalendarsData)?.accounts) ? (raw as CalendarsData).accounts : [];
+  const accounts = list
+    .filter((a) => typeof a?.id === 'string' && (a.provider === 'google' || a.provider === 'ics'))
+    .map((a) => {
+      const { url: _u, lastSyncAt: _t, error: _e, errorCode: _c, ...rest } = a;
+      return { ...clone(rest), calendars: Array.isArray(rest.calendars) ? clone(rest.calendars).filter((c) => typeof c?.id === 'string') : [], enabled: rest.enabled !== false };
+    });
+  return { version: 1, accounts };
+}
+
+export function mergeCalendarFiles(base: CalendarsData | null, local: CalendarsData, remote: CalendarsData): CalendarsData {
+  const accounts = mergeRecords(base?.accounts ?? null, local.accounts, remote.accounts, (a) => a.id, () => 0, (b, l, r) => {
+    const merged = mergeObject(b ?? null, { ...l, calendars: [] }, { ...r, calendars: [] });
+    return { ...merged, calendars: mergeRecords(b?.calendars ?? null, l.calendars, r.calendars, (c) => c.id) };
+  });
+  return { version: 1, accounts };
+}
+
+export const calendarsUnused = (f: CalendarsData) => f.accounts.length === 0;
