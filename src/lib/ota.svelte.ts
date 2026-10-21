@@ -108,13 +108,13 @@ export function checkWebUpdate(): Promise<Staged | null> {
   checking ??= (async () => {
     const s = await otaStatus();
     if (!s) return null;
-    if (s.pending) return s.pending;
-    const res = await platform.fetch(s.feed, { cache: 'no-store' });
-    // No web updates published yet.
-    if (res.status === 404) return null;
+    const res = await platform.fetch(s.feed, { cache: 'no-store' }).catch((e) => (s.pending ? null : Promise.reject(e)));
+    // No web updates published yet (404), or offline with one already waiting.
+    if (!res || res.status === 404) return s.pending;
     if (!res.ok) throw new Error(`The update feed answered ${res.status}`);
-    const pick = pickBundle(await res.json(), s);
-    return pick ? invoke<Staged>('ota_stage', { url: pick.url, sig: pick.sig }) : null;
+    // Newer than what runs, and than one already waiting (that one stays if nothing is newer).
+    const pick = pickBundle(await res.json(), { ...s, version: s.pending?.version ?? s.version });
+    return pick ? invoke<Staged>('ota_stage', { url: pick.url, sig: pick.sig }) : s.pending;
   })().finally(() => (checking = null));
   return checking;
 }
