@@ -69,6 +69,7 @@ const ICONS = [
   ['bell-ring', 'bell-ring', null], ['alarm-check', 'alarm-clock-check', null], ['alarm-off', 'alarm-clock-off', null],
   ['earth', 'earth', null], ['sun-moon', 'sun-moon', null], ['map-pin', 'map-pin', null],
   ['brain-circuit', 'brain-circuit', null], ['ear', 'ear', null], ['speech', 'speech', null], ['route', 'route', null], ['server', 'server', null],
+  ['database', 'database', null], ['smartphone', 'smartphone', null], ['shield-check', 'shield-check', null], ['lock-open', 'lock-open', null],
   ['chevron-up', 'chevron-up', null], ['arrow-left', 'arrow-left', null], ['layout-grid', 'layout-grid', null], ['calendar-range', 'calendar-range', null],
   ['move-horizontal', 'move-horizontal', null], ['zoom-in', 'zoom-in', null], ['zoom-out', 'zoom-out', null], ['check-check', 'check-check', null],
   ['hand-heart', 'hand-heart', null], ['heart-handshake', 'heart-handshake', null], ['thumbs-up', 'thumbs-up', null], ['send', 'send', null],

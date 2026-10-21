@@ -90,7 +90,7 @@
     privacy: 'privacy screenshots screen recording hide names secret',
     assistant: 'voice input talk speech microphone mic language hotkey hold v dictation tones assistant',
     calendars: 'calendars google ics link events',
-    sync: 'sync github backup devices token repository',
+    sync: 'sync github cloudflare d1 database backup devices token repository encrypt encryption master password recovery key vault phone',
     addons: 'addons work time tracker billing invoices extensions',
     updates: 'updates version restart auto update',
     data: 'your data export import sample clear reset start over factory erase trash keys shortcuts keyboard',

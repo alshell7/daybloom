@@ -777,7 +777,9 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     const info = await conn.probe();
     await conn.prepare?.();
     const sealedConn = sealed() ? conn : connection(true)!;
-    const listing = await conn.remote.list();
+    const vault = await readRecord(sealedConn);
+    // Data sealed by another device counts too: that's where this device will sync once unlocked.
+    const listing = vault && sealedConn !== conn ? await sealedConn.remote.list() : await conn.remote.list();
     const names = new Set(listing.map((e) => e.name));
     backend.learned?.(state.config, info);
     await persistConfig();
@@ -786,7 +788,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
       info,
       hasData: DATA_FILES.some((f) => names.has(f)),
       deviceCount: listing.filter((e) => deviceIdOf(e.name)).length,
-      vault: await readRecord(sealedConn),
+      vault,
     };
   }
 
@@ -900,6 +902,12 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     await keeper.set(next.vault);
     if (state.config.enabled) void syncNow();
     return next.recovery;
+  }
+
+  /** Forget the vault key on this device (every service locks until the password is entered again). */
+  async function lockHere() {
+    await running?.catch(() => {});
+    await keeper.set(null);
   }
 
   /**
@@ -1035,6 +1043,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     checkPassword,
     changePassword,
     replaceRecovery,
+    lockHere,
     setEncrypted,
   };
 }
