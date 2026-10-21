@@ -25,6 +25,17 @@
   let focused = $state(false);
   let input: HTMLInputElement | undefined = $state();
 
+  // A phone: "Quick add" from the share sheet, the quick-settings tile or a shortcut.
+  $effect(() => {
+    const open = (e: Event) => {
+      const t = (e as CustomEvent<{ text?: string }>).detail?.text;
+      if (t) text = t;
+      requestAnimationFrame(() => input?.focus());
+    };
+    addEventListener('daybloom:capture', open);
+    return () => removeEventListener('daybloom:capture', open);
+  });
+
   const EXAMPLES = ['gym 5pm 45m', 'meds every day 8am', 'call mom tomorrow 6pm', 'deep work 9–11:30am', 'standup weekdays 9:30 15m', 'return parcel later'];
   let ex = $state(0);
   $effect(() => {

@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import Icon from '../../lib/Icon.svelte';
   import { platform } from '../../lib/platform';
+  import { bioForget } from '../../lib/native/bio';
   import { d1Sync, githubSync as sync, TOKEN_URL, type TestResult } from '../../lib/sync/sync.svelte';
   import Segmented from '../Segmented.svelte';
   import DeviceList from './DeviceList.svelte';
@@ -231,7 +232,10 @@
         onsubmit={async (pw) => {
           await sync.setEncrypted(false, pw);
           // Nothing else uses the master password: this device forgets the key too.
-          if (!d1Sync.configured) await sync.lockHere();
+          if (!d1Sync.configured) {
+            await sync.lockHere();
+            await bioForget().catch(() => {});
+          }
           enc = 'idle';
         }}
         oncancel={() => (enc = 'idle')}

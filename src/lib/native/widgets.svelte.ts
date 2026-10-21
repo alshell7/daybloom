@@ -82,7 +82,7 @@ function blockFor(key: string): Block | null {
 
 /** Ticks and button presses from the widgets, done while the planner was closed. */
 async function takePending() {
-  const p = await deviceCall<{ done: string[]; intent?: { action: string; key: string } }>('widgetPending').catch(() => null);
+  const p = await deviceCall<{ done: string[]; intent?: { action: string; key: string; text?: string } }>('widgetPending').catch(() => null);
   for (const key of p?.done ?? []) {
     const b = blockFor(key);
     if (b && !b.done) toggleDone(key);
@@ -90,7 +90,18 @@ async function takePending() {
   if (p?.intent) act(p.intent);
 }
 
-function act(i: { action: string; key: string }) {
+function act(i: { action: string; key: string; text?: string }) {
+  if (i.action === 'capture') {
+    view.sheet = null;
+    // Give the planner a frame to show the field.
+    setTimeout(() => dispatchEvent(new CustomEvent('daybloom:capture', { detail: { text: i.text ?? '' } })), 250);
+    return;
+  }
+  if (i.action === 'focus') {
+    if (timer.active) view.focus = true;
+    else view.sheet = { kind: 'focus' };
+    return;
+  }
   if (i.action !== 'start2') return;
   const b = i.key ? blockFor(i.key) : null;
   void import('../starter.svelte').then(({ starter }) => {

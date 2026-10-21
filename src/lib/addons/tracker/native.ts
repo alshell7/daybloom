@@ -63,7 +63,8 @@ export function activityCapabilities() {
   return {
     /** System-wide idle time (else only this window's input). */
     systemIdle: desktop,
-    apps: desktop,
+    /** A phone senses apps too, once usage access is allowed in Android's settings. */
+    apps: desktop || platform.isMobile,
     titles: platform.isNative && platform.os === 'windows',
   };
 }

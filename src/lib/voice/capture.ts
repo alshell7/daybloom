@@ -1,6 +1,7 @@
 // Microphone → 16 kHz mono float PCM for Whistle. Opens the mic only while listening and
 // closes every track afterwards, so the OS "mic in use" indicator goes away at once.
 
+import { platform } from '../platform';
 import { Resampler, SPEECH_RATE } from './audio';
 
 export interface CaptureHandlers {
@@ -44,6 +45,12 @@ function workletUrl(): string {
 export async function startCapture(h: CaptureHandlers): Promise<Capture> {
   if (!navigator.mediaDevices?.getUserMedia || typeof AudioWorkletNode === 'undefined') {
     throw new MicError('unsupported', 'This window cannot record audio.');
+  }
+  // A phone: Android's own permission first (the web view's prompt alone isn't enough).
+  if (platform.isMobile) {
+    const { deviceCall } = await import('../native/device.svelte');
+    const r = await deviceCall<{ granted: boolean }>('microphone').catch(() => null);
+    if (r && !r.granted) throw new MicError('denied', 'The microphone isn’t allowed for Daybloom. You can allow it in Android’s settings.');
   }
   let stream: MediaStream;
   try {

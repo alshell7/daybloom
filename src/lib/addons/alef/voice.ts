@@ -2,6 +2,7 @@
 // (tiny-tts, on this device, pitched up a little), the system's voice, or silence. Every
 // voice goes through the app's sound switch and volume.
 
+import { platform } from '../../platform';
 import { audioOut } from '../../sound';
 import { babble, speaker } from './chirps';
 
@@ -25,6 +26,7 @@ let stopCurrent: (() => void) | null = null;
 export function hush() {
   stopCurrent?.();
   stopCurrent = null;
+  if (platform.isMobile) void import('../../native/device.svelte').then(({ deviceCall }) => deviceCall('stopSpeaking')).catch(() => {});
   try {
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
   } catch {
@@ -131,6 +133,14 @@ if (typeof speechSynthesis !== 'undefined') {
 }
 
 function systemVoice(words: string, o: { pitch: number; volume: number }): Spoken | null {
+  // A phone's web view has no speech: Android's own text-to-speech says it.
+  if (platform.isMobile) {
+    void import('../../native/device.svelte')
+      .then(({ deviceCall }) => deviceCall('speak', { text: words, pitch: Math.max(0.5, Math.min(2, 1.55 * o.pitch)), rate: 1.04, volume: o.volume }))
+      .catch(() => {});
+    const total = Math.max(0.6, words.split(/\s+/).length * 0.34);
+    return { starts: paced(words, total), total };
+  }
   if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') return babble(words, { pitch: o.pitch, volume: o.volume });
   const u = new SpeechSynthesisUtterance(words);
   const v = pickVoice();

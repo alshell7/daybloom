@@ -8,6 +8,7 @@
   import { D1_DEFAULT_NAME, D1_TOKEN_URL, validAccountId, type D1Database } from '../../lib/sync/d1';
   import type { TestResult } from '../../lib/sync/engine.svelte';
   import { d1Sync as sync, githubSync } from '../../lib/sync/sync.svelte';
+  import { bioForget, bioOpen, bioState } from '../../lib/native/bio';
   import Segmented from '../Segmented.svelte';
   import DeviceList from './DeviceList.svelte';
   import PasswordPrompt from './PasswordPrompt.svelte';
@@ -29,6 +30,16 @@
   /** Password-gated actions once connected. */
   let gate = $state<'' | 'on' | 'off' | 'disconnect'>('');
   let erase = $state(false);
+  // A phone with the fingerprint unlock set up confirms these with a fingerprint instead.
+  let bioSealed = $state(false);
+  $effect(() => {
+    void gate;
+    void bioState().then((s) => (bioSealed = s.sealed));
+  });
+  const viaFinger = (then: () => Promise<void>) => (bioSealed ? async () => {
+    await sync.adoptKey(await bioOpen('Confirm it’s you'));
+    await then();
+  } : undefined);
 
   onMount(() => {
     sync.init().then(() => {
@@ -148,6 +159,10 @@
         title="Turn on Cloudflare D1 sync"
         submitLabel="Turn on"
         recovery={!sync.unlocked}
+        onbiometric={viaFinger(async () => {
+          await sync.enable(true);
+          gate = '';
+        })}
         onsubmit={async (secret, how) => {
           if (sync.unlocked) {
             if (!(await sync.checkPassword(secret))) throw new Error('That isn’t your master password. Check caps lock and try again.');
@@ -163,6 +178,10 @@
         title="Pause Cloudflare D1 sync"
         hint="This device stops syncing. Your data stays in the database, sealed."
         submitLabel="Pause"
+        onbiometric={viaFinger(async () => {
+          await sync.enable(false);
+          gate = '';
+        })}
         onsubmit={async (pw) => {
           if (!(await sync.checkPassword(pw))) throw new Error('That isn’t your master password. Check caps lock and try again.');
           await sync.enable(false);
@@ -182,11 +201,23 @@
           ? 'Every device loses this copy. The data on each device stays.'
           : 'This device forgets the token and sync history. The database keeps its sealed data.'}
         submitLabel={erase ? 'Erase and disconnect' : 'Disconnect'}
+        onbiometric={viaFinger(async () => {
+          await sync.disconnect({ erase });
+          if (!githubSync.config.encrypted) {
+            await sync.lockHere();
+            await bioForget().catch(() => {});
+          }
+          gate = '';
+          erase = false;
+        })}
         onsubmit={async (pw) => {
           if (!(await sync.checkPassword(pw))) throw new Error('That isn’t your master password. Check caps lock and try again.');
           await sync.disconnect({ erase });
           // Nothing else uses the master password: this device forgets the key too.
-          if (!githubSync.config.encrypted) await sync.lockHere();
+          if (!githubSync.config.encrypted) {
+            await sync.lockHere();
+            await bioForget().catch(() => {});
+          }
           gate = '';
           erase = false;
           accountId = sync.config.accountId;

@@ -2,7 +2,10 @@
   // The master password, once any sync is encrypted: whether this device holds the key, and
   // the few things you can do with it. Both services share it, so this card stands above them.
   import Icon from '../../lib/Icon.svelte';
+  import { bioForget, bioOpen, bioSeal, bioState } from '../../lib/native/bio';
+  import { platform } from '../../lib/platform';
   import { d1Sync, githubSync } from '../../lib/sync/sync.svelte';
+  import { messageOf } from './time';
   import PasswordPrompt from './PasswordPrompt.svelte';
   import RecoveryKey from './RecoveryKey.svelte';
 
@@ -26,6 +29,41 @@
     if (githubSync.config.enabled && githubSync.config.encrypted) void githubSync.syncNow();
   }
 
+  // A phone: the vault key can be sealed behind a fingerprint, so unlocking needs no typing.
+  let bio = $state({ available: false, sealed: false });
+  let bioProblem = $state('');
+  $effect(() => {
+    void unlocked;
+    if (platform.isMobile) void bioState().then((s) => (bio = s));
+  });
+
+  async function toggleBio(e: Event) {
+    const box = e.currentTarget as HTMLInputElement;
+    const on = box.checked;
+    box.checked = bio.sealed;
+    bioProblem = '';
+    try {
+      if (on) {
+        const key = await svc.exportKey();
+        if (!key) throw new Error('Unlock with your password first.');
+        await bioSeal(key);
+      } else await bioForget();
+      bio = await bioState();
+    } catch (err) {
+      bioProblem = messageOf(err);
+    }
+  }
+
+  async function bioUnlock() {
+    bioProblem = '';
+    try {
+      await svc.adoptKey(await bioOpen());
+      finish('Unlocked. Syncing again.');
+    } catch (err) {
+      bioProblem = messageOf(err);
+    }
+  }
+
   async function unlock(secret: string, how: 'password' | 'recovery') {
     await svc.unlock(secret, how);
     if (how === 'recovery') step = 'reset';
@@ -46,6 +84,12 @@
     {#if step === 'idle'}
       {#if unlocked}
         <p class="hint">Your synced data is encrypted before it leaves this device. Only your master password, or your recovery key, can open it.</p>
+        {#if bio.available}
+          <label class="row">
+            <span><Icon name="lock-open" size={14} /> Unlock with fingerprint on this phone</span>
+            <input type="checkbox" class="switch" checked={bio.sealed} onchange={toggleBio} />
+          </label>
+        {/if}
         <div class="actions">
           <button class="btn btn-soft" onclick={() => ((step = 'change'), (done = ''))}>Change password</button>
           <button class="btn btn-quiet" onclick={() => ((step = 'recovery'), (done = ''))}>New recovery key</button>
@@ -54,10 +98,16 @@
       {:else}
         <p class="hint">Enter your master password to keep syncing. Everything on this device is still here.</p>
         <div class="actions">
-          <button class="btn btn-primary" onclick={() => ((step = 'unlock'), (done = ''))}><Icon name="lock-open" size={14} /> Unlock</button>
+          {#if bio.sealed}
+            <button class="btn btn-primary" onclick={bioUnlock}><Icon name="lock-open" size={14} /> Unlock with fingerprint</button>
+            <button class="btn btn-quiet" onclick={() => ((step = 'unlock'), (done = ''))}>Use password</button>
+          {:else}
+            <button class="btn btn-primary" onclick={() => ((step = 'unlock'), (done = ''))}><Icon name="lock-open" size={14} /> Unlock</button>
+          {/if}
         </div>
       {/if}
       {#if done}<p class="ok" aria-live="polite"><Icon name="circle-check" size={14} /> {done}</p>{/if}
+      {#if bioProblem}<p class="notice" aria-live="polite"><Icon name="info" size={14} /> {bioProblem}</p>{/if}
     {:else if step === 'unlock'}
       <PasswordPrompt mode="enter" submitLabel="Unlock" recovery onsubmit={unlock} oncancel={() => (step = 'idle')} />
     {:else if step === 'reset'}

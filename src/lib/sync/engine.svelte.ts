@@ -904,6 +904,23 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     return next.recovery;
   }
 
+  /** The unlocked vault, to seal on this device (a fingerprint unlock). Null when locked. */
+  async function exportKey(): Promise<string | null> {
+    const v = await keeper.get();
+    return v ? exportVault(v) : null;
+  }
+
+  /** Takes back a vault this device sealed earlier (unsealed by a fingerprint). */
+  async function adoptKey(text: string): Promise<void> {
+    const v = await importVault(text);
+    if (!v) throw new VaultError('damaged', 'That saved key can’t be read. Enter your master password instead.');
+    const record = await remoteVault().catch(() => null);
+    if (record && record.kid !== v.kid) throw new VaultError('other-vault', 'Your synced data now uses a different master password. Enter that password.');
+    await keeper.set(record && record.at > v.record.at ? { ...v, record } : v);
+    if (state.status.state === 'error' && (state.status.kind === 'locked' || state.status.kind === 'vault')) state.status = { state: 'idle' };
+    paused = false;
+  }
+
   /** Forget the vault key on this device (every service locks until the password is entered again). */
   async function lockHere() {
     await running?.catch(() => {});
@@ -1043,6 +1060,8 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     checkPassword,
     changePassword,
     replaceRecovery,
+    exportKey,
+    adoptKey,
     lockHere,
     setEncrypted,
   };

@@ -7,4 +7,7 @@
     <string name="widget_alef_desc">Alef, with one small next step for the block that is on</string>
     <string name="widget_done">Done</string>
     <string name="widget_start">Start 2 min</string>
+    <string name="tile_capture">Quick add</string>
+    <string name="shortcut_add">Add a block</string>
+    <string name="shortcut_focus">Start a focus</string>
 </resources>

@@ -15,9 +15,24 @@
     recovery?: boolean;
     onsubmit: (secret: string, how: 'password' | 'recovery') => Promise<void>;
     oncancel?: () => void;
+    /** A phone with a fingerprint unlock set up: confirm with it instead of typing. */
+    onbiometric?: () => Promise<void>;
   }
 
-  let { mode, title, hint, submitLabel, recovery = false, onsubmit, oncancel }: Props = $props();
+  let { mode, title, hint, submitLabel, recovery = false, onsubmit, oncancel, onbiometric }: Props = $props();
+
+  async function biometric() {
+    if (!onbiometric || busy) return;
+    busy = true;
+    problem = '';
+    try {
+      await onbiometric();
+    } catch (err) {
+      problem = err instanceof Error && err.message ? err.message : 'That didn’t work. Use your password.';
+    } finally {
+      busy = false;
+    }
+  }
 
   let secret = $state('');
   let again = $state('');
@@ -97,6 +112,7 @@
   {#if problem}<p class="notice" aria-live="polite"><Icon name="info" size={14} /> {problem}</p>{/if}
   <div class="actions">
     <button class="btn btn-primary" disabled={!ready || busy}>{busy ? 'One moment…' : submitLabel}</button>
+    {#if onbiometric && mode === 'enter'}<button type="button" class="btn btn-soft" onclick={biometric} disabled={busy}><Icon name="lock-open" size={14} /> Use fingerprint</button>{/if}
     {#if oncancel}<button type="button" class="btn btn-quiet" onclick={oncancel}>Cancel</button>{/if}
     {#if recovery && mode === 'enter'}
       <button type="button" class="link" onclick={switchHow}>{how === 'password' ? 'Use my recovery key instead' : 'Use my password'}</button>

@@ -30,8 +30,15 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import android.Manifest
+import android.location.Location
+import android.location.LocationManager
+import androidx.fragment.app.FragmentActivity
+import app.tauri.PermissionState
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.Permission
+import app.tauri.annotation.PermissionCallback
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSObject
@@ -90,6 +97,27 @@ class PinArgs {
 }
 
 @InvokeArg
+class BioArgs {
+  lateinit var account: String
+  var value: String = ""
+  var title: String = "Unlock with your fingerprint"
+}
+
+@InvokeArg
+class SpeakArgs {
+  var text: String = ""
+  var pitch: Float = 1f
+  var rate: Float = 1f
+  var volume: Float = 1f
+}
+
+@InvokeArg
+class UpdateArgs {
+  var url: String = ""
+  var sha256: String = ""
+}
+
+@InvokeArg
 class BarsArgs {
   /** The app is showing a dark theme, so the bars need light icons. */
   var dark: Boolean = false
@@ -143,7 +171,12 @@ object SecretStore {
   }
 }
 
-@TauriPlugin
+@TauriPlugin(
+  permissions = [
+    Permission(strings = [Manifest.permission.ACCESS_COARSE_LOCATION], alias = "location"),
+    Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = "microphone"),
+  ]
+)
 class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   private var webView: WebView? = null
   private var insetsCss = ""
@@ -157,6 +190,12 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   private var pendingAction: JSObject? = null
 
   private fun actionOf(intent: Intent?): JSObject? {
+    // Shared to Daybloom from another app: the text becomes a quick add.
+    if (intent?.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
+      val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return null
+      intent.action = Intent.ACTION_MAIN
+      return JSObject().put("action", "capture").put("key", "").put("text", text.take(500))
+    }
     val action = intent?.getStringExtra("daybloom.action") ?: return null
     intent.removeExtra("daybloom.action")
     return JSObject().put("action", action).put("key", intent.getStringExtra("daybloom.key") ?: "")
@@ -339,6 +378,137 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     pendingAction?.let { r.put("intent", it) }
     pendingAction = null
     invoke.resolve(r)
+  }
+
+  // -- location (Waqt's prayer times) -------------------------------------------------------
+
+  @Command
+  fun location(invoke: Invoke) {
+    if (getPermissionState("location") != PermissionState.GRANTED) {
+      requestPermissionForAlias("location", invoke, "locationAsked")
+      return
+    }
+    findLocation(invoke)
+  }
+
+  @PermissionCallback
+  fun locationAsked(invoke: Invoke) {
+    if (getPermissionState("location") == PermissionState.GRANTED) findLocation(invoke)
+    else invoke.reject("Location wasn't allowed. You can pick your city instead.", "denied")
+  }
+
+  private fun findLocation(invoke: Invoke) {
+    val lm = activity.getSystemService(LocationManager::class.java)
+    fun send(l: Location?) {
+      if (l == null) invoke.reject("The phone doesn't know where it is just now. Try again outdoors, or pick your city.", "unknown")
+      else invoke.resolve(JSObject().put("lat", l.latitude).put("lon", l.longitude).put("accuracy", l.accuracy.toDouble()))
+    }
+    try {
+      // A city is precise enough for prayer times: a fix from the last few hours will do.
+      val last = lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }
+      if (last != null && System.currentTimeMillis() - last.time < 6 * 3_600_000L) return send(last)
+      val order = if (Build.VERSION.SDK_INT >= 31) listOf(LocationManager.FUSED_PROVIDER, LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+      else listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+      val provider = order.firstOrNull { lm.isProviderEnabled(it) }
+      if (Build.VERSION.SDK_INT >= 30 && provider != null) {
+        var answered = false
+        val once = { l: Location? ->
+          if (!answered) {
+            answered = true
+            send(l ?: last)
+          }
+        }
+        lm.getCurrentLocation(provider, null, activity.mainExecutor) { l -> once(l) }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ once(null) }, 10_000)
+      } else send(last)
+    } catch (e: SecurityException) {
+      invoke.reject("Location wasn't allowed.", "denied")
+    }
+  }
+
+  // -- the microphone (voice input, Alef) -----------------------------------------------------
+
+  @Command
+  fun microphone(invoke: Invoke) {
+    if (getPermissionState("microphone") == PermissionState.GRANTED) invoke.resolve(JSObject().put("granted", true))
+    else requestPermissionForAlias("microphone", invoke, "microphoneAsked")
+  }
+
+  @PermissionCallback
+  fun microphoneAsked(invoke: Invoke) {
+    invoke.resolve(JSObject().put("granted", getPermissionState("microphone") == PermissionState.GRANTED))
+  }
+
+  // -- fingerprint / face for the sync vault -----------------------------------------------------
+
+  @Command
+  fun bioStatus(invoke: Invoke) {
+    val a = invoke.parseArgs(BioArgs::class.java)
+    invoke.resolve(JSObject().put("available", BioVault.available(activity)).put("sealed", BioVault.sealed(activity, a.account)))
+  }
+
+  @Command
+  fun bioSeal(invoke: Invoke) {
+    val a = invoke.parseArgs(BioArgs::class.java)
+    val fa = activity as? FragmentActivity ?: return invoke.reject("No fingerprint prompt here.")
+    BioVault.seal(fa, a.account, a.value) { err -> if (err == null) invoke.resolve() else invoke.reject(err, err) }
+  }
+
+  @Command
+  fun bioOpen(invoke: Invoke) {
+    val a = invoke.parseArgs(BioArgs::class.java)
+    val fa = activity as? FragmentActivity ?: return invoke.reject("No fingerprint prompt here.")
+    BioVault.open(fa, a.account, a.title) { value, err -> if (value != null) invoke.resolve(JSObject().put("value", value)) else invoke.reject(err ?: "failed", err ?: "failed") }
+  }
+
+  @Command
+  fun bioForget(invoke: Invoke) {
+    BioVault.forget(activity, invoke.parseArgs(BioArgs::class.java).account)
+    invoke.resolve()
+  }
+
+  // -- Alef's voice ----------------------------------------------------------------------------------
+
+  @Command
+  fun speak(invoke: Invoke) {
+    val a = invoke.parseArgs(SpeakArgs::class.java)
+    Speech.speak(activity, a.text.take(4000), a.pitch, a.rate, a.volume) { }
+    invoke.resolve()
+  }
+
+  @Command
+  fun stopSpeaking(invoke: Invoke) {
+    Speech.stop()
+    invoke.resolve()
+  }
+
+  // -- the Time Tracker --------------------------------------------------------------------------------
+
+  @Command
+  fun usageAccess(invoke: Invoke) = invoke.resolve(JSObject().put("granted", Usage.granted(activity)))
+
+  @Command
+  fun usageSettings(invoke: Invoke) {
+    Usage.settings(activity)
+    invoke.resolve()
+  }
+
+  @Command
+  fun foregroundApp(invoke: Invoke) = invoke.resolve(JSObject().put("app", Usage.foreground(activity)))
+
+  // -- updating the app itself (an APK from GitHub Releases) -------------------------------------------
+
+  @Command
+  fun apkUpdate(invoke: Invoke) {
+    val a = invoke.parseArgs(UpdateArgs::class.java)
+    Thread {
+      try {
+        val r = ApkUpdate.run(activity, a.url, a.sha256)
+        if (r == null || r == "allow-install") invoke.resolve(JSObject().put("needsPermission", r != null)) else invoke.reject(r)
+      } catch (e: Exception) {
+        invoke.reject("The download stopped: ${e.message ?: "no connection"}. Try again in a moment.")
+      }
+    }.start()
   }
 
   /** Privacy mode: keep Daybloom out of screenshots, recordings and the app switcher's preview. */

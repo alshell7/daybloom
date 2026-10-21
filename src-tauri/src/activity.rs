@@ -31,9 +31,24 @@ pub fn activity_idle_seconds() -> f64 {
 }
 
 /// The app in front (and, on Windows with `with_title`, its window title).
+#[cfg(desktop)]
 #[tauri::command]
 pub fn activity_foreground(with_title: bool) -> Option<Foreground> {
     foreground(with_title).filter(|f| !f.app.trim().is_empty())
+}
+
+/// A phone: the app last in front, from Android's usage stats (once the user allows usage
+/// access; see DevicePlugin.kt). Never a window title.
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn activity_foreground(app: tauri::AppHandle, with_title: bool) -> Option<Foreground> {
+    let _ = with_title;
+    #[derive(serde::Deserialize)]
+    struct Front {
+        app: Option<String>,
+    }
+    let f: Front = crate::device::call(&app, "foregroundApp", serde_json::json!({})).await.ok()?;
+    f.app.filter(|a| !a.trim().is_empty()).map(|app| Foreground { app, title: None })
 }
 
 // ---- macOS ------------------------------------------------------------------------------
@@ -139,6 +154,7 @@ fn idle_seconds() -> f64 {
 }
 
 #[cfg(not(any(target_os = "macos", windows)))]
+#[cfg_attr(mobile, allow(dead_code))]
 fn foreground(_with_title: bool) -> Option<Foreground> {
     None
 }

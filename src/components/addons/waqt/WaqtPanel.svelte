@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { platform } from '../../../lib/platform';
   // Waqt: a window onto the sky of your day. The gradient follows where the sun is (night, dawn,
   // day, golden afternoon, dusk); the sun glides along the day's arc past each prayer; the next
   // prayer and its jamaat are a glance away. Below: today's prayers to mark, the week as pearls,
@@ -113,6 +114,21 @@
   }
   function locate() {
     locError = '';
+    // A phone asks Android (approximate location is enough for prayer times).
+    if (platform.isMobile) {
+      locating = true;
+      void import('../../../lib/native/device.svelte')
+        .then(({ deviceCall }) => deviceCall<{ lat: number; lon: number }>('location'))
+        .then((p) => {
+          locating = false;
+          if (p) choose({ name: 'My location', country: guess?.country ?? '', lat: +p.lat.toFixed(4), lng: +p.lon.toFixed(4) });
+        })
+        .catch((e) => {
+          locating = false;
+          locError = typeof e === 'string' ? e : 'The phone didn’t share a location. Pick a city instead.';
+        });
+      return;
+    }
     if (!('geolocation' in navigator)) {
       locError = 'This computer didn’t share a location. Pick a city instead.';
       return;
