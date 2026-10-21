@@ -74,6 +74,7 @@ the website's source. Check that this is acceptable for you under the Aceternity
 | canvas-confetti | `ui/confetti.ts` | ISC |
 | motion | animation | MIT |
 | React, React DOM | the page | MIT |
+| Music in the film: "Calm Background Music" by MrCatfishing (<https://freesound.org/people/MrCatfishing/sounds/788347/>) | `public/media/film.mp4` | CC0 1.0 (no credit needed; credited anyway) |
 | Tailwind CSS, Vite, clsx | build and styles | MIT |
 
 ## Daybloom's own code
@@ -82,5 +83,6 @@ These parts come from the Daybloom app in this repository, not from a third part
 geometry and drawing (`lib/geometry.ts`, `components/dial/`), Alef's eyes and feelings
 (`lib/alef/`, `components/alef/`), the alarm tones (`lib/tones.ts`), the sun model and the world
 clock (`lib/sky.ts`), the themes and dial finishes (`lib/themes.ts`), the city list
-(`data/zones.json`, from the Waqt place list), the mihrab icon (`lib/mihrab.tsx`), and the
-screenshots in `public/media` (from `docs/media`, converted by `scripts/optimize-media.mjs`).
+(`data/zones.json`, from the Waqt place list), the mihrab icon (`lib/mihrab.tsx`), the
+screenshots in `public/media` (from `docs/media`, converted by `scripts/optimize-media.mjs`), and
+the film (`public/media/film.mp4`, made in `promo/` with Framefields, apart from its music).

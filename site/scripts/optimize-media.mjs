@@ -1,8 +1,8 @@
 // Turns the app's screenshots (docs/media/*.png) into responsive AVIF and WebP files in
 // site/public/media, and writes src/data/media.json (sizes and widths) for <Picture>.
 // Run it again after the screenshots change: `npm run media`. Needs ImageMagick 7
-// (`magick`, with AVIF and WebP) and ffmpeg for the video poster. The output is committed,
-// so the GitHub Pages build does not need these tools.
+// (`magick`, with AVIF and WebP) and ffmpeg for the film. The output is committed, so the
+// GitHub Pages build does not need these tools.
 
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -13,6 +13,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const site = join(here, '..');
 const src = join(site, '..', 'docs', 'media');
 const brand = join(site, '..', 'assets', 'brand');
+// The promo film, rendered by promo/ (`npm run render:60`; its out/ folder is not committed).
+const film = join(site, '..', 'promo', 'out', 'daybloom-promo.mp4');
 const out = join(site, 'public', 'media');
 mkdirSync(out, { recursive: true });
 
@@ -31,7 +33,7 @@ function widthsFor(w) {
 }
 
 const manifest = {};
-for (const f of readdirSync(out)) if (/\.(avif|webp)$/.test(f) && !f.startsWith('demo-poster')) rmSync(join(out, f));
+for (const f of readdirSync(out)) if (/\.(avif|webp)$/.test(f) && !f.startsWith('film-poster')) rmSync(join(out, f));
 for (const file of readdirSync(src).filter((f) => f.endsWith('.png') && USED.includes(basename(f, '.png'))).sort()) {
   const name = basename(file, '.png');
   const input = join(src, file);
@@ -48,11 +50,15 @@ for (const file of readdirSync(src).filter((f) => f.endsWith('.png') && USED.inc
   console.log(`${name} ${w}×${h} → ${kb}`);
 }
 
-// The tour video (already H.264) and its poster frame.
-copyFileSync(join(src, 'demo.mp4'), join(out, 'demo.mp4'));
-run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', '2', '-i', join(src, 'demo.mp4'), '-frames:v', '1', '-vf', 'scale=1440:-2', join(out, 'demo-poster.png')]);
-run('magick', [join(out, 'demo-poster.png'), '-strip', '-quality', '80', join(out, 'demo-poster.webp')]);
-run('rm', [join(out, 'demo-poster.png')]);
+// The promo film, made smaller for the web (H.264 at 60 fps, its music at 128 kbps, the index
+// first so it starts while it loads), and its poster: the dial beside "Time you can see.".
+if (existsSync(film)) {
+  run('ffmpeg', ['-y', '-loglevel', 'error', '-i', film, '-c:v', 'libx264', '-preset', 'slow', '-crf', '25', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', join(out, 'film.mp4')]);
+  run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', '10.4', '-i', film, '-frames:v', '1', '-vf', 'scale=1440:-2', join(out, 'film-poster.png')]);
+  run('magick', [join(out, 'film-poster.png'), '-strip', '-quality', '80', join(out, 'film-poster.webp')]);
+  rmSync(join(out, 'film-poster.png'));
+  console.log(`film → ${Math.round(statSync(join(out, 'film.mp4')).size / 1024 / 1024)} MB`);
+} else console.log('no promo/out/daybloom-promo.mp4: the film in public/media is kept as it is');
 
 // Icons: the SVG app icon, a PNG fallback and the Apple touch icon.
 const pub = join(site, 'public');

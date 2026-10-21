@@ -1,5 +1,5 @@
 // The planner itself, tilting flat as it scrolls in: drag between its light and dark look,
-// or play the 71-second tour.
+// or play the 74-second film (with sound, from promo/).
 
 import { useRef, useState } from 'react';
 import { Play, X } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Picture } from '../ui/picture';
 import { SectionHead } from '../ui/section-head';
 
 export function ProductShot() {
-  const [tour, setTour] = useState(false);
+  const [film, setFilm] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   return (
     <section aria-labelledby="planner-title" className="relative pt-4 pb-24 sm:pb-32">
@@ -23,17 +23,17 @@ export function ProductShot() {
         />
         <ContainerScroll className="mx-auto mt-12 max-w-[1080px] sm:mt-16">
           <div className="overflow-hidden rounded-[22px] bg-raised shadow-lift ring-1 ring-line">
-            {tour ? (
+            {film ? (
               <video
                 ref={video}
-                className="block aspect-[1440/900] w-full bg-black"
-                src={asset('media/demo.mp4')}
-                poster={asset('media/demo-poster.webp')}
+                className="block aspect-video w-full bg-black"
+                src={asset('media/film.mp4')}
+                poster={asset('media/film-poster.webp')}
                 controls
                 autoPlay
                 playsInline
                 preload="none"
-                aria-label="A 71-second tour of Daybloom: the dial, the four dial types, quick add, voice, the focus launcher, themes, finishing a block, the desktop widget and screen cues."
+                aria-label="A 74-second film about Daybloom, with music: the dial builds itself, a block is planned by sweeping the dial, the planner, widget, focus and themes, Alef, free time around meetings and salah, the world clock, Board and Gantt, a month of dials, alarms, Trash and privacy."
               />
             ) : (
               <Compare
@@ -48,11 +48,11 @@ export function ProductShot() {
         <div className="mt-6 flex justify-center">
           <button
             type="button"
-            onClick={() => setTour((t) => !t)}
+            onClick={() => setFilm((f) => !f)}
             className="inline-flex h-10 items-center gap-2 rounded-full bg-sunken px-4 text-[14px] font-medium text-ink dark:bg-raised dark:ring-1 dark:ring-line-strong transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--sunken),var(--ink)_6%)] active:scale-[0.97]"
           >
-            {tour ? <X className="size-4" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}
-            {tour ? 'Close the tour' : 'Watch the 71-second tour'}
+            {film ? <X className="size-4" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}
+            {film ? 'Close the film' : 'Watch the 74-second film'}
           </button>
         </div>
       </div>
