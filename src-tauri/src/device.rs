@@ -25,7 +25,19 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 }
 
 /// Methods the planner may call. Anything else is refused before it reaches Kotlin.
-const METHODS: &[&str] = &["insets", "systemBars", "backHandler", "keepAwake", "hour12", "secure"];
+const METHODS: &[&str] = &[
+    "insets",
+    "systemBars",
+    "backHandler",
+    "keepAwake",
+    "hour12",
+    "secure",
+    "schedule",
+    "focusShow",
+    "focusHide",
+    "reminderAccess",
+    "openSettings",
+];
 
 pub async fn call<R: Runtime, T: DeserializeOwned>(app: &AppHandle<R>, method: &str, args: impl Serialize) -> Result<T, String> {
     let device = app.try_state::<Device<R>>().ok_or("This device has no native side.")?;

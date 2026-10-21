@@ -264,6 +264,9 @@ export const platform = {
   },
 
   async notify(title: string, body: string): Promise<void> {
+    // A phone: Android posts reminders itself from the schedule (lib/native/reminders), also
+    // while the app is closed, so the open app sending them too would double up.
+    if (isMobile) return;
     if (isTauri) {
       const n = await import('@tauri-apps/plugin-notification');
       let granted = await n.isPermissionGranted();

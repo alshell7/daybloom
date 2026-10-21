@@ -86,7 +86,8 @@ function infoOf(b: Block, t: Task): AlarmInfo {
 }
 
 function step(now: number) {
-  if (!alarmFile.ready) return;
+  // A phone rings alarms natively (Reminders.kt), with the app open or not.
+  if (!alarmFile.ready || platform.isMobile) return;
   const st = alarmFile.value;
   const from = prev;
   prev = now;

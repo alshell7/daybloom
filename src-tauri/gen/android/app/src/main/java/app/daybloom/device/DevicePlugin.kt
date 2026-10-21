@@ -13,7 +13,12 @@
 package app.daybloom.device
 
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.text.format.DateFormat
@@ -51,6 +56,25 @@ class SecretArgs {
 @InvokeArg
 class OnArgs {
   var on: Boolean = false
+}
+
+@InvokeArg
+class ScheduleArgs {
+  /** The reminders, as JSON objects (see Reminder). */
+  var items: List<Map<String, Any?>> = emptyList()
+}
+
+@InvokeArg
+class FocusArgs {
+  var title: String = "Focus"
+  var body: String = ""
+  var endsAt: Long = 0
+}
+
+@InvokeArg
+class SettingsArgs {
+  /** notifications | exactAlarms | fullScreen | battery */
+  var which: String = "notifications"
 }
 
 @InvokeArg
@@ -201,6 +225,64 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun hour12(invoke: Invoke) {
     invoke.resolve(JSObject().put("value", !DateFormat.is24HourFormat(activity)))
+  }
+
+  /** The next reminders and alarms (replaces what was scheduled before). */
+  @Command
+  fun schedule(invoke: Invoke) {
+    val a = invoke.parseArgs(ScheduleArgs::class.java)
+    val list = a.items.mapNotNull { m ->
+      try {
+        Reminder.from(org.json.JSONObject(m))
+      } catch (e: Exception) {
+        null
+      }
+    }
+    Reminders.schedule(activity, list)
+    invoke.resolve(JSObject().put("scheduled", list.size).put("exact", Reminders.canExact(activity)))
+  }
+
+  @Command
+  fun focusShow(invoke: Invoke) {
+    val a = invoke.parseArgs(FocusArgs::class.java)
+    Reminders.focusShow(activity, a.title, a.body, a.endsAt)
+    invoke.resolve()
+  }
+
+  @Command
+  fun focusHide(invoke: Invoke) {
+    Reminders.focusHide(activity)
+    invoke.resolve()
+  }
+
+  /** What reminders and alarms are allowed to do here. */
+  @Command
+  fun reminderAccess(invoke: Invoke) {
+    val nm = activity.getSystemService(NotificationManager::class.java)
+    val fullScreen = if (Build.VERSION.SDK_INT >= 34) nm.canUseFullScreenIntent() else true
+    val pm = activity.getSystemService(android.os.PowerManager::class.java)
+    invoke.resolve(
+      JSObject()
+        .put("notifications", nm.areNotificationsEnabled())
+        .put("exactAlarms", Reminders.canExact(activity))
+        .put("fullScreen", fullScreen)
+        .put("unrestricted", pm.isIgnoringBatteryOptimizations(activity.packageName))
+    )
+  }
+
+  /** Opens the system page where that permission is switched on. */
+  @Command
+  fun openSettings(invoke: Invoke) {
+    val a = invoke.parseArgs(SettingsArgs::class.java)
+    val pkg = Uri.parse("package:${activity.packageName}")
+    val intent = when (a.which) {
+      "exactAlarms" -> if (Build.VERSION.SDK_INT >= 31) Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg) else null
+      "fullScreen" -> if (Build.VERSION.SDK_INT >= 34) Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg) else null
+      "battery" -> Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg)
+      else -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+    } ?: Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
+    activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    invoke.resolve()
   }
 
   /** Privacy mode: keep Daybloom out of screenshots, recordings and the app switcher's preview. */
