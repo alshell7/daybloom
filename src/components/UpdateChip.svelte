@@ -4,7 +4,8 @@
   // (the release's own notes, a tap away) and "Update and restart". While it downloads, a ring
   // fills around Daybloom's little dial mark; if that fails, a calm "Try again". "Not now" sets
   // it aside for a few hours and it waits in the top bar's More menu. It rises with a spring,
-  // waits while a panel is open, and keeps toasts above it (view.setDock).
+  // waits while a panel is open, and keeps toasts above it (view.setDock). A web update
+  // (ota.svelte.ts) is already downloaded and verified: "Refresh to update" reloads in place.
   import { cubicOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
   import Icon from '../lib/Icon.svelte';
@@ -20,6 +21,7 @@
   const failed = $derived(updates.status === 'error' && updateNotice.tried && !!updates.version);
   const offer = $derived(updates.status === 'available' && !updateWaiting());
   const phase = $derived(busy ? updates.status : failed ? 'failed' : offer ? 'offer' : null);
+  const web = $derived(updates.kind === 'web');
 
   // An open panel leaves the dial little room: the offer steps away until it closes (nothing
   // covers the dial). A download in progress stays, beside the panel, or not at all on a narrow
@@ -128,12 +130,15 @@
           {:else if phase === 'downloading'}
             <p class="t">Updating to <b class="tnum">{updates.version}</b></p>
             <p class="s tnum">{pct}% · Daybloom restarts when it’s done</p>
+          {:else if phase === 'installing' && web}
+            <p class="t">Refreshing…</p>
+            <p class="s">Starting <span class="tnum">{updates.version}</span></p>
           {:else if phase === 'installing'}
             <p class="t">Restarting…</p>
             <p class="s">Installing <span class="tnum">{updates.version}</span></p>
           {:else}
             <p class="t">Couldn’t update</p>
-            <p class="s" title={updates.error}>Check your connection, then try again.</p>
+            <p class="s" title={updates.error}>{web ? 'Daybloom stays on this version for now.' : 'Check your connection, then try again.'}</p>
           {/if}
         </div>
       {/key}
@@ -147,7 +152,7 @@
           {/if}
           <span class="sp"></span>
           <button class="btn btn-primary sm" onclick={install}>
-            {#if phase === 'failed'}<Icon name="refresh" size={14} stroke={2.2} /> Try again{:else}Update and restart{/if}
+            {#if phase === 'failed'}<Icon name="refresh" size={14} stroke={2.2} /> Try again{:else if web}Refresh to update{:else}Update and restart{/if}
           </button>
         </div>
       {/if}

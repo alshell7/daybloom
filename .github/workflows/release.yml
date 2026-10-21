@@ -1,8 +1,14 @@
-# Tag vX.Y.Z (npm run release) → signed installers for macOS + Windows, uploaded to a draft
-# release in this repo with the update manifest (latest.json). The release is published only
-# when both builds and the frontend checks pass; from then on installed copies see it at
-# releases/latest. Copies older than v0.1.8 still read the old feed repo, so v0.1.8 is
-# mirrored there once (the `bridge` job).
+# Tag vX.Y.Z (npm run release) → a draft release in this repo, published only when every build
+# and the frontend checks pass; from then on installed copies see it at releases/latest.
+# src-tauri/runtime.json says which kind of release it is (scripts/release.mjs sets it):
+# - native (runtime.json → native is this version): signed installers for macOS + Windows and
+#   the updater's manifest (latest.json), plus this version's web bundle;
+# - web update (only the web layer changed): no installers. The web bundle
+#   (web-X.Y.Z-rN.zip, signed with the updater key) goes to installed apps of runtime N, which
+#   refresh to it (src-tauri/src/ota.rs); latest.json is copied from the release before, so the
+#   updater keeps offering the last installers.
+# web-latest.json lists the newest bundle of each runtime. Copies older than v0.1.8 still read
+# the old feed repo, so v0.1.8 is mirrored there once (the `bridge` job).
 name: release
 
 on:
@@ -22,7 +28,27 @@ env:
   FEED_BASE: https://raw.githubusercontent.com/alshell7/daybloom-releases/main
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      kind: ${{ steps.plan.outputs.kind }}
+      version: ${{ steps.plan.outputs.version }}
+      runtime: ${{ steps.plan.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native or web update
+        id: plan
+        run: |
+          node -e '
+            const version = require("./package.json").version;
+            const rt = require("./src-tauri/runtime.json");
+            console.log(["version=" + version, "runtime=" + rt.RUNTIME, "kind=" + (rt.native === version ? "native" : "web")].join("\n"));
+          ' | tee -a "$GITHUB_OUTPUT"
+
   bundle:
+    needs: plan
+    if: needs.plan.outputs.kind == 'native'
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -80,6 +106,57 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
 
+  # The web layer as a signed bundle, for every release; a web update's release is made here.
+  web:
+    needs: [plan, bundle]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.bundle.result == 'success' || needs.bundle.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      KIND: ${{ needs.plan.outputs.kind }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      RUNTIME: ${{ needs.plan.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build the web layer
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
+        run: npm run build
+      - name: Pack and sign the bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          node scripts/web-bundle.mjs pack dist out --version "$VERSION" --runtime "$RUNTIME"
+          npx tauri signer sign --app-version "$VERSION" "out/web-$VERSION-r$RUNTIME.zip"
+      - name: The web update feed (one bundle per runtime)
+        run: |
+          ZIP="web-$VERSION-r$RUNTIME.zip"
+          gh release download -R "$GITHUB_REPOSITORY" --pattern web-latest.json -D old || echo "No web-latest.json yet: this is the first."
+          node scripts/web-bundle.mjs feed old/web-latest.json --version "$VERSION" --runtime "$RUNTIME" \
+            --url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$ZIP" --zip "out/$ZIP" > out/web-latest.json
+          cat out/web-latest.json
+      - name: Make the release (web update; the updater keeps the last installers)
+        if: env.KIND == 'web'
+        run: |
+          gh release download -R "$GITHUB_REPOSITORY" --pattern latest.json -D out
+          {
+            node scripts/release-notes.mjs "$VERSION" || true
+            echo
+            echo '_A web update: installed apps refresh to it, with no install. New downloads get the installers of the release before._'
+          } > out/body.md
+          gh release create "v$VERSION" -R "$GITHUB_REPOSITORY" --verify-tag --draft --title "Daybloom v$VERSION" --notes-file out/body.md
+          gh release upload "v$VERSION" -R "$GITHUB_REPOSITORY" out/latest.json
+      - name: Upload the bundle and the feed
+        run: gh release upload "v$VERSION" -R "$GITHUB_REPOSITORY" out/web-*.zip out/web-*.zip.sig out/web-latest.json --clobber
+
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -94,11 +171,12 @@ jobs:
       - run: npm test
 
   publish:
-    needs: [bundle, check]
+    needs: [plan, web, check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Plain-text notes in the update feed (apps before 0.1.12 show them as-is)
+        if: needs.plan.outputs.kind == 'native'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

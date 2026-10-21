@@ -8,6 +8,10 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ## Next
 
+### New
+
+- **Updates without a restart** — small updates that change only Daybloom's screens download in the background. Click **Refresh to update** and the window loads again with the new version, or it starts the next time you open Daybloom. If one doesn't start well, Daybloom goes back to the version before it by itself.
+
 ## 0.2.0
 ### New
 

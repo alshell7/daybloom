@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 
@@ -18,11 +19,34 @@ function ortWithoutWasm(): Plugin {
   };
 }
 
+/**
+ * Web updates (src-tauri/src/ota.rs) serve this build's pages with the CSP hashes of the app's
+ * built-in pages, so a page may have no inline script: each one must load from a file.
+ */
+function noInlineScripts(): Plugin {
+  return {
+    name: 'no-inline-scripts',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        for (const [tag, attrs, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+          if (!/\ssrc=/i.test(attrs) || body.trim()) throw new Error(`${ctx.path}: inline <script> (web updates allow only <script src>): ${tag.slice(0, 80)}`);
+        }
+      },
+    },
+  };
+}
+
+/** The native API level the app is built for (src-tauri/runtime.json): `import.meta.env.VITE_RUNTIME`. */
+const runtime: number = JSON.parse(readFileSync(new URL('./src-tauri/runtime.json', import.meta.url), 'utf8')).RUNTIME;
+
 const host = process.env.TAURI_DEV_HOST;
 
 // https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
-  plugins: [ortWithoutWasm(), svelte()],
+  plugins: [ortWithoutWasm(), svelte(), noInlineScripts()],
+  define: { 'import.meta.env.VITE_RUNTIME': JSON.stringify(String(runtime)) },
   worker: { format: 'es', plugins: () => [ortWithoutWasm()] },
   clearScreen: false,
   server: {

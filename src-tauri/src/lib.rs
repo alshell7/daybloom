@@ -6,6 +6,7 @@ mod export;
 mod mcp;
 mod mic;
 mod oauth;
+mod ota;
 mod overlay;
 mod privacy;
 mod tray;
@@ -86,6 +87,9 @@ pub fn run() {
         mcp::stdio_relay(&args);
         return;
     }
+    // Web updates over the air: a signed bundle's files first, then the built-in ones (ota.rs).
+    let mut context = tauri::generate_context!();
+    ota::wrap(&mut context);
     let app = tauri::Builder::default()
         // Must be registered first so a second launch never gets further than this.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| show_main(app)))
@@ -180,15 +184,20 @@ pub fn run() {
             assistant::assistant_weights_download,
             assistant::assistant_weights_read,
             assistant::assistant_weights_forget,
+            ota::ota_status,
+            ota::ota_stage,
+            ota::ota_apply,
+            ota::ota_ready,
+            ota::ota_rollback,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Daybloom");
 
-    app.run(|_app, _event| {
+    app.run(|app, event| match event {
         // Dock icon clicked (macOS): always surface the planner, even if the widget is showing.
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Reopen { .. } = _event {
-            show_main(_app);
-        }
+        tauri::RunEvent::Reopen { .. } => show_main(app),
+        tauri::RunEvent::Exit => ota::exit(app),
+        _ => {}
     });
 }
