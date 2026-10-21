@@ -8,6 +8,7 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 
 ## Next
 
+## 0.2.0
 ### New
 
 - **AI, set up once** — Settings › AI holds every AI service in one place: add a key and a model once, agree once, then choose what each part of Daybloom uses to think, listen and speak. Alef, Ask Daybloom, Make it smaller and voice input each pick a service and a model, or stay on this device.

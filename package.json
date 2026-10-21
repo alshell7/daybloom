@@ -1,9 +1,9 @@
 {
   "name": "daybloom",
   "private": true,
-  "version": "0.1.13",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Daybloom \u2014 a visual, sectograph-style day planner and timer for brains that see time differently.",
+  "description": "Daybloom — a visual, sectograph-style day planner and timer for brains that see time differently.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
