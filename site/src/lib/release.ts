@@ -2,10 +2,10 @@
 // the page then asks GitHub once per visit whether a newer one exists, so the buttons stay
 // right between site builds. File names carry the version, so they come from the release.
 
-import { useEffect, useState } from 'react';
-import baked from '@/data/release.json';
+import { useEffect, useState } from "react";
+import baked from "@/data/release.json";
 
-export const REPO = 'alshell7/daybloom';
+export const REPO = "alshell7/daybloom";
 export const REPO_URL = `https://github.com/${REPO}`;
 export const RELEASES_URL = `${REPO_URL}/releases`;
 export const LATEST_URL = `${REPO_URL}/releases/latest`;
@@ -23,25 +23,36 @@ export interface Release {
   mac: Asset | null;
   win: Asset | null;
   msi: Asset | null;
+  /** The phone app (from 0.3.0); older releases have none. */
+  android?: Asset | null;
 }
 
 export const BAKED = baked as Release;
 
-const KEY = 'daybloom-release';
+const KEY = "daybloom-release";
 let live: Release | null = null;
 let pending: Promise<Release | null> | null = null;
 
-function pick(r: { tag_name: string; published_at: string; html_url: string; assets: { name: string; size: number }[] }): Release {
+function pick(r: {
+  tag_name: string;
+  published_at: string;
+  html_url: string;
+  assets: { name: string; size: number }[];
+}): Release {
   const find = (re: RegExp) => r.assets.find((a) => re.test(a.name));
-  const asset = (a?: { name: string; size: number }) => (a ? { name: a.name, size: a.size, url: `${LATEST_URL}/download/${a.name}` } : null);
+  const asset = (a?: { name: string; size: number }) =>
+    a
+      ? { name: a.name, size: a.size, url: `${LATEST_URL}/download/${a.name}` }
+      : null;
   return {
     tag: r.tag_name,
-    version: r.tag_name.replace(/^v/, ''),
+    version: r.tag_name.replace(/^v/, ""),
     publishedAt: r.published_at,
     page: r.html_url,
     mac: asset(find(/_universal\.dmg$/i) ?? find(/\.dmg$/i)),
     win: asset(find(/x64-setup\.exe$/i) ?? find(/\.exe$/i)),
     msi: asset(find(/\.msi$/i)),
+    android: asset(find(/_android\.apk$/i) ?? find(/\.apk$/i)),
   };
 }
 
@@ -53,7 +64,10 @@ async function fetchLatest(): Promise<Release | null> {
     /* storage may be blocked */
   }
   try {
-    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+    const res = await fetch(
+      `https://api.github.com/repos/${REPO}/releases/latest`,
+      { headers: { Accept: "application/vnd.github+json" } },
+    );
     if (!res.ok) return null;
     const r = pick(await res.json());
     if (!r.mac || !r.win) return null;
@@ -89,5 +103,10 @@ export function useRelease(): Release {
 export const mb = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
 
 export function releaseDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }

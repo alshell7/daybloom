@@ -110,7 +110,7 @@ export function Hero() {
             ))}
           </h1>
           <p className="mt-6 max-w-[34ch] text-[clamp(18px,2vw,21px)] leading-[1.5] text-ink-2 sm:mt-7">
-            Daybloom is a visual day planner and timer for macOS and Windows. Your day becomes a dial: each block is an arc on the ring, and the hand points at now.
+            Daybloom is a visual day planner and timer for macOS, Windows and Android. Your day becomes a dial: each block is an arc on the ring, and the hand points at now.
           </p>
           <DownloadButtons className="mt-9" />
         </div>

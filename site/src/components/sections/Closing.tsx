@@ -33,7 +33,7 @@ export function Footer() {
             <img src={asset('favicon.svg')} alt="" width={28} height={28} className="size-7" loading="lazy" />
             Daybloom
           </a>
-          <p className="mt-3 max-w-[46ch] text-[14px] leading-[1.6] text-ink-3">A visual day planner and timer for macOS and Windows. Made with care for calm, clear days.</p>
+          <p className="mt-3 max-w-[46ch] text-[14px] leading-[1.6] text-ink-3">A visual day planner and timer for macOS, Windows and Android. Made with care for calm, clear days.</p>
           <p className="mt-6 text-[12.5px] leading-[1.7] text-ink-3">
             © {year} Daybloom · MIT licence. Icons by <a className="underline underline-offset-2 hover:text-ink" href="https://lucide.dev">Lucide</a> (ISC). On-device models by{' '}
             <a className="underline underline-offset-2 hover:text-ink" href="https://cactuscompute.com">Cactus Compute</a> (Apache-2.0). Interface pieces adapted from Magic UI, Aceternity UI, React Bits and Fumadocs:{' '}

@@ -11,7 +11,8 @@ src-tauri/gen/*
 
 !.env.example
 
-# signing keys never live in the repo
+# signing keys never live in the repo (a local copy sits in signing/, ignored as a whole)
+/signing/
 keystore.properties
 *.jks
 *.keystore

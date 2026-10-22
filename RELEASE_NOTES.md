@@ -17,9 +17,10 @@ Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one p
 - **A master password for sync** — one password seals everything you sync. You get a recovery key when you set it; you can change the password or make a new recovery key at any time. Turning encrypted sync on or off asks for it. On a phone, your fingerprint can unlock it.
 - **Encrypted GitHub Sync** — turn on encryption in Settings › Connect › Sync and your repo keeps only sealed files.
 - **More of your day syncs** — the Trash, what you did with calendar events, your AI setup, Alef, Retrospection and Soft landings now sync too. With encryption on, your calendar subscriptions and your AI keys sync as well, so a new device needs only your password.
-
-### New
-
+- **Choose how sync works** — for each sync service, choose how often it syncs (every 1, 5 or 15 minutes, every hour, or only when you tap Sync now), whether it syncs soon after a change, whether a phone uses mobile data, and which parts sync. Find it under Syncing in Settings › Connect › Sync.
+- **App lock** — lock Daybloom with a PIN of 4 to 8 digits, and on a phone with your fingerprint too. Choose when it locks again after you leave: at once, or after 1, 5 or 15 minutes. While the lock is on, a phone keeps Daybloom out of screenshots and the recent apps. Turn it on in Settings › Privacy.
+- **Tidy notifications on your phone** — each block shows one notification at a time, all of them stay together in one group, and each one goes away by itself when its time has passed. When you open Daybloom, the ones you have seen clear.
+- **Reminders on the minute** — some phones let ordinary reminders come up to an hour late. On those phones, and on any phone where a reminder came late, Daybloom uses the alarm clock for reminders, so they arrive on time. You can change this in Settings › Phone, and **Try the alarm** there rings a test alarm in 15 seconds.
 - **Updates without a restart** — small updates that change only Daybloom's screens download in the background. Click **Refresh to update** and the window loads again with the new version, or it starts the next time you open Daybloom. If one doesn't start well, Daybloom goes back to the version before it by itself.
 
 ## 0.2.0
