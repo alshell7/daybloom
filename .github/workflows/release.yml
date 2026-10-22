@@ -204,6 +204,9 @@ jobs:
           java-version: 21
       - uses: android-actions/setup-android@v3
         if: env.HAS_KEY == 'true'
+        # The default list includes "tools", which the SDK no longer has, so sdkmanager fails.
+        with:
+          packages: platform-tools
       - name: SDK platform, build tools and NDK
         if: env.HAS_KEY == 'true'
         run: sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;27.1.12297006" >/dev/null
