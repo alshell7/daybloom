@@ -211,23 +211,26 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
-/* thin, quiet scrollbars that belong to the palette */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
-}
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 10px;
-  border: 3px solid transparent;
-  background-clip: content-box;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
+/* thin, quiet scrollbars that belong to the palette (with a mouse: a touch screen keeps its
+   own, which only show while scrolling and take no room) */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 10px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 /* shared controls ----------------------------------------------------------- */
@@ -281,6 +284,7 @@ textarea::placeholder {
 }
 
 .icon-btn {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 34px;
@@ -291,6 +295,15 @@ textarea::placeholder {
     background var(--dur-1) var(--ease-out),
     color var(--dur-1) var(--ease-out),
     transform var(--dur-1) var(--ease-out);
+}
+/* A finger: a bigger hit area than the 34 px the eye sees (Android asks for 48 dp). */
+@media (pointer: coarse) {
+  .icon-btn::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: inherit;
+  }
 }
 .icon-btn:hover {
   background: var(--sunken);

@@ -72,7 +72,7 @@
       const got = await aiSplitStep({ task, step: s });
       const i = steps.findIndex((x) => x.id === id);
       if (got && i >= 0) steps = [...steps.slice(0, i), ...got.map((g) => ({ ...g, id: ++seq })), ...steps.slice(i + 1)];
-      if (settings.value.sound) sounds.tick();
+      sounds.tick();
     } finally {
       splitting = null;
     }
@@ -81,7 +81,7 @@
     open = true;
     kept = 0;
     generate();
-    if (settings.value.sound) sounds.tick();
+    sounds.tick();
     await tick();
   }
   function other() {
@@ -95,7 +95,7 @@
   function keep() {
     const n = steps.filter((s) => s.title.trim()).length;
     keepSteps(task, steps);
-    if (settings.value.sound) sounds.done();
+    sounds.done();
     kept = n;
     open = false;
   }
@@ -418,5 +418,13 @@
   /* In focus mode it sits on the dark focus surface. */
   .focus.card {
     background: color-mix(in srgb, var(--c) 8%, var(--surface));
+  }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .pebbles li .rm {
+      opacity: 1;
+      visibility: visible;
+    }
   }
 </style>

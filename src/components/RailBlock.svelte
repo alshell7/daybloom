@@ -14,6 +14,8 @@
   import { isOn } from '../lib/addons/registry';
   import { crumbs } from '../lib/addons/crumbs/crumbs.svelte';
   import { meetingOf } from '../lib/calendar/meeting';
+  import { haptic } from '../lib/haptics';
+  import { attention } from '../lib/native/attention.svelte';
   import { platform } from '../lib/platform';
   import { alarms } from '../lib/alarms.svelte';
 
@@ -22,19 +24,57 @@
   // ---- drag to move / resize (Structured-style) ----------------------------
   const PX_PER_MIN = 1.4;
   const STEP = 5;
-  let drag = $state<null | { mode: 'move' | 'resize'; y0: number; dy: number; moved: boolean; startMs: number; endMs: number }>(null);
+  let drag = $state<null | { mode: 'move' | 'resize'; x0: number; y0: number; dy: number; moved: boolean; armed: boolean; startMs: number; endMs: number }>(null);
   let lastSlot = 0;
 
   const editable = $derived(block.kind === 'task' && !block.readOnly);
   const shown = $derived(drag?.moved ? { startMs: drag.startMs, endMs: drag.endMs } : { startMs: block.startMs, endMs: block.endMs });
 
+  // A finger holds a block a moment to pick it up (a tick says it's lifted); before that a
+  // swipe scrolls the day and a tap opens it. A mouse drags at once.
+  const HOLD_MS = 320;
+  let hold: ReturnType<typeof setTimeout> | null = null;
   function down(e: PointerEvent, mode: 'move' | 'resize') {
     if (e.button !== 0) return;
     if (!editable) return;
     e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag = { mode, y0: e.clientY, dy: 0, moved: false, startMs: block.startMs, endMs: block.endMs };
+    const el = e.currentTarget as HTMLElement;
+    const id = e.pointerId;
+    const touch = e.pointerType === 'touch';
+    drag = { mode, x0: e.clientX, y0: e.clientY, dy: 0, moved: false, armed: !touch, startMs: block.startMs, endMs: block.endMs };
     lastSlot = 0;
+    if (!touch) return el.setPointerCapture(id);
+    if (hold) clearTimeout(hold);
+    hold = setTimeout(() => {
+      hold = null;
+      if (!drag || drag.armed) return;
+      drag.armed = true;
+      try {
+        el.setPointerCapture(id);
+      } catch {
+        /* the finger already left */
+      }
+      haptic('pick');
+    }, HOLD_MS);
+  }
+
+  /** Lets a touch go without moving anything (a scroll took over, or Android cancelled it). */
+  function cancel() {
+    if (hold) clearTimeout(hold);
+    hold = null;
+    drag = null;
+    view.railPreview = null;
+    overBacklog = false;
+    view.backlogDrop = false;
+  }
+
+  // While a lifted block moves, the page holds still under the finger.
+  function holdStill(node: HTMLElement) {
+    const stop = (e: TouchEvent) => {
+      if (drag?.armed) e.preventDefault();
+    };
+    node.addEventListener('touchmove', stop, { passive: false });
+    return { destroy: () => node.removeEventListener('touchmove', stop) };
   }
 
   /** Over the Backlog section (or the top bar's backlog button) while moving: drop to park it. */
@@ -43,6 +83,11 @@
 
   function move(e: PointerEvent) {
     if (!drag) return;
+    if (!drag.armed) {
+      // Moving before the hold: a scroll, not a drag.
+      if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 8) cancel();
+      return;
+    }
     drag.dy = e.clientY - drag.y0;
     if (!drag.moved && Math.abs(drag.dy) > 5) drag.moved = true;
     if (!drag.moved) return;
@@ -69,6 +114,8 @@
   }
 
   function up() {
+    if (hold) clearTimeout(hold);
+    hold = null;
     if (!drag) return;
     const d = drag;
     drag = null;
@@ -76,11 +123,15 @@
     if (overBacklog) {
       overBacklog = false;
       view.backlogDrop = false;
+      haptic('drop');
       toBacklog(block.key);
       return;
     }
     if (d.moved) {
-      if (d.startMs !== block.startMs || d.endMs !== block.endMs) adjust(block.key, d.startMs, d.endMs);
+      if (d.startMs !== block.startMs || d.endMs !== block.endMs) {
+        haptic('drop');
+        adjust(block.key, d.startMs, d.endMs);
+      }
     } else if (d.mode === 'move') open();
   }
 
@@ -218,31 +269,36 @@
 
   <div
     class="capsule"
+    use:holdStill
     data-genie-anchor
     class:grab={editable}
     role="button"
     tabindex="-1"
-    aria-label={editable ? `${block.title}: drag to move, click to open` : `Open ${block.title}`}
+    aria-label={editable ? (platform.isMobile ? `${block.title}: hold to move, tap to open` : `${block.title}: drag to move, click to open`) : `Open ${block.title}`}
     onpointerdown={(e) => down(e, 'move')}
     onpointermove={move}
     onpointerup={up}
-    onpointercancel={up}
+    onpointercancel={cancel}
     onclick={() => !editable && open()}
     onkeydown={(e) => e.key === 'Enter' && open()}
   >
     <!-- liquid: rises with elapsed time; a two-layer wave rolls on its surface -->
     <span class="liquid" aria-hidden="true">
-      <!-- re-mounted each minute: the surface sloshes once as the level rises, then rests
-           (and keeps rolling while hovered) — lively without a forever-running animation -->
-      {#key clock.minute}
-        <span class="wave a"></span>
-        <span class="wave b"></span>
-      {/key}
+      <!-- only the live block shows a surface; re-mounted each minute while someone is looking
+           (attention.svelte.ts): it sloshes once as the level rises, then rests (and keeps
+           rolling while hovered) — lively without a forever-running animation -->
+      {#if live}
+        {#key attention.looking ? clock.minute : 0}
+          <span class="wave a"></span>
+          <span class="wave b"></span>
+        {/key}
+      {/if}
     </span>
     <span class="cap-icon"><Icon name={block.done ? 'check' : block.icon} size={18} stroke={2.1} /></span>
     {#if editable}
       <span
         class="resize"
+        use:holdStill
         role="slider"
         tabindex="-1"
         aria-label="Drag to change length"
@@ -250,7 +306,7 @@
         onpointerdown={(e) => down(e, 'resize')}
         onpointermove={move}
         onpointerup={up}
-        onpointercancel={up}
+        onpointercancel={cancel}
       ></span>
     {/if}
   </div>
@@ -402,7 +458,8 @@
     align-content: start;
     justify-items: center;
     padding-top: 11px;
-    touch-action: none;
+    /* a swipe scrolls the day; a held block takes the touch (holdStill) */
+    touch-action: pan-y;
     transition:
       transform var(--dur-2) var(--ease-settle),
       background var(--dur-3) var(--ease-out),
@@ -474,11 +531,15 @@
     background-position: 10px 0;
     animation: roll 2.7s var(--ease-out) 1 reverse;
   }
-  .row:hover .wave.a {
-    animation: roll 1.6s linear infinite;
-  }
-  .row:hover .wave.b {
-    animation: roll 2.7s linear infinite reverse;
+  /* A mouse only: a touch screen keeps :hover on the last row tapped, and the waves would
+     roll on for as long as the app stays open. */
+  @media (hover: hover) {
+    .row:hover .wave.a {
+      animation: roll 1.6s linear infinite;
+    }
+    .row:hover .wave.b {
+      animation: roll 2.7s linear infinite reverse;
+    }
   }
   .live .wave.a {
     opacity: 1;
@@ -1018,5 +1079,14 @@
   }
   :global([data-motion='calm']) .wave {
     animation: none;
+  }
+
+  /* A touch screen: no hover tools over the title. Chrome keeps :hover on the row a finger
+     lands on, so they'd turn live under the tap (Move to the backlog…); the block's sheet has
+     them all. */
+  @media (hover: none) {
+    .tools {
+      display: none;
+    }
   }
 </style>

@@ -67,6 +67,8 @@ export function startReminders(): () => void {
         kind: 'focusEnd',
         title: breakTime ? 'Break’s over' : last ? 'Focus done' : 'Time for a break',
         body: breakTime ? 'Ready when you are.' : `${timer.active!.label || 'Focus'} · nice work.`,
+        tag: 'focus',
+        until: now + s.remainingMs + 30 * MINUTE,
       });
     }
     // Android asks once, the first time there is something to remind you of — after getting

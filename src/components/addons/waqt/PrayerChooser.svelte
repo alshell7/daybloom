@@ -27,7 +27,7 @@
 
   function pick(h: PrayedHow) {
     waqt.markAs(date, slot.id, h, qasr);
-    if (settings.value.sound) sounds.tick();
+    sounds.tick();
     setTimeout(onclose, 260);
   }
 </script>

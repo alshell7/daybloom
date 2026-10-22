@@ -6,6 +6,9 @@
   import Icon from '../lib/Icon.svelte';
   import SkyDot from '../lib/dial/SkyDot.svelte';
   import { aheadLabel, dayShift, MAX_COMPARE, pinZone, promoteZone, replaceZone, timeIn, weekdayIn } from '../lib/dial/world';
+  import { fitOnScreen } from '../lib/fitOnScreen';
+  import { popovers } from '../lib/popovers.svelte';
+  import { platform, thisDevice } from '../lib/platform';
   import { clock } from '../lib/stores/clock.svelte';
   import { settings } from '../lib/stores/settings.svelte';
   import { view } from '../lib/stores/view.svelte';
@@ -46,6 +49,11 @@
     return ALL.filter((z) => z.toLowerCase().includes(needle)).slice(0, 30);
   });
 
+  // Back (or Esc) closes it first.
+  $effect(() => {
+    if (open) return popovers.push(() => (open = false));
+  });
+
   async function toggle() {
     open = !open;
     if (open) {
@@ -53,7 +61,8 @@
       active = 0;
       replacing = null;
       await tick();
-      input?.focus();
+      // A phone: no keyboard over the list unless asked for (a tap on the search field).
+      if (!platform.isMobile) input?.focus();
     }
   }
 
@@ -63,7 +72,7 @@
     settings.value.timeZone = z === system ? '' : z;
     if (z !== system) settings.value.recentZones = [z, ...settings.value.recentZones.filter((x) => x !== z)].slice(0, 5);
     open = false;
-    view.say(z === system ? `Back on this computer's time · ${zoneCity(z)}` : `Showing your day in ${zoneCity(z)} time · ${zoneOffsetLabel(z)}`);
+    view.say(z === system ? `Back on ${thisDevice}'s time · ${zoneCity(z)}` : `Showing your day in ${zoneCity(z)} time · ${zoneOffsetLabel(z)}`);
   }
 
   function pin(z: string) {
@@ -131,7 +140,7 @@
 
   {#if open}
     <div class="scrim" role="presentation" onclick={() => (open = false)}></div>
-    <div class="pop" role="dialog" aria-label="Choose time zone" transition:scale={{ start: 0.94, duration: view.reducedMotion ? 0 : 200, easing: cubicOut }}>
+    <div class="pop" role="dialog" aria-label="Choose time zone" use:fitOnScreen transition:scale={{ start: 0.94, duration: view.reducedMotion ? 0 : 200, easing: cubicOut }}>
       <label class="search">
         <Icon name="search" size={15} />
         <input bind:this={input} bind:value={q} oninput={() => (active = 0)} onkeydown={onKey} placeholder="City or region…" aria-label="Search time zones" />
@@ -178,7 +187,7 @@
             <button class="opt" class:on={z === current} role="option" aria-selected={z === current} onclick={() => choose(z)} onpointerenter={() => (active = i)}>
               <span class="city">
                 {zoneCity(z)}
-                {#if z === system}<em>this computer</em>{/if}
+                {#if z === system}<em>{thisDevice}</em>{/if}
               </span>
               <span class="meta tnum">{z.split('/')[0]} · {zoneOffsetLabel(z)}</span>
               <span class="time tnum">{localTime(z)}</span>
@@ -250,6 +259,8 @@
     z-index: 44;
   }
   .pop {
+    /* inside the top bar, which keeps its own items on one line */
+    white-space: normal;
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
@@ -391,6 +402,12 @@
   .pin:focus-visible,
   .pin.on {
     opacity: 1;
+  }
+  /* A touch screen has no hover to reveal the pin: it always shows. */
+  @media (hover: none) {
+    .pin {
+      opacity: 1;
+    }
   }
   .pin:hover {
     background: color-mix(in srgb, var(--ink) 8%, transparent);

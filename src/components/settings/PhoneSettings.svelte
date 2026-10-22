@@ -6,12 +6,21 @@
   import Icon from '../../lib/Icon.svelte';
   import { deviceCall } from '../../lib/native/device.svelte';
   import { isOn } from '../../lib/addons/registry';
+  import { formatTime } from '../../lib/engine/time';
+  import { settings } from '../../lib/stores/settings.svelte';
+  import { view } from '../../lib/stores/view.svelte';
 
   interface Access {
     notifications: boolean;
     exactAlarms: boolean;
     fullScreen: boolean;
     unrestricted: boolean;
+    /** Reminders go through the alarm clock (Reminders.kt `clock`), and why "auto" chose it. */
+    onTime: 'auto' | 'clock' | 'standard';
+    clock: boolean;
+    loose: boolean;
+    late: number;
+    lateMin: number;
   }
 
   let access = $state<Access | null>(null);
@@ -27,7 +36,10 @@
     void read();
     const back = () => document.visibilityState === 'visible' && void read();
     document.addEventListener('visibilitychange', back);
-    return () => document.removeEventListener('visibilitychange', back);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      clearTimeout(tryClear);
+    };
   });
 
   async function notifications() {
@@ -41,6 +53,43 @@
   }
 
   const open = (which: string) => () => void deviceCall('openSettings', { which }).catch(() => {});
+
+  let switching = $state(false);
+  async function useClock(on: boolean) {
+    switching = true;
+    await deviceCall('reminderMode', { mode: on ? 'clock' : 'standard' }).catch(() => {});
+    await read();
+    switching = false;
+  }
+  // A real alarm a few seconds from now, rung by Android like a planned one: you can close
+  // Daybloom or lock the phone first and see that it still rings.
+  const TRY_IN = 15_000;
+  let tryAt = $state(0);
+  let tryNote = $state('');
+  let tryClear: ReturnType<typeof setTimeout> | undefined;
+  async function tryAlarm() {
+    const a = settings.value.alarm;
+    const at = Date.now() + TRY_IN;
+    const item = { id: 'try-alarm', at, kind: 'alarm', title: 'Daybloom alarm', body: 'This is how your alarms ring.', tone: a.tone, ringForMin: 1, snoozeMin: a.snooze, gentle: a.gentle, volume: a.volume };
+    const ok = await deviceCall('testAlarm', { items: [item] }).then(
+      () => true,
+      () => false,
+    );
+    tryAt = ok ? at : 0;
+    tryNote = ok ? `It rings at ${formatTime(at, view.hour12)}. Lock the phone or close Daybloom now if you like.` : 'The alarm couldn’t be set. Check “On-time alarms” above.';
+    clearTimeout(tryClear);
+    tryClear = setTimeout(() => ((tryAt = 0), (tryNote = '')), TRY_IN + 60_000);
+  }
+
+  const clockWhy = $derived(
+    !access || access.onTime !== 'auto'
+      ? 'Keeps every reminder on the minute. Your status bar then shows the next one as an alarm.'
+      : access.late > 0
+        ? `A reminder came ${Math.max(2, access.lateMin)} min late on this phone, so Daybloom changed to the alarm clock. Your status bar shows the next one.`
+        : access.loose
+          ? 'This phone can delay other reminders by up to an hour. The alarm clock keeps them on the minute. Your status bar shows the next one.'
+          : 'Keeps every reminder on the minute. Your status bar then shows the next one as an alarm. Daybloom turns this on by itself if a reminder comes late.',
+  );
 
   async function pin(kind: 'dial' | 'alef') {
     note = '';
@@ -76,6 +125,32 @@
       {/if}
     </div>
   {/each}
+  {#if access?.exactAlarms}
+    <label class="row">
+      <span class="what">
+        <span>Use the alarm clock for reminders</span>
+        <span class="why">{clockWhy}</span>
+      </span>
+      <input
+        type="checkbox"
+        class="switch"
+        checked={access.clock}
+        disabled={switching}
+        onchange={(e) => {
+          const want = e.currentTarget.checked;
+          e.currentTarget.checked = access?.clock ?? false;
+          void useClock(want);
+        }}
+      />
+    </label>
+  {/if}
+  <div class="row">
+    <span class="what">
+      <span>Try the alarm</span>
+      <span class="why" aria-live="polite">{tryNote || 'It rings in 15 seconds, also with Daybloom closed or the phone locked.'}</span>
+    </span>
+    <button class="btn btn-soft" onclick={tryAlarm} disabled={tryAt > 0}>Try it</button>
+  </div>
 
   <p class="label">Home screen</p>
   <div class="actions">
@@ -122,10 +197,13 @@
     justify-content: space-between;
     gap: var(--s-3);
     min-height: 52px;
+    padding: 6px 0;
     font-size: var(--t-sm);
   }
   .what {
     display: grid;
+    flex: 1 1 0;
+    min-width: 0;
     gap: 2px;
     color: var(--ink);
   }

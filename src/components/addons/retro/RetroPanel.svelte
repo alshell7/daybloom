@@ -3,6 +3,7 @@
   // bright spots, your days as columns (how full, how kept), the rhythm of your day, where the
   // time went; then what could be easier — each with a gentle tip and a one-tap fix — a few
   // things to try, and three short lines of your own: keep, change, try.
+  import { thisDevice } from '../../../lib/platform';
   import { cubicOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
   import { landingsFile } from '../../../lib/addons/landings/pad.svelte';
@@ -234,7 +235,7 @@
             <label><span>Change</span><input class="field" value={note.change} oninput={(e) => setNote('change', e.currentTarget.value)} placeholder="What got in the way" /></label>
             <label><span>Try</span><input class="field" value={note.try} oninput={(e) => setNote('try', e.currentTarget.value)} placeholder="One small experiment" /></label>
           </div>
-          <p class="quiet">Stays on this computer.</p>
+          <p class="quiet">Stays on {thisDevice}.</p>
         </section>
       {/key}
     </div>
@@ -485,6 +486,12 @@
     display: grid;
     grid-template-columns: 1fr 1.25fr;
     gap: var(--s-5);
+  }
+  /* A phone: the rhythm above the categories, each with the full width. */
+  @media (max-width: 480px) {
+    .two {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   .parts {
     display: flex;

@@ -6,16 +6,20 @@
 //                 in private preferences, so AI keys and sync tokens survive restarts
 //   insets        the status / navigation bar and cut-out sizes, pushed into CSS variables
 //                 (--safe-top …) whenever they change, so the app can draw edge to edge
-//   system bars   light or dark icons to match the theme
+//   system bars   light or dark icons to match the theme, and the window's colour behind it
 //   back          while the planner has something open (a sheet), the system back gesture
 //                 closes it instead of leaving the app
 //   keep awake    the screen stays on during a focus session, if asked
+//   haptics       Android's own touch effects (ticks, long press, confirm…), see src/lib/haptics.ts
 package app.daybloom.device
 
 import android.app.Activity
 import android.app.NotificationManager
+import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -23,6 +27,8 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.text.format.DateFormat
 import android.util.Base64
+import android.view.HapticFeedbackConstants
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.WebView
 import androidx.activity.OnBackPressedCallback
@@ -66,6 +72,11 @@ class OnArgs {
 }
 
 @InvokeArg
+class ModeArgs {
+  var mode: String = "auto"
+}
+
+@InvokeArg
 class ScheduleArgs {
   /** The reminders, as JSON objects (see Reminder). */
   var items: List<Map<String, Any?>> = emptyList()
@@ -101,6 +112,8 @@ class BioArgs {
   lateinit var account: String
   var value: String = ""
   var title: String = "Unlock with your fingerprint"
+  /** The prompt's other way in (its button). */
+  var other: String = "Use password"
 }
 
 @InvokeArg
@@ -118,9 +131,88 @@ class UpdateArgs {
 }
 
 @InvokeArg
+class HapticArgs {
+  /** snap | tick | pick | drop | done | no | on | off (see src/lib/haptics.ts) */
+  var kind: String = "tick"
+}
+
+@InvokeArg
 class BarsArgs {
   /** The app is showing a dark theme, so the bars need light icons. */
   var dark: Boolean = false
+  /** system | light | dark, as picked in Settings (remembered for the next start). */
+  var mode: String? = null
+}
+
+/**
+ * The theme picked in the planner, remembered for the next start: the window and the web view
+ * behind the page take the page's ground colour, so nothing white shows before it draws. On
+ * Android 12+ a theme picked in the app (not "system") also becomes the app's own night mode,
+ * so the system's start screen matches it too.
+ */
+object Appearance {
+  private const val PREFS = "daybloom_look"
+  // --ground in src/app.css (and res/values*/colors.xml), light and dark.
+  private const val LIGHT = 0xFFECEFF3.toInt()
+  private const val DARK = 0xFF0D121C.toInt()
+
+  // The planner has painted its first screen; MainActivity keeps the start screen until then.
+  private var shown = false
+  private var onShown: (() -> Unit)? = null
+
+  @Synchronized fun starting() {
+    shown = false
+    onShown = null
+  }
+
+  /** Runs [then] once the page has painted its first screen (at once if it has). */
+  fun whenShown(then: () -> Unit) {
+    synchronized(this) {
+      if (!shown) {
+        onShown = then
+        return
+      }
+    }
+    then()
+  }
+
+  fun markShown() {
+    val then = synchronized(this) {
+      shown = true
+      onShown.also { onShown = null }
+    }
+    then?.invoke()
+  }
+
+  fun ground(dark: Boolean) = if (dark) DARK else LIGHT
+
+  fun ground(ctx: Context) = ground(
+    when (prefs(ctx).getString("mode", "system")) {
+      "dark" -> true
+      "light" -> false
+      else -> (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    }
+  )
+
+  fun remember(ctx: Context, mode: String) {
+    val p = prefs(ctx)
+    if (p.getString("mode", "system") == mode) return
+    p.edit().putString("mode", mode).apply()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val night = when (mode) {
+        "dark" -> UiModeManager.MODE_NIGHT_YES
+        "light" -> UiModeManager.MODE_NIGHT_NO
+        else -> UiModeManager.MODE_NIGHT_AUTO // follow the system again
+      }
+      try {
+        ctx.getSystemService(UiModeManager::class.java)?.setApplicationNightMode(night)
+      } catch (e: Exception) {
+        // Only the start screen's colour depends on it.
+      }
+    }
+  }
+
+  private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }
 
 /** Values sealed by a Keystore key that never leaves the device's secure hardware. */
@@ -201,6 +293,15 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     return JSObject().put("action", action).put("key", intent.getStringExtra("daybloom.key") ?: "")
   }
 
+  // Back in the app: the reminders already shown have done their job (the dial shows the day).
+  override fun onResume(activity: AppCompatActivity) {
+    try {
+      Reminders.clearShown(activity)
+    } catch (e: Exception) {
+      // Only tidying.
+    }
+  }
+
   override fun onNewIntent(intent: Intent) {
     val a = actionOf(intent) ?: return
     webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybloom:intent',{detail:$a}))", null)
@@ -208,14 +309,27 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
 
   override fun load(webView: WebView) {
     this.webView = webView
+    // Behind the page, the theme's ground colour (the web view's own default is white).
+    activity.runOnUiThread { webView.setBackgroundColor(Appearance.ground(activity)) }
     pendingAction = actionOf(activity.intent)
     (activity as? AppCompatActivity)?.onBackPressedDispatcher?.addCallback(activity, back)
     val density = activity.resources.displayMetrics.density
     ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
       val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
       val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+      // The keyboard: the page ends at its top edge (the classic "adjust resize", which an
+      // edge-to-edge window doesn't get by itself), so a sheet or a chat box sits above it and
+      // the field being typed in scrolls into view. Its height counts the gesture bar under it.
+      val keyboard = if (ime.bottom > bars.bottom) ime.bottom else 0
+      (v.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+        if (lp.bottomMargin != keyboard) {
+          lp.bottomMargin = keyboard
+          v.layoutParams = lp
+        }
+      }
       fun px(n: Int) = "${(n / density).toInt()}px"
-      insetsCss = "{top:'${px(bars.top)}',right:'${px(bars.right)}',bottom:'${px(bars.bottom)}',left:'${px(bars.left)}',keyboard:'${px(ime.bottom)}'}"
+      val bottom = if (keyboard > 0) 0 else bars.bottom
+      insetsCss = "{top:'${px(bars.top)}',right:'${px(bars.right)}',bottom:'${px(bottom)}',left:'${px(bars.left)}',keyboard:'${px(keyboard)}'}"
       pushInsets()
       ViewCompat.onApplyWindowInsets(v, insets)
     }
@@ -262,11 +376,40 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   @Command
   fun systemBars(invoke: Invoke) {
     val a = invoke.parseArgs(BarsArgs::class.java)
+    a.mode?.let { Appearance.remember(activity, it) }
+    val ground = Appearance.ground(a.dark)
     activity.runOnUiThread {
       val c = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
       c.isAppearanceLightStatusBars = !a.dark
       c.isAppearanceLightNavigationBars = !a.dark
+      activity.window.setBackgroundDrawable(ColorDrawable(ground))
+      webView?.setBackgroundColor(ground)
     }
+    invoke.resolve()
+  }
+
+  /** Touch feedback from Android's own effects, so it follows the phone's Touch feedback setting. */
+  @Command
+  fun haptic(invoke: Invoke) {
+    val sdk = Build.VERSION.SDK_INT
+    val effect = when (invoke.parseArgs(HapticArgs::class.java).kind) {
+      "snap" -> if (sdk >= 34) HapticFeedbackConstants.SEGMENT_FREQUENT_TICK else HapticFeedbackConstants.CLOCK_TICK
+      "pick" -> HapticFeedbackConstants.LONG_PRESS
+      "drop" -> if (sdk >= 30) HapticFeedbackConstants.GESTURE_END else HapticFeedbackConstants.CLOCK_TICK
+      "done" -> if (sdk >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.LONG_PRESS
+      "no" -> if (sdk >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
+      "on" -> if (sdk >= 34) HapticFeedbackConstants.TOGGLE_ON else HapticFeedbackConstants.KEYBOARD_TAP
+      "off" -> if (sdk >= 34) HapticFeedbackConstants.TOGGLE_OFF else HapticFeedbackConstants.KEYBOARD_TAP
+      else -> HapticFeedbackConstants.KEYBOARD_TAP
+    }
+    activity.runOnUiThread { webView?.performHapticFeedback(effect) }
+    invoke.resolve()
+  }
+
+  /** The planner's first screen is painted: the start screen can go. */
+  @Command
+  fun shown(invoke: Invoke) {
+    Appearance.markShown()
     invoke.resolve()
   }
 
@@ -333,7 +476,33 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
         .put("exactAlarms", Reminders.canExact(activity))
         .put("fullScreen", fullScreen)
         .put("unrestricted", pm.isIgnoringBatteryOptimizations(activity.packageName))
+        .put("onTime", Reminders.mode(activity))
+        .put("clock", Reminders.clock(activity))
+        .put("loose", Reminders.looseMaker())
+        .put("late", Reminders.late(activity))
+        .put("lateMin", Reminders.lateBy(activity) / 60_000)
     )
+  }
+
+  /** Settings › Phone › Try the alarm: the one alarm in `items`, rung like a planned one. */
+  @Command
+  fun testAlarm(invoke: Invoke) {
+    val m = invoke.parseArgs(ScheduleArgs::class.java).items.firstOrNull()
+    val r = try {
+      m?.let { Reminder.from(org.json.JSONObject(it)) }
+    } catch (e: Exception) {
+      null
+    }
+    if (r == null) return invoke.reject("No alarm to try")
+    Reminders.test(activity, r)
+    invoke.resolve(JSObject().put("at", r.at))
+  }
+
+  /** How reminders are kept on time: "auto", "clock" (the alarm clock) or "standard". */
+  @Command
+  fun reminderMode(invoke: Invoke) {
+    Reminders.setMode(activity, invoke.parseArgs(ModeArgs::class.java).mode)
+    invoke.resolve(JSObject().put("clock", Reminders.clock(activity)))
   }
 
   /** Opens the system page where that permission is switched on. */
@@ -451,14 +620,14 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   fun bioSeal(invoke: Invoke) {
     val a = invoke.parseArgs(BioArgs::class.java)
     val fa = activity as? FragmentActivity ?: return invoke.reject("No fingerprint prompt here.")
-    BioVault.seal(fa, a.account, a.value) { err -> if (err == null) invoke.resolve() else invoke.reject(err, err) }
+    BioVault.seal(fa, a.account, a.value, a.title, a.other) { err -> if (err == null) invoke.resolve() else invoke.reject(err, err) }
   }
 
   @Command
   fun bioOpen(invoke: Invoke) {
     val a = invoke.parseArgs(BioArgs::class.java)
     val fa = activity as? FragmentActivity ?: return invoke.reject("No fingerprint prompt here.")
-    BioVault.open(fa, a.account, a.title) { value, err -> if (value != null) invoke.resolve(JSObject().put("value", value)) else invoke.reject(err ?: "failed", err ?: "failed") }
+    BioVault.open(fa, a.account, a.title, a.other) { value, err -> if (value != null) invoke.resolve(JSObject().put("value", value)) else invoke.reject(err ?: "failed", err ?: "failed") }
   }
 
   @Command

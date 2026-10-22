@@ -10,7 +10,7 @@
   import SettingsTabs from './settings/SettingsTabs.svelte';
   import { formatMinutes } from '../lib/engine/time';
   import Icon from '../lib/Icon.svelte';
-  import { platform } from '../lib/platform';
+  import { keychain, platform, thisDevice } from '../lib/platform';
   import { PRESET_ORDER, PRESETS } from '../lib/presets';
   import { sounds } from '../lib/sound';
   import { settings } from '../lib/stores/settings.svelte';
@@ -50,6 +50,7 @@
   import ThemeGallery from './ThemeGallery.svelte';
   import SyncSettings from './SyncSettings.svelte';
   import PhoneSettings from './settings/PhoneSettings.svelte';
+  import LockSettings from './settings/LockSettings.svelte';
   import ScreenPicker from './ScreenPicker.svelte';
   import AlarmSettings from './settings/AlarmSettings.svelte';
   import BreathSettings from './settings/BreathSettings.svelte';
@@ -91,7 +92,7 @@
     support: 'gentle support nudges check-in overrun gap ideas anchors hourly wind down start starting first step stuck two minutes',
     cues: 'screen cues glow edge bar hud focus colour color',
     widget: 'desktop widget layer top float menu bar timer launch login startup wing long titles slide marquee typing replies',
-    privacy: 'privacy screenshots screen recording hide names secret',
+    privacy: 'privacy screenshots screen recording hide names secret lock pin fingerprint biometric',
     phone: 'phone android reminders alarms notifications on time exact lock screen full screen battery background widget home screen dial alef usage access tracker',
     assistant: 'voice input talk speech microphone mic language hotkey hold v dictation tones assistant',
     calendars: 'calendars google ics link events',
@@ -345,10 +346,10 @@
         {#if platform.isMobile && shows('phone')}
         <PhoneSettings />
         {/if}
-        {#if !platform.isMobile && shows('cues')}
+        {#if shows('cues')}
         <section>
           <h3>Screen cues</h3>
-          <p class="hint top">Quiet signals at the edge of your screen that keep the time in view — they never take a click or the keyboard.</p>
+          <p class="hint top">{platform.isMobile ? 'Quiet signals at the edge of the screen while Daybloom is open — a glow, a time bar, a small timer. They never take a tap.' : 'Quiet signals at the edge of your screen that keep the time in view — they never take a click or the keyboard.'}</p>
           <div class="row">
             <span>Show them</span>
             <Segmented
@@ -498,6 +499,7 @@
           {:else}
           <p class="hint">{platform.os === 'windows' ? 'Windows leaves protected windows out of captures (they show as empty).' : 'macOS leaves protected windows out of screenshots. Some screen recorders can still capture them, so also hide block names when you share your screen.'} You can also switch it from the {platform.os === 'mac' ? 'menu bar' : 'tray'} icon.</p>
           {/if}
+          <LockSettings />
         </section>
         {/if}
         {#if query && tabMatches('ai')}<p class="grp">AI</p>{/if}
@@ -601,7 +603,7 @@
         {#if shows('data')}
         <section>
           <h3>Your data</h3>
-          <p class="hint">Everything stays on this computer unless you turn on Sync with GitHub. Sign-ins and tokens live in your system keychain.</p>
+          <p class="hint">Everything stays on {thisDevice} unless you turn on Sync. Sign-ins and tokens live in {keychain}.</p>
           <div class="cal-actions">
             <button class="btn btn-soft" onclick={exportData}>Export</button>
             <label class="btn btn-soft">Import<input type="file" accept="application/json" onchange={importData} hidden /></label>
@@ -619,7 +621,7 @@
             <small>{trashFile.value.items.length ? `${trashFile.value.items.length} ${trashFile.value.items.length === 1 ? 'item' : 'items'} · kept 30 days` : 'Empty · deleted blocks wait here for 30 days'}</small>
             <Icon name="chevron-right" size={14} />
           </button>
-          <p class="hint keys">Keys: <kbd>N</kbd> new · <kbd>←</kbd><kbd>→</kbd> days · <kbd>T</kbd> today · <kbd>M</kbd> month · <kbd>1</kbd>–<kbd>4</kbd> dials · <kbd>F</kbd> focus · <kbd>W</kbd> widget · <kbd>Space</kbd> done</p>
+          {#if !platform.isMobile}<p class="hint keys">Keys: <kbd>N</kbd> new · <kbd>←</kbd><kbd>→</kbd> days · <kbd>T</kbd> today · <kbd>M</kbd> month · <kbd>1</kbd>–<kbd>4</kbd> dials · <kbd>F</kbd> focus · <kbd>W</kbd> widget · <kbd>Space</kbd> done</p>{/if}
         </section>
         {/if}
         {#if query && !matches.length}<p class="empty">Nothing matches “{query}”. Try “sound”, “widget” or “calendar”.</p>{/if}
@@ -857,6 +859,21 @@
     gap: var(--s-3);
     min-height: 40px;
     font-size: var(--t-sm);
+  }
+  /* A phone: a control that doesn't fit beside its label goes under it, on the right. */
+  @media (max-width: 480px) {
+    .row {
+      flex-wrap: wrap;
+      row-gap: var(--s-2);
+    }
+    .row > :last-child:not(:first-child) {
+      margin-left: auto;
+    }
+    /* A switch stays beside its words; the words wrap instead. */
+    .row:has(> .switch) > :first-child {
+      flex: 1 1 0;
+      min-width: 0;
+    }
   }
   .row > span:first-child {
     color: var(--ink-2);

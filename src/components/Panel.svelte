@@ -166,4 +166,13 @@
       max-height: 78vh;
     }
   }
+  /* A phone: 16 px sides instead of 24, so a 360 px screen keeps its room for the content. */
+  @media (max-width: 480px) {
+    header {
+      padding-left: var(--s-4);
+    }
+    .content {
+      padding: 0 var(--s-4) var(--s-4);
+    }
+  }
 </style>

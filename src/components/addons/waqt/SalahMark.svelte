@@ -44,7 +44,7 @@
     pending = null;
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     view.spark(r.left + r.width / 2, r.top + r.height / 2, color, false, 'Prayed');
-    if (settings.value.sound) sounds.done();
+    sounds.done();
     onmarked?.();
   }
 

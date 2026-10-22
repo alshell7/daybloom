@@ -99,4 +99,10 @@
     font-weight: 500;
     white-space: nowrap;
   }
+  /* A phone: a taller tab for a finger. */
+  @media (pointer: coarse) {
+    button {
+      padding: 9px 2px 8px;
+    }
+  }
 </style>

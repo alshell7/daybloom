@@ -71,7 +71,7 @@
     const m = snap(((laps * 360 + deg) / 360) * 60);
     if (m !== minutes) {
       minutes = m;
-      if (settings.value.sound) sounds.tick();
+      sounds.tick();
     }
   }
   function down(e: PointerEvent) {

@@ -22,6 +22,7 @@
   import { addDays, formatDuration, formatMinutes, MINUTE, minutesOfDay, weekday } from '../../lib/engine/time';
   import type { BacklogList, ISODate, Task } from '../../lib/engine/types';
   import Icon from '../../lib/Icon.svelte';
+  import { platform } from '../../lib/platform';
   import { isOn } from '../../lib/addons/registry';
   import { sounds } from '../../lib/sound';
   import { view } from '../../lib/stores/view.svelte';
@@ -63,7 +64,9 @@
 
   let editing = $state(false);
   let draft = $state('');
-  let tray = $state<null | 'due' | 'time' | 'move'>(null);
+  let tray = $state<null | 'due' | 'time' | 'move' | 'actions'>(null);
+  // A phone: the title has the row; its actions wait behind one button, with their names.
+  const phone = platform.isMobile;
   let checking = $state(false);
   let time = $state('');
   let gripDown = false;
@@ -134,7 +137,7 @@
   }
 
   // ── Trays ──
-  async function open(kind: 'due' | 'time' | 'move') {
+  async function open(kind: 'due' | 'time' | 'move' | 'actions') {
     if (tray === kind) {
       tray = null;
       return;
@@ -257,7 +260,7 @@
   onkeydown={keydown}
   onfocusin={() => onfocused?.()}
 >
-  <div class="line">
+  <div class="line" class:phone>
     {#if reorderable}
       <span class="grip" onpointerdown={grip} title="Drag to reorder" aria-hidden="true"><Icon name="grip" size={14} /></span>
     {:else}
@@ -290,7 +293,7 @@
           onblur={() => commit(false)}
         />
       {:else}
-        <button class="title" onclick={startEdit} tabindex="-1" title={isDone ? task.title : 'Click to rename'}>
+        <button class="title" onclick={phone ? () => (view.sheet = { kind: 'edit', key: `later:${task.id}` }) : startEdit} tabindex="-1" title={isDone ? task.title : 'Click to rename'}>
           <span class="tx">{task.title || 'Untitled'}</span>
         </button>
       {/if}
@@ -299,6 +302,13 @@
         {#if isDone}
           <span class="cap tnum">{durLabel}</span>
           {#if task.doneAt}<span class="cap">· done {doneLabel(task.doneAt, nowMs)}</span>{/if}
+        {:else if phone}
+          <!-- read-only on a phone (a tap on a chip changed it by mistake); change them in its details -->
+          <span class="chip tnum">{durLabel}</span>
+          {#if task.priority}<span class="chip prio p{task.priority}"><Icon name="flag" size={11} stroke={2} />{PRIORITY_LABEL[task.priority as Level]}</span>{/if}
+          {#if task.energy}<span class="chip" aria-label={ENERGY_LABEL[task.energy as Level]}><Icon name={ENERGY_ICON[task.energy as Level]} size={14} stroke={1.9} /></span>{/if}
+          {#if task.due}<span class="chip due" class:warm><Icon name="calendar-clock" size={11} stroke={2} />{dueLabel(task.due, today)}</span>{/if}
+          {#if age}<span class="cap age"><Icon name="hourglass" size={11} /> {age}</span>{/if}
         {:else}
           <button class="chip tnum" tabindex={tabbable ? 0 : -1} onclick={cycleDuration} title="Length — click to change (shift-click goes back)" aria-label={`Length ${durLabel}, change`}>
             {durLabel}
@@ -335,6 +345,11 @@
       </div>
     </div>
 
+    {#if phone}
+      <button class="more" class:on={tray === 'actions'} aria-expanded={tray === 'actions'} onclick={() => open('actions')} aria-label={`Actions for ${task.title || 'this item'}`}>
+        <Icon name="more" size={18} />
+      </button>
+    {:else}
     <div class="tools">
       {#if isDone}
         <button tabindex={tabbable ? 0 : -1} class="tool" onclick={toggle} title="Restore" aria-label="Restore"><Icon name="undo" size={15} /></button>
@@ -351,12 +366,25 @@
         <button tabindex={tabbable ? 0 : -1} class="tool" onclick={() => onremove?.()} title="Delete (⌫)" aria-label="Delete"><Icon name="trash-ui" size={15} /></button>
       {/if}
     </div>
+    {/if}
   </div>
 
   {#if tray}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="tray" transition:slide={{ duration: view.reducedMotion ? 0 : 200, easing: cubicOut }} onkeydown={trayKey}>
-      {#if tray === 'due'}
+      {#if tray === 'actions'}
+        {#if isDone}
+          <button class="pill" onclick={toggle}><Icon name="undo" size={13} />Restore</button>
+        {:else}
+          <button class="pill strong" onclick={() => ((tray = null), backlog.fitToday(task.id))}><Icon name="sun" size={13} />Today</button>
+          <button class="pill" onclick={() => open('time')}><Icon name="clock" size={13} />Pick a time</button>
+          {#if isOn('smaller') && !task.subtasks.length}
+            <button class="pill" onclick={() => ((tray = null), (view.sheet = { kind: 'edit', key: `later:${task.id}`, smaller: true }))}><Icon name="layers" size={13} />Make it smaller</button>
+          {/if}
+          <button class="pill" onclick={() => open('move')}><Icon name="move-later" size={13} />Move</button>
+        {/if}
+        <button class="pill quiet" onclick={() => ((tray = null), onremove?.())}><Icon name="trash-ui" size={13} />Delete</button>
+      {:else if tray === 'due'}
         {#each dueChoices as c (c.label)}
           <button class="pill" aria-pressed={task.due === c.date} onclick={() => setDue(c.date)}>{c.label}</button>
         {/each}
@@ -419,6 +447,10 @@
     align-items: center;
     column-gap: 9px;
     padding: 7px 8px 7px 2px;
+  }
+  /* A phone: its actions button takes the row's last column. */
+  .line.phone {
+    grid-template-columns: 14px 22px 28px minmax(0, 1fr) 40px;
   }
 
   /* grip */
@@ -847,6 +879,46 @@
       padding: 0;
       font-size: 0;
       gap: 0;
+    }
+  }
+
+  /* A touch screen: the row's tools answer only once the row is tapped (focused or its tray
+     open), so a tap on the row can't land on a hidden Delete. */
+  @media (hover: none) {
+    .tool,
+    .ghost {
+      pointer-events: none;
+    }
+    .row:focus-within .tool,
+    .row.tray-open .tool,
+    .row:focus-within .ghost {
+      pointer-events: auto;
+    }
+  }
+
+  /* A phone's one actions button, at the end of the row. */
+  .more {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-right: -6px;
+    border-radius: var(--r-pill);
+    color: var(--ink-3);
+  }
+  .more.on {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+  /* A touch screen: the title may take two lines rather than cut off at one. */
+  @media (hover: none) {
+    .tx {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
     }
   }
 </style>

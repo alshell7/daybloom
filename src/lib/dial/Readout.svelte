@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { NowState } from '../engine/blocks';
-  import { formatClockCountdown, formatDayShort, formatDuration, formatTime, MINUTE } from '../engine/time';
+  import { formatClockCountdown, formatDayShort, formatDuration, formatTime, fromISODate, MINUTE } from '../engine/time';
   import type { ISODate } from '../engine/types';
   import Icon from '../Icon.svelte';
   import Rolling from './Rolling.svelte';
+  import { platform } from '../platform';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { breath as guide, rhythm, rhythmLength, type BreathState } from '../breath.svelte';
@@ -136,8 +137,13 @@
     {/if}
   {:else}
   {#if view.tone !== 'rest' && view.tone !== 'day'}
-    <!-- the wall clock, always readable at a glance; the big number is time left -->
-    <div class="clock tnum" aria-label={`It's ${formatTime(now, hour12)}`}><Rolling text={formatTime(now, hour12)} {reduced} /></div>
+    <!-- the wall clock, always readable at a glance; the big number is time left. A phone's top
+         bar already shows the time, and has no room for the date: here it's the date instead. -->
+    {#if platform.isMobile && !compact}
+      <div class="clock" aria-label={fromISODate(date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}>{fromISODate(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+    {:else}
+      <div class="clock tnum" aria-label={`It's ${formatTime(now, hour12)}`}><Rolling text={formatTime(now, hour12)} {reduced} /></div>
+    {/if}
   {/if}
   {#if face}
     <div class="face">{@render face({ big: view.big, tone: view.tone })}</div>

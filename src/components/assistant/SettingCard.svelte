@@ -3,7 +3,7 @@
   // desktop dial.
   import { activeTimeZone, formatTime, systemTimeZone, zoneCity, zoneOffsetLabel } from '../../lib/engine/time';
   import Icon from '../../lib/Icon.svelte';
-  import { platform } from '../../lib/platform';
+  import { platform, thisDevice } from '../../lib/platform';
   import { PRESET_ORDER, PRESETS } from '../../lib/presets';
   import { clock } from '../../lib/stores/clock.svelte';
   import { settings } from '../../lib/stores/settings.svelte';
@@ -78,7 +78,7 @@
       <span class="a-ico quiet"><Icon name="globe" size={15} /></span>
       <div class="txt">
         <strong class="a-title">{zoneCity(zone)} · {formatTime(clock.minute, view.hour12)}</strong>
-        <span class="a-meta tnum">{zoneOffsetLabel(zone)}{away ? ` · this computer is on ${zoneCity(system)} time` : " · this computer's own time"}</span>
+        <span class="a-meta tnum">{zoneOffsetLabel(zone)}{away ? ` · ${thisDevice} is on ${zoneCity(system)} time` : ` · ${thisDevice}'s own time`}</span>
       </div>
     </div>
     <div class="a-actions">

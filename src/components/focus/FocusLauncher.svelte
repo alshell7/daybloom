@@ -241,7 +241,7 @@
               </button>
             {/each}
           </div>
-          <p class="hint">Gentle cues at the edge of your screen while you focus. More in Settings › Screen cues.</p>
+          <p class="hint">{platform.isMobile ? 'Gentle cues at the edge of the screen while you focus here. More in Settings › Phone.' : 'Gentle cues at the edge of your screen while you focus. More in Settings › Screen cues.'}</p>
         </section>
       {/if}
     </div>

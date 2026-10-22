@@ -11,7 +11,7 @@
   import { hush, playSpoken, speak } from '../../lib/addons/alef/voice';
   import { tinyTts } from '../../lib/addons/alef/tts/tts.svelte';
   import Icon from '../../lib/Icon.svelte';
-  import { platform } from '../../lib/platform';
+  import { platform, thisDevice } from '../../lib/platform';
   import { audioOut } from '../../lib/sound';
   import { settings } from '../../lib/stores/settings.svelte';
   import { view } from '../../lib/stores/view.svelte';
@@ -61,7 +61,7 @@
     const m = deviceModel(feature === 'voice' ? 'whistle' : 'needle');
     if (m.status === 'ready') return 'Private; nothing leaves your computer';
     if (m.status === 'downloading') return `Getting ${m.name}… ${Math.round(m.progress * 100)}%`;
-    return feature === 'voice' ? `Needs ${m.name} on this computer` : `Basic mode until ${m.name} is here`;
+    return feature === 'voice' ? `Needs ${m.name} on ${thisDevice}` : `Basic mode until ${m.name} is here`;
   }
 
   const services = $derived(PROVIDERS.filter((p) => can(p.id, skill)));
@@ -77,7 +77,7 @@
     const own: Opt[] = isSpeak
       ? [
           { id: 'chirps', name: 'Chirps', sub: 'Little robot sounds', icon: 'audio-lines', ready: true },
-          { id: 'device', name: 'On-device voice', sub: tinyTts.status === 'ready' ? 'Made on this computer' : 'Not downloaded yet', icon: 'speech', ready: true },
+          { id: 'device', name: 'On-device voice', sub: tinyTts.status === 'ready' ? `Made on ${thisDevice}` : 'Not downloaded yet', icon: 'speech', ready: true },
           { id: 'system', name: 'System voice', sub: "Your computer's own voice", icon: 'volume', ready: true },
           { id: 'off', name: 'Off', sub: 'Silent; you can still read it', icon: 'volume-off', ready: true },
         ]

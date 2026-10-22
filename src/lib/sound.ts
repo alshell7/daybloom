@@ -80,8 +80,10 @@ function bell(freq: number, at: number, dur = 1.6, gain = 0.22) {
 }
 
 let lastDetent = 0;
-/** The bezel's 5-minute click. Rate-limited so fast sweeps purr instead of rattle. */
+/** The bezel's 5-minute click (and on a phone a fine tick, also with Sounds off). Rate-limited
+ *  so fast sweeps purr instead of rattle. */
 export function detent() {
+  haptic('snap');
   const c = audio();
   if (!c || !master) return;
   const now = performance.now();

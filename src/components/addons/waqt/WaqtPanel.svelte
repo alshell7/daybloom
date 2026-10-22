@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { platform } from '../../../lib/platform';
+  import { platform, thisDevice } from '../../../lib/platform';
   // Waqt: a window onto the sky of your day. The gradient follows where the sun is (night, dawn,
   // day, golden afternoon, dusk); the sun glides along the day's arc past each prayer; the next
   // prayer and its jamaat are a glance away. Below: today's prayers to mark, the week as pearls,
@@ -49,7 +49,8 @@
     if (now < maghrib.at) return 'golden';
     return 'dusk';
   });
-  const sun = $derived(sunProgress(day, now));
+  // By the minute: the sun glides a step a minute (by the second it would glide without pause).
+  const sun = $derived(sunProgress(day, clock.minute));
   // The day arc: a half ellipse from the left horizon (sunrise) to the right (Maghrib).
   const W = 320;
   const H = 120;
@@ -83,7 +84,7 @@
     const el = e.currentTarget as HTMLElement;
     if (!waqt.howOf(today, p.id)) {
       waqt.markAs(today, p.id, waqt.quickHow(p));
-      if (settings.value.sound) sounds.tick();
+      sounds.tick();
     }
     choosing = { slot: p, el };
     choosingOpen = true;
@@ -110,7 +111,7 @@
     }
     q = '';
     changing = false;
-    if (settings.value.sound) sounds.done();
+    sounds.done();
   }
   function locate() {
     locError = '';
@@ -189,7 +190,7 @@
             <path class="star" d="M48 18l1.8 4 4.2.4-3.2 2.8 1 4.2-3.8-2.3-3.8 2.3 1-4.2-3.2-2.8 4.2-.4z" />
           </svg>
           <h3>{waqt.ready ? 'Change your place' : 'Where do you pray?'}</h3>
-          <p class="lead">Waqt works out the salah times for your place, on this computer. Your place goes only to your own GitHub repo, and only when sync is on.</p>
+          <p class="lead">Waqt works out the salah times for your place, on {thisDevice}. Your place goes only to your own sync, and only when sync is on.</p>
           <input bind:this={searchBox} class="field search" bind:value={q} placeholder="Search a city" aria-label="Search a city" />
           {#if found.length}
             <ul class="found" transition:slide={{ duration: rm ? 0 : 160 }}>
@@ -915,7 +916,17 @@
   .sec:hover {
     background: var(--sunken);
   }
+  /* The title gives way first, so a short detail ("15m kept free") stays whole. */
+  .sec > span {
+    flex: 0 3 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .sec small {
+    flex: 0 1 auto;
+    min-width: 0;
     margin-left: auto;
     max-width: 50%;
     overflow: hidden;

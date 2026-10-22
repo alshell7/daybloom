@@ -2,6 +2,7 @@
   // Reset Daybloom: choose what to clear — each part says what goes, with a count where it
   // helps — or everything. Save a copy first, then hold the button to confirm (a plain second
   // press works from the keyboard). Saving stops, every window reloads into a fresh start.
+  import { thisDevice } from '../lib/platform';
   import { cubicOut } from 'svelte/easing';
   import { fly, slide } from 'svelte/transition';
   import Icon from '../lib/Icon.svelte';
@@ -88,7 +89,7 @@
 {#if open}
   <Panel title="Reset Daybloom" onclose={() => ((view.sheet = null), (armed = false))}>
     <div class="rs">
-      <p class="lead">Start over, as much as you like. Choose what to clear on this computer.</p>
+      <p class="lead">Start over, as much as you like. Choose what to clear on {thisDevice}.</p>
 
       <label class="all" class:on={everything}>
         <span class="ico"><Icon name="refresh" size={16} /></span>

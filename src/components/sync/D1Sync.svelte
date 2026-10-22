@@ -4,13 +4,14 @@
   // it on or off, and disconnecting, ask for that password first.
   import { onMount } from 'svelte';
   import Icon from '../../lib/Icon.svelte';
-  import { platform } from '../../lib/platform';
+  import { keychain, platform } from '../../lib/platform';
   import { D1_DEFAULT_NAME, D1_TOKEN_URL, validAccountId, type D1Database } from '../../lib/sync/d1';
   import type { TestResult } from '../../lib/sync/engine.svelte';
   import { d1Sync as sync, githubSync } from '../../lib/sync/sync.svelte';
   import { bioForget, bioOpen, bioState } from '../../lib/native/bio';
   import Segmented from '../Segmented.svelte';
   import DeviceList from './DeviceList.svelte';
+  import SyncOptions from './SyncOptions.svelte';
   import PasswordPrompt from './PasswordPrompt.svelte';
   import RecoveryKey from './RecoveryKey.svelte';
   import { ago, messageOf, plural } from './time';
@@ -232,6 +233,8 @@
 
     <DeviceList devices={sync.devices} mine={cfg.deviceId} mineAt={cfg.lastSyncAt} />
 
+    <SyncOptions {sync} />
+
     <details class="conn" open={replacingToken}>
       <summary>Connection</summary>
       <p class="where">Account …{cfg.accountId.slice(-6)} · {cfg.databaseName || cfg.databaseId}</p>
@@ -258,7 +261,7 @@
           </div>
         {:else}
           <div class="inline">
-            <span class="chip"><Icon name="check" size={12} /> Saved in your keychain</span>
+            <span class="chip"><Icon name="check" size={12} /> {platform.isMobile ? 'Saved on this phone' : 'Saved in your keychain'}</span>
             <button class="btn btn-quiet" onclick={() => (replacingToken = true)}>Replace</button>
           </div>
         {/if}
@@ -282,7 +285,7 @@
         <label for="d1-token">API token</label>
         {#if sync.hasToken && !replacingToken}
           <div class="inline">
-            <span class="chip"><Icon name="check" size={12} /> Saved in your keychain</span>
+            <span class="chip"><Icon name="check" size={12} /> {platform.isMobile ? 'Saved on this phone' : 'Saved in your keychain'}</span>
             <button type="button" class="btn btn-quiet" onclick={() => (replacingToken = true)}>Replace</button>
           </div>
         {:else}
@@ -290,7 +293,7 @@
         {/if}
       </div>
       <p class="hint">
-        Create a custom token with one permission, <em>Account · D1 · Edit</em>, for this account only. It goes straight into your system keychain.
+        Create a custom token with one permission, <em>Account · D1 · Edit</em>, for this account only. It goes straight into {keychain}.
         <button type="button" class="link" onclick={() => platform.openExternal(D1_TOKEN_URL)}>Create a token on Cloudflare <Icon name="external" size={12} /></button>
       </p>
       {#if !platform.isNative}

@@ -270,6 +270,7 @@
 
   .foot {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-2);
     width: 100%;
     min-width: 0;

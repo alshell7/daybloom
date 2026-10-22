@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { attention } from '../lib/native/attention.svelte';
   import { tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
@@ -356,7 +357,7 @@
             <div class="now-line" aria-label={`Now, ${formatTime(clock.now, view.hour12)}`}>
               <span class="now-time tnum">{formatTime(clock.now, view.hour12)}</span>
               <span class="now-rule" aria-hidden="true">
-                {#key clock.minute}<i class="now-dot"></i>{/key}
+                {#key attention.looking ? clock.minute : 0}<i class="now-dot"></i>{/key}
               </span>
             </div>
           {/if}
@@ -638,6 +639,7 @@
     text-decoration-color: color-mix(in srgb, var(--ink) 40%, transparent);
   }
   .tick {
+    position: relative;
     width: 22px;
     height: 22px;
     border-radius: 50%;
@@ -1072,6 +1074,24 @@
     .scroll.fill {
       display: block;
       overflow: visible;
+    }
+  }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .gap .gap-add {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
+
+  /* A finger: the done circle answers over 44 px, not just the 22 px drawn. */
+  @media (pointer: coarse) {
+    .tick::after {
+      content: '';
+      position: absolute;
+      inset: -11px;
+      border-radius: 50%;
     }
   }
 </style>

@@ -4,11 +4,12 @@
   // only ciphertext.
   import { onMount } from 'svelte';
   import Icon from '../../lib/Icon.svelte';
-  import { platform } from '../../lib/platform';
+  import { keychain, platform } from '../../lib/platform';
   import { bioForget } from '../../lib/native/bio';
   import { d1Sync, githubSync as sync, TOKEN_URL, type TestResult } from '../../lib/sync/sync.svelte';
   import Segmented from '../Segmented.svelte';
   import DeviceList from './DeviceList.svelte';
+  import SyncOptions from './SyncOptions.svelte';
   import PasswordPrompt from './PasswordPrompt.svelte';
   import RecoveryKey from './RecoveryKey.svelte';
   import { ago, messageOf, plural } from './time';
@@ -256,6 +257,8 @@
 
     <DeviceList devices={sync.devices} mine={cfg.deviceId} mineAt={cfg.lastSyncAt} />
 
+    <SyncOptions {sync} />
+
     <details class="conn" open={replacingToken}>
       <summary>Connection</summary>
       <p class="where">{cfg.repo} · {cfg.branch} · {cfg.folder ? `${cfg.folder}/` : 'repo root'}</p>
@@ -272,7 +275,7 @@
           </div>
         {:else}
           <div class="inline">
-            <span class="chip"><Icon name="check" size={12} /> Saved in your keychain</span>
+            <span class="chip"><Icon name="check" size={12} /> {platform.isMobile ? 'Saved on this phone' : 'Saved in your keychain'}</span>
             <button class="btn btn-quiet" onclick={() => (replacingToken = true)}>Replace</button>
           </div>
         {/if}
@@ -298,7 +301,7 @@
         <label for="sync-token">Access token</label>
         {#if sync.hasToken && !replacingToken}
           <div class="inline">
-            <span class="chip"><Icon name="check" size={12} /> Saved in your keychain</span>
+            <span class="chip"><Icon name="check" size={12} /> {platform.isMobile ? 'Saved on this phone' : 'Saved in your keychain'}</span>
             <button type="button" class="btn btn-quiet" onclick={() => (replacingToken = true)}>Replace</button>
           </div>
         {:else}
@@ -307,7 +310,7 @@
       </div>
       <p class="hint">
         Make a fine-grained token with access to only this repo, and set <em>Contents</em> to <em>Read and write</em> — nothing else.
-        It goes straight into your system keychain and isn't shown again.
+        It goes straight into {keychain} and isn't shown again.
         <button type="button" class="link" onclick={() => platform.openExternal(TOKEN_URL)}>Create a token on GitHub <Icon name="external" size={12} /></button>
       </p>
       {#if !platform.isNative}

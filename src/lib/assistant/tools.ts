@@ -34,7 +34,7 @@ import {
 import type { BacklogList, Block, CategoryId, ISODate, Recurrence, Task } from '../engine/types';
 import { computeInsights, type Span } from '../insights';
 import { dayReview } from '../nudges.svelte';
-import { platform } from '../platform';
+import { platform, thisDevice } from '../platform';
 import { PRESETS, type PresetId } from '../presets';
 import { sounds } from '../sound';
 import { rhythm, routineStreaks } from '../streaks';
@@ -928,7 +928,7 @@ export const TOOLS: ToolDef[] = [
       s.timeZone = z === system ? '' : z;
       if (z !== system) s.recentZones = [z, ...s.recentZones.filter((x) => x !== z)].slice(0, 5);
       return {
-        say: z === system ? `Back on this computer's time · ${zoneCity(system)}.` : `Showing your day in ${zoneCity(z)} time · ${zoneOffsetLabel(z)}.`,
+        say: z === system ? `Back on ${thisDevice}'s time · ${zoneCity(system)}.` : `Showing your day in ${zoneCity(z)} time · ${zoneOffsetLabel(z)}.`,
         card: { kind: 'zone' },
         undo: () => Object.assign(settings.value, prev),
       };

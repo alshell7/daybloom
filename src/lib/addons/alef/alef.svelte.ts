@@ -7,6 +7,7 @@
 // tools, and says its own moments in its own words (muse.ts); otherwise it answers on this
 // device. The widget only mirrors the face and bubble (startAlefView).
 
+import { attention } from '../../native/attention.svelte';
 import { untrack } from 'svelte';
 import { isoOf, MINUTE, formatTime } from '../../engine/time';
 import type { Block } from '../../engine/types';
@@ -806,7 +807,8 @@ export function startAlef(): () => void {
     const ms = (lively ? 9000 : 22000) + Math.random() * (lively ? 13000 : 26000);
     idleTimer = setTimeout(() => {
       if (stopped) return;
-      if (!alef.performing && !alef.talk && !alef.busy && !(typeof document !== 'undefined' && document.hidden && !alef.settings.inWidget)) {
+      // (A phone: only while someone is looking; each one moves the whole dial.)
+      if (attention.looking && !alef.performing && !alef.talk && !alef.busy && !(typeof document !== 'undefined' && document.hidden && !alef.settings.inWidget)) {
         const night = !signalsOf({ now: clock.now, blocks: [], inFocus: false, idleMin, streak: 0, openCheckIns: 0, wake: settings.value.wake, sleep: settings.value.sleep }).awake;
         const id = idleBehavior(alef.affect, Math.floor(Math.random() * 1000), { night, idleMin });
         alef.perform(id, { sound: (id === 'sleeping' || id === 'sleepy') && Math.random() < 0.25 });

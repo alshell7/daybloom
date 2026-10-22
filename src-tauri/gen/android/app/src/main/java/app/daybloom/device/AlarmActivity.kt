@@ -49,7 +49,13 @@ class AlarmActivity : AppCompatActivity() {
       background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.parseColor("#141B26"), Color.parseColor("#0B0F16")))
     }
     // Lexend, the app's own type (res/font, SIL Open Font License).
-    val lexend = androidx.core.content.res.ResourcesCompat.getFont(this, resources.getIdentifier("lexend", "font", packageName))
+    val lexend = resources.getIdentifier("lexend", "font", packageName).takeIf { it != 0 }?.let {
+      try {
+        androidx.core.content.res.ResourcesCompat.getFont(this, it)
+      } catch (e: Exception) {
+        null
+      }
+    }
     fun face(weight: Int): Typeface = if (lexend != null && android.os.Build.VERSION.SDK_INT >= 28) Typeface.create(lexend, weight, false) else (lexend ?: Typeface.DEFAULT)
     fun text(s: String, sp: Float, color: String, bold: Boolean = false) = TextView(this).apply {
       text = s

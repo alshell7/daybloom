@@ -22,6 +22,7 @@
   import AlefPosture from './addons/alef/AlefPosture.svelte';
   import { alef, alefFile } from '../lib/addons/alef/alef.svelte';
   import { ACTS } from '../lib/addons/alef/behaviors';
+  import { keyed } from './topbar/items';
 
   // Alef works beside you here: body doubling.
   const alefOn = $derived(isOn('alef') && alefFile.ready && alefFile.value.settings.onDial);
@@ -75,7 +76,7 @@
 {/snippet}
 
 <div class="focus" role="dialog" aria-label="Focus" style:--c={wedge?.color ?? 'var(--ink-3)'} transition:fade={{ duration: view.reducedMotion ? 0 : 260 }}>
-  <button class="icon-btn close" onclick={leaveFocus} aria-label="Leave focus (Esc)"><Icon name="minimize" size={18} /></button>
+  <button class="icon-btn close" onclick={leaveFocus} aria-label={keyed('Leave focus', 'Esc')}><Icon name="minimize" size={18} /></button>
 
   <div class="center">
     <div class="dial" in:scale={{ start: 0.92, duration: view.reducedMotion ? 0 : 520, easing: cubicOut }}>

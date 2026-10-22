@@ -230,4 +230,12 @@
   .sw.on i {
     transform: scale(1.15);
   }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .row .edit {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
 </style>

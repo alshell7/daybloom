@@ -1,4 +1,5 @@
 <script lang="ts" generics="T extends string">
+  import { haptic } from '../lib/haptics';
   // A segmented control whose thumb glides to the chosen option (clip-path, so it
   // animates on the compositor and keeps a true pill shape at every width).
   let {
@@ -46,7 +47,7 @@
 <div class="seg" bind:this={root} role="group" aria-label={label}>
   <span class="thumb" class:ready style:clip-path={inset} aria-hidden="true"></span>
   {#each options as o (o.value)}
-    <button aria-pressed={o.value === value} onclick={() => onchange(o.value)} title={o.title}>{o.label}</button>
+    <button aria-pressed={o.value === value} onclick={() => (o.value !== value && haptic('tick'), onchange(o.value))} title={o.title}>{o.label}</button>
   {/each}
 </div>
 

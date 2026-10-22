@@ -275,12 +275,17 @@
     background: var(--sunken);
     opacity: 0.7;
   }
-  .ai-off {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 4px;
+  /* One flowing sentence with its link (as flex items its words and link wrapped apart). */
+  .hint.ai-off {
+    display: block;
     margin: 0 0 var(--s-3);
+  }
+  .ai-off :global(svg) {
+    vertical-align: -2px;
+    margin-right: 4px;
+  }
+  .ai-off .link {
+    display: inline;
   }
   .rc {
     --lilac: #8670e6;

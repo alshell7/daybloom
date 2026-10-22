@@ -27,6 +27,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 /// Methods the planner may call. Anything else is refused before it reaches Kotlin.
 const METHODS: &[&str] = &[
     "insets",
+    "shown",
+    "haptic",
     "systemBars",
     "backHandler",
     "keepAwake",
@@ -36,6 +38,8 @@ const METHODS: &[&str] = &[
     "focusShow",
     "focusHide",
     "reminderAccess",
+    "reminderMode",
+    "testAlarm",
     "openSettings",
     "widgets",
     "widgetPending",

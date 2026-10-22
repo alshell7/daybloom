@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The release build drops resources nothing names in code. These are looked up by a name
+     made at run time (the alarm's chosen tone, the alarm screen's font), so they stay. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/tone_*,@font/lexend" />

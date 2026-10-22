@@ -564,6 +564,58 @@ describe('github sync, end to end', () => {
   });
 });
 
+describe('sync options', () => {
+  it('only by hand: no sync on its own, on start or after a change; Sync now still works', async () => {
+    vi.useFakeTimers();
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    await a.svc.setOptions({ every: 0 });
+    const stop = a.svc.start();
+    await vi.advanceTimersByTimeAsync(0);
+    const before = repo.gets;
+    a.data.tasks.tasks.push(task('quiet'));
+    a.touch();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS + SYNC_INTERVAL_MS * 3);
+    expect(repo.gets).toBe(before);
+    await a.svc.syncNow();
+    expect(repo.read('tasks.json').tasks.map((t: Task) => t.id)).toEqual(['quiet']);
+    stop();
+  });
+
+  it('after a change off: the change waits for the next timed sync', async () => {
+    vi.useFakeTimers();
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    await a.svc.setOptions({ onChange: false, every: 15 });
+    const stop = a.svc.start();
+    await vi.advanceTimersByTimeAsync(0);
+    const before = repo.gets;
+    a.data.tasks.tasks.push(task('later'));
+    a.touch();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 3);
+    expect(repo.gets).toBe(before);
+    await vi.advanceTimersByTimeAsync(15 * 60_000);
+    expect(repo.read('tasks.json').tasks.map((t: Task) => t.id)).toEqual(['later']);
+    stop();
+  });
+
+  it('leaves out what is switched off', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    await connect(a, 'Work Mac');
+    await a.svc.setOptions({ skip: ['settings'] });
+    a.data.tasks.tasks.push(task('kept'));
+    a.data.settings.theme = 'dark';
+    a.touch();
+    await a.svc.syncNow();
+    expect(repo.read('tasks.json').tasks.map((t: Task) => t.id)).toEqual(['kept']);
+    const settings = repo.read('settings.json');
+    expect(settings?.theme).not.toBe('dark');
+  });
+});
+
 describe('github sync, addon files', () => {
   /** 09:00 UTC on 19 October 2026. */
   const T = Date.UTC(2026, 9, 19, 9);

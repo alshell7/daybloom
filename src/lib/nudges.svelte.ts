@@ -34,6 +34,8 @@ class Nudges {
     return view.todayBlocks
       .filter((b) => b.kind === 'task' && !b.done && !b.floating && b.endMs <= now && b.endMs > now - 6 * 60 * MINUTE)
       .filter((b) => !taskOf(b)?.acks?.includes(b.date))
+      // Swiped away for today (the block itself stays open in the timeline).
+      .filter((b) => !dismissedToday().includes(`check:${b.key}`))
       .sort((a, b) => a.endMs - b.endMs);
   });
 

@@ -13,6 +13,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -56,14 +57,11 @@ class AlarmService : Service() {
     val am = getSystemService(AudioManager::class.java)
     focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT).setAudioAttributes(attrs).build().also { am.requestAudioFocus(it) }
     val target = r.volume.toFloat().coerceIn(0.05f, 1f)
-    player = MediaPlayer().apply {
-      setAudioAttributes(attrs)
-      setDataSource(this@AlarmService, Uri.parse("android.resource://$packageName/raw/tone_${r.tone}"))
-      isLooping = true
-      prepare()
-      setVolume(if (r.gentle) target * 0.12f else target, if (r.gentle) target * 0.12f else target)
-      start()
-    }
+    val first = if (r.gentle) target * 0.12f else target
+    // The chosen tone; if it can't play, the phone's own alarm sound; and if that can't either,
+    // the alarm still vibrates and shows. An alarm never stops the app.
+    player = tone(Uri.parse("android.resource://$packageName/raw/tone_${r.tone}"), attrs, first)
+      ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)?.let { tone(it, attrs, first) }
     if (r.gentle) {
       val start = System.currentTimeMillis()
       val step = object : Runnable {
@@ -81,6 +79,23 @@ class AlarmService : Service() {
       Reminders.rangOut(this, r)
       stopSelf()
     }, r.ringForMin * 60_000L)
+  }
+
+  /** A looping player for [uri], already playing, or null if it can't play. */
+  private fun tone(uri: Uri, attrs: AudioAttributes, volume: Float): MediaPlayer? {
+    val p = MediaPlayer()
+    return try {
+      p.setAudioAttributes(attrs)
+      p.setDataSource(this, uri)
+      p.isLooping = true
+      p.prepare()
+      p.setVolume(volume, volume)
+      p.start()
+      p
+    } catch (e: Exception) {
+      p.release()
+      null
+    }
   }
 
   private fun quiet() {

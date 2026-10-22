@@ -4,6 +4,7 @@
   // a run of poses the eyes spring toward (AlefEyes); between feelings the face rests in the
   // mood, blinks, glances at the pointer and bobs while it talks. Overlays (hearts, zzz, a
   // tear…) are one-shot, transform and opacity only.
+  import { platform } from '../../../lib/platform';
   import { onMount, untrack } from 'svelte';
   import type { Affect } from '../../../lib/addons/alef/affect';
   import { ACTS, type ActId, type Eye } from '../../../lib/addons/alef/behaviors';
@@ -120,6 +121,18 @@
   const eyeColor = $derived(screen?.eye ?? eyes);
   const eyeGlow = $derived(screen ? screen.glow : 1);
   const scan = $derived(screen ? screen.scan : 0.13);
+
+  // The words sit above the face; where that would run past the top of the page's scroll area
+  // (a phone's dial sits right under the top bar), they open below it instead.
+  function roomAbove(node: HTMLElement) {
+    let clip: HTMLElement | null = node.parentElement;
+    while (clip && clip !== document.body && getComputedStyle(clip).overflowY === 'visible') clip = clip.parentElement;
+    const top = clip && clip !== document.body ? clip.getBoundingClientRect().top : 0;
+    // The layout box (the entrance animation scales the drawn one).
+    const parent = node.offsetParent as HTMLElement | null;
+    const at = (parent ? parent.getBoundingClientRect().top : 0) + node.offsetTop;
+    if (at < top + 4) node.classList.add('below');
+  }
 
   type Pose = { l: Eye; r: Eye; ms: number };
   const rest = $derived(restPose(affect));
@@ -248,7 +261,7 @@
 >
   {#if bubble && !compact}
     {#key bubble.seq}
-      <div class="bubble" class:long={bubble.text.length > 120} class:offering={!!bubble.offers?.length} role="status" aria-live="polite" onpointerenter={() => onhold?.(true)} onpointerleave={() => onhold?.(false)}>
+      <div class="bubble" use:roomAbove class:long={bubble.text.length > 120} class:offering={!!bubble.offers?.length} role="status" aria-live="polite" onpointerenter={() => onhold?.(true)} onpointerleave={() => onhold?.(false)}>
         <button class="say" onclick={() => ondismiss?.()} title="Click to talk">{bubble.text}</button>
         {#if bubble.offers?.length && onoffer}
           <span class="offers">
@@ -265,7 +278,7 @@
     this={interactive ? 'button' : 'div'}
     class="face"
     style:animation={move}
-    aria-label={interactive ? `${label}. Click to say hello, double-click to talk.` : label}
+    aria-label={interactive ? (platform.isMobile ? `${label}. Tap to say hello, double-tap to talk.` : `${label}. Click to say hello, double-click to talk.`) : label}
     role={interactive ? undefined : 'img'}
     onclick={interactive ? faceClick : undefined}
     ondblclick={interactive ? () => onopen?.() : undefined}
@@ -737,6 +750,17 @@
       opacity: 0;
       transform: translateY(6px) scale(0.85);
     }
+  }
+  .bubble.below {
+    top: calc(100% + 10px);
+    bottom: auto;
+    transform-origin: 50% 0;
+  }
+  .bubble.below::after {
+    top: auto;
+    bottom: 100%;
+    translate: -50% 6px;
+    box-shadow: -1px -1px 0 var(--line);
   }
   .bubble.long {
     width: min(300px, 190%);

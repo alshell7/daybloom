@@ -34,13 +34,15 @@ export interface BarItemDef {
 
 const mod = platform.os === 'mac' ? '⌘' : 'Ctrl ';
 export const KBD = { ask: `${mod}K`, privacy: platform.os === 'mac' ? '⇧⌘P' : 'Ctrl ⇧ P' };
+/** A control's name for screen readers, with its key on a computer (a phone has no keys). */
+export const keyed = (label: string, key: string) => (platform.isMobile ? label : `${label} (${key})`);
 
 const BEFORE_ADDONS: BarItemDef[] = [
   { id: 'private', group: 'now', label: 'Privacy badge', icon: 'eye-off', priority: 97, note: 'While privacy mode is on' },
   { id: 'session', group: 'now', label: 'Focus timer', icon: 'hourglass', priority: 99, note: 'While a focus session runs outside focus mode' },
   { id: 'tracker', group: 'now', label: 'Time Tracker', icon: 'timer', priority: 98, note: 'While the stopwatch runs' },
-  { id: 'date', group: 'navigate', label: 'Day and date', icon: 'calendar-clock', priority: 0, lead: true, note: 'The clock takes you to today (T); the date opens the month (M)' },
-  { id: 'week', group: 'navigate', label: 'Week', icon: 'calendar-range', priority: 0, lead: true, note: 'Swipe or ‹ › to look at other weeks · ← → move a day' },
+  { id: 'date', group: 'navigate', label: 'Day and date', icon: 'calendar-clock', priority: 0, lead: true, note: platform.isMobile ? 'The clock takes you to today; the date opens the month' : 'The clock takes you to today (T); the date opens the month (M)' },
+  { id: 'week', group: 'navigate', label: 'Week', icon: 'calendar-range', priority: 0, lead: true, note: platform.isMobile ? 'Swipe to look at other weeks' : 'Swipe or ‹ › to look at other weeks · ← → move a day' },
   { id: 'zone', group: 'navigate', label: 'Time zone', icon: 'globe', priority: 0, lead: true },
   { id: 'ask', group: 'do', label: 'Ask Daybloom', icon: 'sparkles', priority: 80, kbd: KBD.ask },
   { id: 'backlog', group: 'do', label: 'Backlog', icon: 'inbox', priority: 76, kbd: 'B' },
@@ -64,6 +66,7 @@ export function barCatalog(): BarItemDef[] {
     ...BEFORE_ADDONS.filter((d) => d.id !== 'tracker' || isOn('tracker')),
     // The first addon stays a little longer than the next.
     ...addons.map((a, i): BarItemDef => ({ id: `addon:${a.id}`, group: 'addons', label: a.name, icon: a.icon, priority: 30 + (n - i) * 0.01, sheet: a.sheet })),
-    ...AFTER_ADDONS,
+    // A phone has no desktop widget (its home-screen widgets are added from the launcher).
+    ...AFTER_ADDONS.filter((d) => d.id !== 'widget' || !platform.isMobile),
   ];
 }

@@ -256,12 +256,14 @@ export function analyse(i: RetroInput): Retro {
   patterns.sort((a, b) => b.weight - a.weight);
 
   // ── Story ──
-  const tone = !planned ? 'A quiet stretch' : kept >= 0.8 ? 'A strong stretch' : kept >= 0.6 ? 'A steady stretch' : kept >= 0.4 ? 'A mixed stretch' : 'A heavy stretch';
+  // One or two plans say nothing about a week yet (and today's may still be ahead), so they
+  // stay a quiet stretch rather than a verdict.
+  const tone = planned - letGo < 3 ? 'A quiet stretch' : kept >= 0.8 ? 'A strong stretch' : kept >= 0.6 ? 'A steady stretch' : kept >= 0.4 ? 'A mixed stretch' : 'A heavy stretch';
   const span = n <= 7 ? 'week' : `${n} days`;
   const title = tone.replace('stretch', span);
   const topCat = [...byCategory].sort((a, b) => b.doneMin - a.doneMin)[0];
   const bits: string[] = [];
-  if (planned) bits.push(`You kept ${done} of ${planned - letGo} plans (${pct(kept)})${letGo ? `, and let ${letGo} go` : ''}.`);
+  if (planned) bits.push(`You kept ${done} of ${planned - letGo} ${planned - letGo === 1 ? 'plan' : 'plans'} (${pct(kept)})${letGo ? `, and let ${letGo} go` : ''}.`);
   if (doneMin >= 30) bits.push(`${dur(doneMin)} of time well spent${topCat && topCat.doneMin >= 30 ? `, most of it on ${CATEGORIES.find((c) => c.id === topCat.id)?.label.toLowerCase()}` : ''}.`);
   if (strongPart && strongPart.planned >= 3) bits.push(`${strongPart.label}s are when things get done.`);
   if (!bits.length) bits.push('Plan a few blocks and finish them; the story of your days starts here.');

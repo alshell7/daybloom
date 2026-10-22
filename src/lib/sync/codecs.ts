@@ -160,6 +160,21 @@ export const DATA_FILES = [
   'secrets.json',
 ];
 
+/** What a service can leave out (Settings › Sync). Your day and backlog always travel. */
+export type SyncGroup = 'settings' | 'addons' | 'ai' | 'calendars' | 'keys';
+export const SYNC_GROUPS: { id: SyncGroup; label: string; files: string[] }[] = [
+  { id: 'settings', label: 'Settings and look', files: ['settings.json'] },
+  { id: 'addons', label: 'Addons’ data', files: ['work.json', 'tracker.json', 'crumbs.json', 'reality.json', 'waqt.json', 'alef.json', 'retro.json', 'landings.json'] },
+  { id: 'ai', label: 'AI setup', files: ['ai.json'] },
+  { id: 'calendars', label: 'Calendar links', files: ['calendars.json'] },
+  { id: 'keys', label: 'AI keys and calendar sign-ins', files: ['secrets.json'] },
+];
+
+/** Whether a file is left out by the service's choices. */
+export function skippedFile(file: string, skip: readonly SyncGroup[]): boolean {
+  return skip.some((g) => SYNC_GROUPS.find((x) => x.id === g)?.files.includes(file));
+}
+
 /** Keys of every base snapshot, for forgetting them all. */
 export const BASE_KEYS = DATA_FILES.map((f) => f.replace(/\.json$/, ''));
 

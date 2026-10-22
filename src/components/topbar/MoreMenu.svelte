@@ -33,6 +33,8 @@
   import { cubicOut } from 'svelte/easing';
   import { formatDayLong, fromISODate } from '../../lib/engine/time';
   import Icon from '../../lib/Icon.svelte';
+  import { fitOnScreen } from '../../lib/fitOnScreen';
+  import { popovers } from '../../lib/popovers.svelte';
   import { view } from '../../lib/stores/view.svelte';
   import { bump, springOut } from './motion';
 
@@ -55,6 +57,10 @@
   } = $props();
 
   let open = $state(false);
+  // Back (or Esc) closes it first.
+  $effect(() => {
+    if (open) return popovers.push(() => (open = false));
+  });
   let btn = $state<HTMLButtonElement>();
   let menu = $state<HTMLDivElement>();
   const rm = $derived(view.reducedMotion);
@@ -166,7 +172,7 @@
   </button>
 
   {#if open}
-    <div class="menu" role="menu" tabindex="-1" aria-label="More" bind:this={menu} onkeydown={onKey} in:menuIn out:menuOut>
+    <div class="menu" role="menu" tabindex="-1" aria-label="More" bind:this={menu} use:fitOnScreen onkeydown={onKey} in:menuIn out:menuOut>
       {#each groups as g, gi (g.id)}
         <div role="group" aria-label={g.name}>
         <p class="head" aria-hidden="true" in:fly|global={row(offset(gi))}>{g.name}</p>
@@ -232,6 +238,8 @@
     pointer-events: none;
   }
   .menu {
+    /* inside the top bar, which keeps its own items on one line */
+    white-space: normal;
     position: absolute;
     top: calc(100% + 8px);
     right: -4px;

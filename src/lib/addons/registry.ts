@@ -3,6 +3,7 @@
 // Addon data lives in its own store (never inside tasks), so turning one off hides it
 // without touching your day.
 
+import { platform } from '../platform';
 import { settings } from '../stores/settings.svelte';
 
 export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef' | 'views';
@@ -25,6 +26,8 @@ export interface AddonMeta {
   group?: AddonGroup;
   /** Uses the AI set up in Settings › AI. */
   ai?: boolean;
+  /** Only on a computer: a phone doesn't list it or run it, even when sync turned it on. */
+  desktop?: boolean;
 }
 
 export type AddonGroup = 'plan' | 'time' | 'calm' | 'faith' | 'ai';
@@ -38,7 +41,7 @@ export const ADDON_GROUPS: { id: AddonGroup; name: string; short: string }[] = [
   { id: 'ai', name: 'AI & connections', short: 'AI' },
 ];
 
-export const ADDONS: AddonMeta[] = [
+const ALL: AddonMeta[] = [
   {
     id: 'work',
     group: 'time',
@@ -205,15 +208,19 @@ export const ADDONS: AddonMeta[] = [
       { icon: 'shield', text: 'Only on this computer, behind a key; read-only with one switch' },
     ],
     sheet: 'mcp',
+    desktop: true,
   },
 ];
 
+/** The addons this device can run. */
+export const ADDONS = ALL.filter((a) => !(a.desktop && platform.isMobile));
+
 export function addon(id: AddonId): AddonMeta {
-  return ADDONS.find((a) => a.id === id)!;
+  return ALL.find((a) => a.id === id)!;
 }
 
 export function isOn(id: AddonId): boolean {
-  return settings.value.addons[id] === true;
+  return settings.value.addons[id] === true && !(platform.isMobile && addon(id).desktop);
 }
 
 export function setOn(id: AddonId, on: boolean) {

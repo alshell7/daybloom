@@ -4,7 +4,7 @@
 // the system keychain too. Saved files are deleted (not overwritten), saving stops, and every
 // window reloads into a fresh start.
 
-import { platform } from './platform';
+import { platform, thisDevice } from './platform';
 import { freezeSaves } from './stores/persisted.svelte';
 import { PROVIDERS } from './ai/providers';
 
@@ -20,19 +20,19 @@ export interface PartInfo {
 export const PARTS: PartInfo[] = [
   { id: 'blocks', name: 'Blocks and backlog', icon: 'dial', what: 'Every block, repeat and backlog task, the Trash, what you ticked or skipped in your calendars, alarms and a running focus session.' },
   { id: 'progress', name: 'Progress', icon: 'trophy', what: 'Badges, your rhythm and what you asked Ask Daybloom.' },
-  { id: 'settings', name: 'Settings', icon: 'sliders', what: 'Theme, dial, rhythm, alarms, the widget, the top bar, which addons are on, and the getting-started card.' },
+  { id: 'settings', name: 'Settings', icon: 'sliders', what: 'Theme, dial, rhythm, alarms, the widget, the top bar, which addons are on, the app lock and the getting-started card.' },
   { id: 'addons', name: 'Addons and their data', icon: 'puzzle', what: 'Work projects and bills, tracked time, breadcrumbs, Waqt marks and settings, Alef’s memory and look, and the rest.' },
   { id: 'ai', name: 'AI services and keys', icon: 'key', what: 'Your AI services, their keys in the keychain, and who uses what.' },
   { id: 'calendars', name: 'Calendars', icon: 'calendar', what: 'Connected calendars and their sign-ins. The calendars themselves stay as they are.' },
   { id: 'sync', name: 'Sync', icon: 'cloud', what: 'GitHub and Cloudflare D1 sync on this device: tokens, snapshots and the saved master-password key. Your repo and database stay as they are.' },
-  { id: 'models', name: 'Downloaded models', icon: 'cpu', what: 'Needle, Whistle and Alef’s voice on this computer (download them again any time).' },
+  { id: 'models', name: 'Downloaded models', icon: 'cpu', what: `Needle, Whistle and Alef’s voice on ${thisDevice} (download them again any time).` },
 ];
 
 /** Saved files each part clears (addons: every `addon-*`). */
 const FILES: Record<ResetPart, (all: string[]) => string[]> = {
   blocks: () => ['tasks', 'trash', 'event-states', 'timer', 'nudges', 'alarms'],
   progress: () => ['progress', 'streaks', 'assistant'],
-  settings: () => ['settings', 'layout', 'cue-preview'],
+  settings: () => ['settings', 'layout', 'cue-preview', 'app-lock'],
   addons: (all) => all.filter((k) => k.startsWith('addon-')),
   ai: () => ['ai'],
   calendars: () => ['calendars', 'calendar-cache', 'calendar-google-client'],
@@ -68,6 +68,11 @@ export async function resetApp(parts: ResetPart[], everything = false): Promise<
     } catch (e) {
       console.warn('[daybloom] reset sync', e);
     }
+  }
+  if (chosen.has('settings')) {
+    // The app lock's PIN and fingerprint token (its on/off is the `app-lock` file).
+    await platform.secrets.delete('app-lock').catch(() => {});
+    if (platform.isMobile) await import('./native/bio').then((b) => b.bioForget('app-lock-bio')).catch(() => {});
   }
   if (chosen.has('ai')) {
     for (const p of PROVIDERS) {

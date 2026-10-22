@@ -48,6 +48,12 @@ describe('retrospection', () => {
     expect(r.patterns.find((p) => p.id === 'meetings')!.action?.do).toBe('landings');
   });
 
+  it('keeps one plan, still open, a quiet week (not a verdict) and says "plan"', () => {
+    const r = analyse({ tasks: [task({ date: '2026-10-13', start: 540 })], events: [], from: '2026-10-13', to: '2026-10-19', nowMs: NOW, wake: 420, sleep: 1380 });
+    expect(r.story.title).toBe('A quiet week');
+    expect(r.story.text).toMatch(/of 1 plan \(/);
+  });
+
   it('is gentle on an empty stretch', () => {
     const r = analyse({ tasks: [], events: [], from: '2026-10-13', to: '2026-10-19', nowMs: NOW, wake: 420, sleep: 1380 });
     expect(r.story.title).toBe('A quiet week');

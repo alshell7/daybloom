@@ -6,6 +6,7 @@
   import { CATEGORIES, categoryColor } from '../../lib/engine/categories';
   import type { CategoryId } from '../../lib/engine/types';
   import Icon from '../../lib/Icon.svelte';
+  import { fitOnScreen } from '../../lib/fitOnScreen';
   import { view } from '../../lib/stores/view.svelte';
 
   let {
@@ -123,6 +124,7 @@
         <div
           class="menu"
           bind:this={menuEl}
+          use:fitOnScreen
           role="menu"
           tabindex="-1"
           aria-label="Sort by"

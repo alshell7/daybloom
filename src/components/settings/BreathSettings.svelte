@@ -201,6 +201,16 @@
     min-height: 40px;
     font-size: var(--t-sm);
   }
+  /* A phone: a control that doesn't fit beside its label goes under it, on the right. */
+  @media (max-width: 480px) {
+    .row {
+      flex-wrap: wrap;
+      row-gap: var(--s-2);
+    }
+    .row > :last-child:not(:first-child) {
+      margin-left: auto;
+    }
+  }
   .row > span:first-child {
     color: var(--ink-2);
   }
@@ -228,6 +238,12 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: var(--s-2);
+  }
+  /* A phone: one pattern a line, so its words show in full. */
+  @media (max-width: 480px) {
+    .patterns {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   .pattern {
     position: relative;
@@ -368,6 +384,7 @@
   /* --- try one breath ------------------------------------------------------------------- */
   .try {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--s-3);
     margin-top: var(--s-3);

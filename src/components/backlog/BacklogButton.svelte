@@ -6,10 +6,14 @@
   import { fly, scale } from 'svelte/transition';
   import { categoryColor } from '../../lib/engine/categories';
   import Icon from '../../lib/Icon.svelte';
+  import { fitOnScreen } from '../../lib/fitOnScreen';
+  import { popovers } from '../../lib/popovers.svelte';
+  import { platform } from '../../lib/platform';
   import { shownTitle } from '../../lib/privacy';
   import { taskFile } from '../../lib/stores/tasks.svelte';
   import { view } from '../../lib/stores/view.svelte';
   import Capture from './Capture.svelte';
+  import { keyed } from '../topbar/items';
 
   let open = $state(false);
   let cap: Capture | undefined = $state();
@@ -25,6 +29,11 @@
     await tick();
     cap?.focus();
   }
+  // Back (or Esc) closes it first.
+  $effect(() => {
+    if (open) return popovers.push(close);
+  });
+
   function close() {
     open = false;
   }
@@ -43,7 +52,7 @@
     aria-pressed={view.sheet?.kind === 'backlog'}
     aria-expanded={open}
     aria-haspopup="dialog"
-    aria-label="Add to the backlog (B opens it)"
+    aria-label={keyed('Add to the backlog', 'B opens it')}
     title="Add to the backlog · B opens it"
   >
     <Icon name="inbox" size={18} />
@@ -56,11 +65,12 @@
       class="card"
       role="dialog"
       aria-label="Add to the backlog"
+      use:fitOnScreen
       tabindex="-1"
       onkeydown={(e) => e.key === 'Escape' && (e.stopPropagation(), close())}
       transition:scale={{ start: 0.95, duration: view.reducedMotion ? 0 : 200, easing: cubicOut }}
     >
-      <p class="head">Add to the backlog <span>Enter adds · it stays open for the next</span></p>
+      <p class="head">Add to the backlog <span>{platform.isMobile ? 'It stays open for the next' : 'Enter adds · it stays open for the next'}</span></p>
       <Capture bind:this={cap} target="inbox" oncaptured={(ids) => (added = [...ids, ...added])} />
       {#if recent.length}
         <ul class="added" aria-label="Just added">
@@ -122,6 +132,8 @@
     z-index: 44;
   }
   .card {
+    /* inside the top bar, which keeps its own items on one line */
+    white-space: normal;
     position: absolute;
     top: calc(100% + 8px);
     right: -6px;

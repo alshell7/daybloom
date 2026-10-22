@@ -14,7 +14,7 @@
 // key is kept in the OS secure store so background syncs never ask for the password.
 // Only the main window ever syncs, and two services never sync at the same moment.
 
-import { BASE_KEYS, codecs, DATA_FILES, type Codec, type SecretStore, type SyncStores } from './codecs';
+import { BASE_KEYS, codecs, DATA_FILES, skippedFile, SYNC_GROUPS, type Codec, type SecretStore, type SyncGroup, type SyncStores } from './codecs';
 import { deepEqual } from './merge';
 import { sealedRemote, SyncError, VAULT_FILE, type FetchLike, type RemoteEntry, type SyncRemote } from './remote';
 import {
@@ -32,6 +32,12 @@ import {
 } from './vault';
 
 export const SYNC_INTERVAL_MS = 5 * 60_000;
+
+/** On a phone's mobile data right now (the web's Network Information, where the web view has it). */
+function onMobileData(): boolean {
+  const c = (typeof navigator !== 'undefined' ? (navigator as Navigator & { connection?: { type?: string } }).connection : undefined) ?? null;
+  return c?.type === 'cellular';
+}
 /** Quiet time after the last local change before syncing it. */
 export const SETTLE_MS = 20_000;
 /** Focus / visibility only syncs if the last sync is at least this old. */
@@ -68,7 +74,18 @@ export interface CommonConfig {
   devices: DeviceInfo[];
   /** Seal everything with the vault (always on for services that require it). */
   encrypted: boolean;
+  /** Sync on its own every this many minutes (0: only with Sync now). */
+  every: number;
+  /** Also sync shortly after a change here. */
+  onChange: boolean;
+  /** A phone: also sync over mobile data (off: Wi-Fi only, Sync now still works). */
+  mobileData: boolean;
+  /** What this service leaves out (see SYNC_GROUPS). */
+  skip: SyncGroup[];
 }
+
+/** The choices for how often a service syncs on its own (minutes; 0 is only by hand). */
+export const SYNC_EVERY = [1, 5, 15, 60, 0] as const;
 
 export type SyncStatus =
   | { state: 'idle' }
@@ -275,6 +292,10 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
       join: 'replace',
       devices: [],
       encrypted: backend.alwaysSealed,
+      every: SYNC_INTERVAL_MS / 60_000,
+      onChange: true,
+      mobileData: true,
+      skip: [],
     } as Config;
   }
 
@@ -311,6 +332,8 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
         /* unreadable: start over */
       }
       if (!Array.isArray(cfg.devices)) cfg.devices = [];
+      if (!Array.isArray(cfg.skip)) cfg.skip = [];
+      if (!(SYNC_EVERY as readonly number[]).includes(cfg.every)) cfg.every = SYNC_INTERVAL_MS / 60_000;
       if (backend.alwaysSealed) cfg.encrypted = true;
       cfg.encrypted = !!cfg.encrypted;
       // Saved with the first configure(), so nothing is written for people who never sync.
@@ -367,7 +390,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
   async function isDirty(): Promise<boolean> {
     const loc = locationOf();
     const stores = await deps.stores();
-    for (const c of codecs(stores, { sealed: sealed() })) {
+    for (const c of codecs(stores, { sealed: sealed() }).filter((c) => !skippedFile(c.file, state.config.skip))) {
       const base = await loadBase(c, loc);
       if (!base || !deepEqual(c.read(), base.data)) return true;
     }
@@ -663,7 +686,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     try {
       const stores = await deps.stores();
       const loc = locationOf(cfg);
-      const list = codecs(stores, { sealed: !!vault });
+      const list = codecs(stores, { sealed: !!vault }).filter((c) => !skippedFile(c.file, state.config.skip));
       await conn.prepare?.();
       if (vault) {
         if ((await checkVault(conn.remote, vault, loc)) === 'off') {
@@ -704,8 +727,12 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     }
   }
 
+  /** Minutes since this service last ran (its own pace counts from there). */
+  let idleMinutes = 0;
+
   function run(): Promise<void> {
     if (running) return running;
+    idleMinutes = 0;
     running = (async () => {
       try {
         await lock(syncOnce);
@@ -719,7 +746,20 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
   /** Background trigger: stays quiet while a problem waits for the user. */
   function auto() {
     if (!state.ready || !state.config.enabled || paused || now() < blockedUntil) return;
+    if (state.config.every === 0) return; // only by hand
+    if (!state.config.mobileData && onMobileData()) return; // waits for Wi-Fi
     void run();
+  }
+
+  /** Changes how and what this service syncs (Settings › Sync). */
+  async function setOptions(patch: Partial<Pick<CommonConfig, 'every' | 'onChange' | 'mobileData' | 'skip'>>) {
+    await init();
+    const c = state.config;
+    if (patch.every !== undefined && (SYNC_EVERY as readonly number[]).includes(patch.every)) c.every = patch.every;
+    if (patch.onChange !== undefined) c.onChange = patch.onChange;
+    if (patch.mobileData !== undefined) c.mobileData = patch.mobileData;
+    if (patch.skip) c.skip = SYNC_GROUPS.map((g) => g.id).filter((g) => patch.skip!.includes(g));
+    await persistConfig();
   }
 
   // -- public actions -------------------------------------------------------
@@ -954,7 +994,12 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     let settle: ReturnType<typeof setTimeout> | null = null;
     let unwatch: (() => void) | undefined;
 
-    const interval = setInterval(auto, SYNC_INTERVAL_MS);
+    // Each minute: due by this service's own pace (Settings › Sync)?
+    const interval = setInterval(() => {
+      idleMinutes++;
+      const every = state.config.every;
+      if (every > 0 && idleMinutes >= every) auto();
+    }, 60_000);
     const onFocus = () => {
       if (now() - (state.config.lastSyncAt ?? 0) > FOCUS_GAP_MS) auto();
     };
@@ -980,7 +1025,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
             if (settle) clearTimeout(settle);
             settle = setTimeout(async () => {
               settle = null;
-              if (stopped || !state.config.enabled) return;
+              if (stopped || !state.config.enabled || !state.config.onChange) return;
               if (await isDirty().catch(() => true)) auto();
             }, SETTLE_MS);
           },
@@ -1052,6 +1097,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     test,
     enable,
     syncNow,
+    setOptions,
     disconnect,
     start,
     remoteVault,

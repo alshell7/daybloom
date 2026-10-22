@@ -1,6 +1,7 @@
 <script lang="ts">
   // Soft landings: how much room to keep after meetings, when to offer a landing, which
   // stepping stones to offer, today's back-to-back hand-offs (with "Make room"), and the week.
+  import { platform } from '../../../lib/platform';
   import { cubicOut } from 'svelte/easing';
   import { fly } from 'svelte/transition';
   import { handoffs, headline, pickStones, STONES } from '../../../lib/addons/landings/landings';
@@ -108,7 +109,7 @@
         {#if week.length}
           <p class="stat"><b class="tnum">{taken.length}</b> {taken.length === 1 ? 'landing' : 'landings'} taken of <span class="tnum">{week.length}</span> offered{favourite ? ` · most often: ${favourite}` : ''}.</p>
         {:else}
-          <p class="empty">When a meeting ends, a landing card appears here at the bottom of the window.</p>
+          <p class="empty">When a meeting ends, a landing card appears here at the bottom of the {platform.isMobile ? 'screen' : 'window'}.</p>
         {/if}
       </section>
     </div>
@@ -145,6 +146,21 @@
     gap: var(--s-3);
     min-height: 40px;
     font-size: var(--t-sm);
+  }
+  /* A phone: a control that doesn't fit beside its label goes under it, on the right. */
+  @media (max-width: 480px) {
+    .row {
+      flex-wrap: wrap;
+      row-gap: var(--s-2);
+    }
+    .row > :last-child:not(:first-child) {
+      margin-left: auto;
+    }
+    /* A switch stays beside its words; the words wrap instead. */
+    .row:has(> .switch) > :first-child {
+      flex: 1 1 0;
+      min-width: 0;
+    }
   }
   .hint,
   .empty,

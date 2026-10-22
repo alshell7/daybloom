@@ -7,6 +7,7 @@
 </script>
 
 <script lang="ts">
+  import { platform } from '../lib/platform';
   import { tick } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fly, slide } from 'svelte/transition';
@@ -386,7 +387,11 @@
                 </ul>
                 {#if prefs.tab !== 'done'}
                   <p class="foot-hint">
-                    Drag a row onto the dial to place it. <kbd>↑</kbd><kbd>↓</kbd> move · <kbd>⏎</kbd> rename · <kbd>Space</kbd> done · <kbd>T</kbd> today
+                    {#if platform.isMobile}
+                      Tap ⋯ on a row to plan it: today, a time, or another list. Tap its name for the details.
+                    {:else}
+                      Drag a row onto the dial to place it. <kbd>↑</kbd><kbd>↓</kbd> move · <kbd>⏎</kbd> rename · <kbd>Space</kbd> done · <kbd>T</kbd> today
+                    {/if}
                   </p>
                 {:else}
                   <div class="done-foot">
@@ -459,6 +464,8 @@
   }
   .mode {
     display: grid;
+    /* minmax(0, …): the lists' tab row scrolls; it doesn't widen the panel on a phone */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-3);
   }
 

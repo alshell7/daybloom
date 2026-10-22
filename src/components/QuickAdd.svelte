@@ -7,6 +7,7 @@
   import { describeRecurrence } from '../lib/engine/recurrence';
   import { addDays, atMinutes, formatDayShort, formatDuration, formatMinutes, MINUTE, minutesOfDay, startOfDayMs } from '../lib/engine/time';
   import Icon from '../lib/Icon.svelte';
+  import { attention } from '../lib/native/attention.svelte';
   import { parseQuick } from '../lib/quickadd';
   import { sounds } from '../lib/sound';
   import { clock } from '../lib/stores/clock.svelte';
@@ -38,8 +39,9 @@
 
   const EXAMPLES = ['gym 5pm 45m', 'meds every day 8am', 'call mom tomorrow 6pm', 'deep work 9–11:30am', 'standup weekdays 9:30 15m', 'return parcel later'];
   let ex = $state(0);
+  // The examples change while someone is looking (on a phone, see attention.svelte.ts).
   $effect(() => {
-    if (focused || text) return;
+    if (focused || text || !attention.looking) return;
     const id = setInterval(() => (ex = (ex + 1) % EXAMPLES.length), 3800);
     return () => clearInterval(id);
   });

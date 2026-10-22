@@ -1,7 +1,8 @@
 // Reminders that work while Daybloom is closed. The planner hands over the next two days
 // (src/lib/native/reminders.svelte.ts → `schedule`): block starts, heads-ups, alerts, salah
-// times and alarms. Android keeps them in its alarm clock (exact, allowed while idle),
-// posts each when its time comes, and after a restart or a clock change puts them back.
+// times and alarms. Android keeps them as exact alarms (allowed while idle; the alarm clock
+// on phones that loosen those, see `clock`), posts each when its time comes, and after a
+// restart or a clock change puts them back.
 //
 // An alarm rings like a clock's (AlarmService): the block's own tone on the alarm stream
 // (rendered from the app's synthesiser, res/raw/tone_*.wav), growing gently, until it's
@@ -36,11 +37,15 @@ data class Reminder(
   val gentle: Boolean = true,
   /** 0..1, within the phone's alarm volume. */
   val volume: Double = 0.7,
+  /** One notification at a time per tag: a block's alerts, start and heads-up replace each other. */
+  val tag: String = "",
+  /** When it has had its moment: Android clears it then (0: when it's tapped or swiped). */
+  val until: Long = 0,
 ) {
   fun toJson(): JSONObject = JSONObject()
     .put("id", id).put("at", at).put("kind", kind).put("title", title).put("body", body)
     .put("tone", tone).put("ringForMin", ringForMin).put("snoozeMin", snoozeMin)
-    .put("gentle", gentle).put("volume", volume)
+    .put("gentle", gentle).put("volume", volume).put("tag", tag).put("until", until)
 
   companion object {
     fun from(o: JSONObject) = Reminder(
@@ -54,6 +59,8 @@ data class Reminder(
       snoozeMin = o.optInt("snoozeMin", 10).coerceIn(1, 60),
       gentle = o.optBoolean("gentle", true),
       volume = o.optDouble("volume", 0.7).coerceIn(0.0, 1.0),
+      tag = o.optString("tag", ""),
+      until = o.optLong("until", 0),
     )
   }
 }
@@ -106,33 +113,81 @@ object Reminders {
 
   fun canExact(ctx: Context): Boolean = Build.VERSION.SDK_INT < 31 || am(ctx).canScheduleExactAlarms()
 
-  /** Replaces every scheduled reminder with `list` (past ones are skipped). */
+  // Some phones quietly turn an app's exact alarms into loose ones that may come up to an hour
+  // late (measured on a OnePlus: ColorOS, shared with OPPO and realme). An alarm clock they
+  // leave alone. So there, and on any phone where a reminder has come late, reminders go
+  // through the alarm clock too; the status bar then shows the next one. Settings › Phone
+  // can choose either way ("clock" or "standard"; "auto" decides as above).
+  private val LOOSE = setOf("oneplus", "oppo", "realme")
+  private const val LATE_MS = 2 * 60_000L
+  private val MODES = setOf("auto", "clock", "standard")
+
+  fun looseMaker(): Boolean = Build.MANUFACTURER.lowercase() in LOOSE
+  fun mode(ctx: Context): String = prefs(ctx).getString("onTime", "auto")?.takeIf { it in MODES } ?: "auto"
+  fun late(ctx: Context): Int = prefs(ctx).getInt("late", 0)
+  fun lateBy(ctx: Context): Long = prefs(ctx).getLong("lateBy", 0)
+  fun clock(ctx: Context): Boolean = when (mode(ctx)) {
+    "clock" -> true
+    "standard" -> false
+    else -> looseMaker() || late(ctx) > 0
+  }
+
+  fun setMode(ctx: Context, mode: String) {
+    if (mode !in MODES) return
+    prefs(ctx).edit().putString("onTime", mode).apply()
+    rearm(ctx)
+  }
+
+  /** Settings › Phone › Try the alarm: one alarm beside the planned ones, kept until it rings. */
+  const val TEST_ID = "try-alarm"
+
+  fun test(ctx: Context, r: Reminder) {
+    channels(ctx)
+    val t = r.copy(id = TEST_ID, kind = "alarm")
+    save(ctx, load(ctx).filter { it.id != TEST_ID } + t)
+    arm(ctx, t)
+  }
+
+  /** Replaces every scheduled reminder with `list` (past ones are skipped; a test alarm stays). */
   fun schedule(ctx: Context, list: List<Reminder>) {
     channels(ctx)
     val old = load(ctx)
     for (r in old) am(ctx).cancel(fireIntent(ctx, r))
     val now = System.currentTimeMillis()
-    val next = list.filter { it.at > now - 30_000 }.sortedBy { it.at }.take(120)
+    val trying = old.filter { it.id == TEST_ID && it.at > now }
+    val next = (list.filter { it.at > now - 30_000 } + trying).sortedBy { it.at }.take(120)
     save(ctx, next)
-    for (r in next) arm(ctx, r)
+    val clock = clock(ctx)
+    for (r in next) arm(ctx, r, clock)
   }
 
-  private fun arm(ctx: Context, r: Reminder) {
+  private fun arm(ctx: Context, r: Reminder, clock: Boolean = clock(ctx)) {
     val pi = fireIntent(ctx, r)
     val am = am(ctx)
     when {
-      r.kind == "alarm" && canExact(ctx) -> am.setAlarmClock(AlarmManager.AlarmClockInfo(r.at, openApp(ctx)), pi)
-      canExact(ctx) -> am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.at, pi)
-      else -> am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.at, pi)
+      !canExact(ctx) -> am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.at, pi)
+      r.kind == "alarm" || clock -> am.setAlarmClock(AlarmManager.AlarmClockInfo(r.at, openApp(ctx)), pi)
+      else -> am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.at, pi)
     }
   }
 
-  /** After a restart, an update or a clock change. */
+  /** After a restart, an update, a clock change or a new mode. */
   fun rearm(ctx: Context) {
     val now = System.currentTimeMillis()
     val left = load(ctx).filter { it.at > now }
     save(ctx, left)
-    for (r in left) arm(ctx, r)
+    val clock = clock(ctx)
+    for (r in left) arm(ctx, r, clock)
+  }
+
+  /** A reminder that came late counts; the first one moves "auto" to the alarm clock at once. */
+  private fun noteLate(ctx: Context, r: Reminder) {
+    val by = System.currentTimeMillis() - r.at
+    if (by < LATE_MS) return
+    val before = clock(ctx)
+    val p = prefs(ctx)
+    p.edit().putInt("late", p.getInt("late", 0) + 1).putLong("lateBy", by).apply()
+    if (!before && clock(ctx)) rearm(ctx)
   }
 
   private fun load(ctx: Context): List<Reminder> {
@@ -153,6 +208,7 @@ object Reminders {
 
   fun fire(ctx: Context, r: Reminder) {
     channels(ctx)
+    noteLate(ctx, r)
     when (r.kind) {
       "alarm" -> ring(ctx, r)
       "focusEnd" -> {
@@ -164,17 +220,51 @@ object Reminders {
     }
   }
 
+  // Reminders don't pile up: one per block (or prayer) at a time, gone once their moment has
+  // passed, together in one Daybloom group, and cleared when you open the app.
+  private const val GROUP = "app.daybloom.reminders"
+  private const val SUMMARY_ID = 7100
+  private const val ONE = 1
+
   private fun post(ctx: Context, r: Reminder, channel: String) {
-    val n = NotificationCompat.Builder(ctx, channel)
+    val now = System.currentTimeMillis()
+    if (r.until in 1..now) return // fired late (after a restart, say): its moment is over
+    val b = NotificationCompat.Builder(ctx, channel)
       .setSmallIcon(R_drawable.stat(ctx))
       .setContentTitle(r.title)
       .setContentText(r.body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(r.body))
       .setContentIntent(openApp(ctx))
       .setAutoCancel(true)
+      .setGroup(GROUP)
       .setCategory(if (channel == "salah") NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_EVENT)
+    if (r.until > now) b.setTimeoutAfter(r.until - now)
+    nm(ctx).notify(r.tag.ifEmpty { r.id }, ONE, b.build())
+    summarize(ctx, channel)
+  }
+
+  /** Two or more reminders showing: one Daybloom group over them (none for a single one). */
+  private fun summarize(ctx: Context, channel: String) {
+    val shown = nm(ctx).activeNotifications.count { it.notification.group == GROUP && it.id != SUMMARY_ID }
+    if (shown < 2) return
+    val n = NotificationCompat.Builder(ctx, channel)
+      .setSmallIcon(R_drawable.stat(ctx))
+      .setContentTitle("Daybloom")
+      .setContentText("$shown reminders")
+      .setGroup(GROUP)
+      .setGroupSummary(true)
+      .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+      .setContentIntent(openApp(ctx))
+      .setAutoCancel(true)
       .build()
-    nm(ctx).notify(r.id.hashCode(), n)
+    nm(ctx).notify(SUMMARY_ID, n)
+  }
+
+  /** The app is open: the reminders already shown have done their job (alarms and focus stay). */
+  fun clearShown(ctx: Context) {
+    for (s in nm(ctx).activeNotifications) {
+      if (s.notification.group == GROUP) nm(ctx).cancel(s.tag, s.id)
+    }
   }
 
   private fun action(ctx: Context, what: String, r: Reminder): PendingIntent {

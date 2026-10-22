@@ -53,11 +53,16 @@ object BioVault {
 
   fun forget(ctx: Context, account: String) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(account).apply()
 
-  private fun key(fresh: Boolean): SecretKey {
+  // One Keystore key per account: sealing one (a fresh key each time) never voids another (the
+  // sync vault and the app lock each have their own). The sync vault keeps the first name.
+  private fun alias(account: String) = if (account == "sync-vault-bio") KEY else "$KEY:$account"
+
+  private fun key(account: String, fresh: Boolean): SecretKey {
+    val name = alias(account)
     val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-    if (fresh) ks.deleteEntry(KEY)
-    (ks.getKey(KEY, null) as? SecretKey)?.let { return it }
-    val b = KeyGenParameterSpec.Builder(KEY, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+    if (fresh) ks.deleteEntry(name)
+    (ks.getKey(name, null) as? SecretKey)?.let { return it }
+    val b = KeyGenParameterSpec.Builder(name, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
       .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
       .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
       .setKeySize(256)
@@ -67,11 +72,11 @@ object BioVault {
     return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply { init(b.build()) }.generateKey()
   }
 
-  private fun prompt(activity: FragmentActivity, title: String, cipher: Cipher, done: (Cipher?, String?) -> Unit) {
+  private fun prompt(activity: FragmentActivity, title: String, other: String, cipher: Cipher, done: (Cipher?, String?) -> Unit) {
     val info = BiometricPrompt.PromptInfo.Builder()
       .setTitle(title)
       .setSubtitle("Daybloom")
-      .setNegativeButtonText("Use password")
+      .setNegativeButtonText(other)
       .setAllowedAuthenticators(STRONG)
       .build()
     val p = BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), object : BiometricPrompt.AuthenticationCallback() {
@@ -81,14 +86,14 @@ object BioVault {
     activity.runOnUiThread { p.authenticate(info, BiometricPrompt.CryptoObject(cipher)) }
   }
 
-  fun seal(activity: FragmentActivity, account: String, value: String, done: (String?) -> Unit) {
+  fun seal(activity: FragmentActivity, account: String, value: String, title: String, other: String, done: (String?) -> Unit) {
     val c = Cipher.getInstance("AES/GCM/NoPadding")
     try {
-      c.init(Cipher.ENCRYPT_MODE, key(fresh = true))
+      c.init(Cipher.ENCRYPT_MODE, key(account, fresh = true))
     } catch (e: Exception) {
       return done(e.message ?: "The phone can't make a fingerprint key right now.")
     }
-    prompt(activity, "Unlock sync with your fingerprint", c) { cipher, err ->
+    prompt(activity, title, other, c) { cipher, err ->
       if (cipher == null) return@prompt done(err)
       val ct = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
       activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -97,19 +102,19 @@ object BioVault {
     }
   }
 
-  fun open(activity: FragmentActivity, account: String, title: String, done: (String?, String?) -> Unit) {
+  fun open(activity: FragmentActivity, account: String, title: String, other: String, done: (String?, String?) -> Unit) {
     val text = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(account, null) ?: return done(null, "not-sealed")
     val parts = text.split(":")
     val c = Cipher.getInstance("AES/GCM/NoPadding")
     try {
-      c.init(Cipher.DECRYPT_MODE, key(fresh = false), GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))
+      c.init(Cipher.DECRYPT_MODE, key(account, fresh = false), GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))
     } catch (e: KeyPermanentlyInvalidatedException) {
       forget(activity, account)
       return done(null, "invalidated")
     } catch (e: Exception) {
       return done(null, e.message ?: "unavailable")
     }
-    prompt(activity, title, c) { cipher, err ->
+    prompt(activity, title, other, c) { cipher, err ->
       if (cipher == null) return@prompt done(null, err)
       try {
         done(String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), Charsets.UTF_8), null)

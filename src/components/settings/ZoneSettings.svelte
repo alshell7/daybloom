@@ -2,6 +2,7 @@
   // Settings › Rhythm › World clock: your own city and up to two to compare. Each city gets a
   // bar of today (your midnight to midnight) in its real day and night, aligned so you read
   // "9 pm there when it's 4 pm here" straight down; hovering the bars reads any moment.
+  import { thisDevice } from '../../lib/platform';
   import { flip } from 'svelte/animate';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
@@ -147,7 +148,7 @@
         <SkyDot zone={r.zone} {now} finish={view.finish} size={20} />
         <span class="name">
           <strong>{zoneCity(r.zone)}</strong>
-          <small>{r.main ? `Your time${r.zone === system ? ' · this computer' : ''}` : `${aheadLabel(now, r.zone, primary)} · ${r.zone.split('/')[0].replaceAll('_', ' ')}`}</small>
+          <small>{r.main ? `Your time${r.zone === system ? ` · ${thisDevice}` : ''}` : `${aheadLabel(now, r.zone, primary)} · ${r.zone.split('/')[0].replaceAll('_', ' ')}`}</small>
         </span>
         <span class="time tnum" class:reading={hoverT != null}>{timeOf(r.zone, hoverT ?? now)}</span>
         <span class="tools">
@@ -243,6 +244,21 @@
     gap: var(--s-3);
     min-height: 40px;
     font-size: var(--t-sm);
+  }
+  /* A phone: a control that doesn't fit beside its label goes under it, on the right. */
+  @media (max-width: 480px) {
+    .row {
+      flex-wrap: wrap;
+      row-gap: var(--s-2);
+    }
+    .row > :last-child:not(:first-child) {
+      margin-left: auto;
+    }
+    /* A switch stays beside its words; the words wrap instead. */
+    .row:has(> .switch) > :first-child {
+      flex: 1 1 0;
+      min-width: 0;
+    }
   }
   .row > span:first-child {
     color: var(--ink-2);

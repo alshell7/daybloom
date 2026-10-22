@@ -3,6 +3,7 @@
   // small live picture of the bar as you choose. Hidden items (and whatever doesn't fit the
   // window) wait in the More menu (⋯), so nothing is ever out of reach. Saved in
   // `settings.topBar.hidden`, which syncs with your other computers.
+  import { platform } from '../../lib/platform';
   import { flip } from 'svelte/animate';
   import { calendarState } from '../../lib/calendarBridge.svelte';
   import Icon from '../../lib/Icon.svelte';
@@ -37,12 +38,13 @@
   const inMore = $derived(catalog.filter((d) => hidden.has(d.id) || barLive.folded.includes(d.id)).length);
   const pvWeek = $derived(hidden.has('week') ? null : barLive.week === 'below' ? 'below' : barLive.week === 'menu' ? null : 'inline');
   const folded = $derived(barLive.folded.length);
+  const place = platform.isMobile ? 'screen' : 'window';
   const status = $derived.by(() => {
     const items = (n: number) => (n === 1 ? '1 item' : `${n} items`);
-    if (folded && hiddenCount) return `${hiddenCount} hidden and ${folded} that don’t fit this window wait in More.`;
-    if (folded) return `${items(folded)} don’t fit this window, so ${folded === 1 ? 'it waits' : 'they wait'} in More. A wider window brings ${folded === 1 ? 'it' : 'them'} back.`;
-    if (hiddenCount) return `${items(hiddenCount)} hidden, in More. Everything else fits this window.`;
-    return 'Everything fits at this window size.';
+    if (folded && hiddenCount) return `${hiddenCount} hidden and ${folded} that don’t fit this ${place} wait in More.`;
+    if (folded) return `${items(folded)} don’t fit this ${place}, so ${folded === 1 ? 'it waits' : 'they wait'} in More.${platform.isMobile ? '' : ` A wider window brings ${folded === 1 ? 'it' : 'them'} back.`}`;
+    if (hiddenCount) return `${items(hiddenCount)} hidden, in More. Everything else fits this ${place}.`;
+    return platform.isMobile ? 'Everything fits on this screen.' : 'Everything fits at this window size.';
   });
 
   // Shrink the preview to fit the panel, never grow it.
@@ -54,7 +56,7 @@
 
 <section>
   <h3>Top bar</h3>
-  <p class="hint top">Choose what shows in the top bar. Hidden items stay one click away in the More menu (⋯), and so does anything that doesn’t fit the window.</p>
+  <p class="hint top">Choose what shows in the top bar. Hidden items stay one {platform.isMobile ? 'tap' : 'click'} away in the More menu (⋯), and so does anything that doesn’t fit the {place}.</p>
 
   <div class="preview" aria-hidden="true" bind:clientWidth={boxW} style:height={innerH ? `${innerH * k}px` : undefined}>
     <div class="pv" bind:clientWidth={innerW} bind:clientHeight={innerH} style:transform={k < 1 ? `scale(${k})` : undefined}>

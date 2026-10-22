@@ -13,6 +13,16 @@
   const s = $derived(timer.active && !view.focus ? cueSubject(clock.now) : null);
   const R = 9;
   const CIRC = 2 * Math.PI * R;
+  // Each second the ring moves a hair, so it just moves; a real jump (+5 min, the next part)
+  // glides. A glide on every tick would animate the SVG stroke without pause, which is work
+  // on every frame, on every platform.
+  const offset = $derived(s ? CIRC * (1 - s.left) : 0);
+  let glide = $state(false);
+  let lastOffset = 0;
+  $effect.pre(() => {
+    glide = Math.abs(offset - lastOffset) > CIRC * 0.02;
+    lastOffset = offset;
+  });
 
   // The first time a running session's view is shrunk, say where it went.
   let wasFocus = false;
@@ -49,7 +59,7 @@
     <span class="ring" aria-hidden="true">
       <svg viewBox="0 0 24 24">
         <circle class="track" cx="12" cy="12" r={R} />
-        <circle class="fill" cx="12" cy="12" r={R} stroke-dasharray={CIRC} stroke-dashoffset={CIRC * (1 - s.left)} />
+        <circle class="fill" class:glide cx="12" cy="12" r={R} stroke-dasharray={CIRC} stroke-dashoffset={offset} />
       </svg>
       <Icon name={s.paused ? 'pause' : s.kind === 'break' ? 'coffee' : s.icon} size={10} stroke={2.4} />
     </span>
@@ -104,6 +114,8 @@
   .fill {
     stroke: var(--c);
     stroke-linecap: round;
+  }
+  .fill.glide {
     transition: stroke-dashoffset 0.9s var(--ease-out);
   }
   .name {

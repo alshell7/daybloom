@@ -1,10 +1,13 @@
 <script lang="ts">
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
+  import { attention } from '../native/attention.svelte';
 
   // Text whose characters roll like an odometer when they change. When the text
   // changes shape (e.g. "1h" → "25:00") the whole readout crossfades instead.
-  let { text, reduced = false }: { text: string; reduced?: boolean } = $props();
+  // On a phone nobody is looking at, they just change (a countdown would roll every second).
+  let { text, reduced: reducedMotion = false }: { text: string; reduced?: boolean } = $props();
+  const reduced = $derived(reducedMotion || !attention.looking);
   const chars = $derived([...text]);
   const shape = $derived(text.replace(/\d/g, '0'));
 

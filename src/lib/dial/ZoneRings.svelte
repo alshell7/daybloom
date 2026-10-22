@@ -113,6 +113,16 @@
 
   // ---- hover: that city's time under the pointer ----------------------------
   let hover = $state<null | { ring: number; deg: number }>(null);
+  // A finger can't hover: a tap reads the time there for a few seconds (and doesn't start a
+  // block on the dial underneath).
+  let tipTimer: ReturnType<typeof setTimeout> | undefined;
+  function onTap(e: PointerEvent) {
+    if (e.pointerType !== 'touch') return;
+    e.stopPropagation();
+    onMove(e);
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => (hover = null), 3500);
+  }
   function onMove(e: PointerEvent) {
     const svg = (e.currentTarget as SVGElement).ownerSVGElement;
     const m = svg?.getScreenCTM();
@@ -132,7 +142,8 @@
     const shift = dayShift(t, g.zone, primary);
     const there = `${g.city} ${timeIn(t, g.zone, hour12)}${shift ? ` ${weekdayIn(t, g.zone)}` : ''}`;
     const here = `${timeIn(t, primary, hour12)} here`;
-    const fs = 25;
+    // A phone's dial is small on screen: bigger words, so the tip reads at arm's length.
+    const fs = typeof document !== 'undefined' && document.documentElement.dataset.device === 'phone' ? 38 : 25;
     const w = (there.length * 0.6 + here.length * 0.52 + 1.2) * fs + 36;
     const [x, y] = polar(Math.min(...rings.map((x) => x.rIn)) - 52, hover.deg);
     const [mx0, my0] = polar(g.rIn - 3, hover.deg);
@@ -205,7 +216,8 @@
         fill-rule="evenodd"
         role="presentation"
         onpointermove={onMove}
-        onpointerleave={() => (hover = null)}
+        onpointerleave={(e) => e.pointerType !== 'touch' && (hover = null)}
+        onpointerdown={onTap}
       />
     {/if}
 
@@ -239,7 +251,7 @@
     {#if tip}
       <g class="tip" aria-hidden="true">
         <path d={tip.mark} stroke={finish.ink} stroke-width="3" stroke-linecap="round" />
-        <rect x={tip.x - tip.w / 2} y={tip.y - 23} width={tip.w} height="46" rx="23" fill={finish.ink} />
+        <rect x={tip.x - tip.w / 2} y={tip.y - tip.fs * 0.92} width={tip.w} height={tip.fs * 1.84} rx={tip.fs * 0.92} fill={finish.ink} />
         <text x={tip.x} y={tip.y + 1} text-anchor="middle" dominant-baseline="central" font-size={tip.fs} fill={finish.face}>
           <tspan class="strong">{tip.there}</tspan><tspan dx="10" opacity="0.62">{tip.here}</tspan>
         </text>

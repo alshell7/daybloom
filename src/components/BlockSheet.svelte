@@ -702,6 +702,12 @@
     gap: var(--s-2);
     align-items: end;
   }
+  /* A phone: the start time keeps its width ("Today" needs less than "8:00am"). */
+  @media (max-width: 400px) {
+    .when {
+      grid-template-columns: minmax(0, 1fr) max-content auto;
+    }
+  }
   .mini {
     display: grid;
     gap: 4px;
@@ -1024,5 +1030,13 @@
     margin: 0;
     font-size: var(--t-xl);
     font-weight: 500;
+  }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .steps li .rm {
+      opacity: 1;
+      visibility: visible;
+    }
   }
 </style>

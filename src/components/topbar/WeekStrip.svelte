@@ -15,6 +15,8 @@
   import { view } from '../../lib/stores/view.svelte';
   import { sideOf, SwipeGate, weekStartOf } from '../calendar-view/month';
   import { springOut } from './motion';
+  import { keyed } from './items';
+  import { platform } from '../../lib/platform';
 
   let {
     chip = 42,
@@ -144,9 +146,12 @@
 
 <nav class="week" aria-label="Week" bind:this={weekEl} style:--chip={`${chip}px`} use:swipe>
   <span class="puck" class:ready={puckReady} style:transform={`translateX(${puckX}px)`} style:opacity={puckX < 0 ? 0 : 1} aria-hidden="true"></span>
+  <!-- A phone swipes between weeks (fit.ts leaves these out of its room) -->
+  {#if !platform.isMobile}
   <button class="icon-btn step" class:toward={side < 0} onclick={() => shift(-1)} aria-label={side < 0 ? `Previous week (back toward ${away})` : 'Previous week'} title={side < 0 ? `Previous week · ${away} is this way` : 'Previous week'}>
     <Icon name="chevron-left" size={18} />
   </button>
+  {/if}
   {#key weekStart}
     {#each days as d, i (d)}
       {@const blocks = byDay.get(d) ?? []}
@@ -170,9 +175,11 @@
       </button>
     {/each}
   {/key}
+  {#if !platform.isMobile}
   <button class="icon-btn step" class:toward={side > 0} onclick={() => shift(1)} aria-label={side > 0 ? `Next week (back toward ${away})` : 'Next week'} title={side > 0 ? `Next week · ${away} is this way` : 'Next week'}>
     <Icon name="chevron-right" size={18} />
   </button>
+  {/if}
   <button
     bind:this={calBtn}
     class="icon-btn cal-btn"
@@ -180,7 +187,7 @@
     onclick={() => calBtn && oncalendar(calBtn)}
     aria-haspopup="dialog"
     aria-expanded={calOpen}
-    aria-label="Month (M)"
+    aria-label={keyed('Month', 'M')}
     title="Month · M"
   >
     <Icon name="calendar-days" size={17} />

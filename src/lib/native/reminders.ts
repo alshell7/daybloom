@@ -19,6 +19,10 @@ export interface NativeReminder {
   snoozeMin?: number;
   gentle?: boolean;
   volume?: number;
+  /** One notification at a time per tag (a block's start, its alerts and its heads-up). */
+  tag?: string;
+  /** When the notification has had its moment and clears itself (ms). */
+  until?: number;
 }
 
 export interface PrayerTime {
@@ -77,19 +81,19 @@ export function planReminders(p: PlanInput): NativeReminder[] {
         volume: p.alarm.volume,
       });
     } else if (p.notify && soon(b.startMs)) {
-      out.push({ id: `go:${b.key}`, at: b.startMs, kind: 'start', title: `Now: ${name}`, body: `${formatDuration(b.endMs - b.startMs)} · until ${t(b.endMs)}` });
+      out.push({ id: `go:${b.key}`, at: b.startMs, kind: 'start', title: `Now: ${name}`, body: `${formatDuration(b.endMs - b.startMs)} · until ${t(b.endMs)}`, tag: b.key, until: b.endMs });
     }
 
     if (p.notify) {
       for (const m of task?.alerts ?? []) {
         const at = b.startMs - m * MINUTE;
-        if (m > 0 && soon(at)) out.push({ id: `al:${b.key}:${m}`, at, kind: 'before', title: `In ${m} minutes: ${name}`, body: `Starts at ${t(b.startMs)}` });
+        if (m > 0 && soon(at)) out.push({ id: `al:${b.key}:${m}`, at, kind: 'before', title: `In ${m} minutes: ${name}`, body: `Starts at ${t(b.startMs)}`, tag: b.key, until: b.startMs + 5 * MINUTE });
       }
       const ms = p.headsUpMin * MINUTE;
       const at = b.endMs - ms;
       if (ms > 0 && b.endMs - b.startMs > ms * 1.5 && soon(at)) {
         const next = timed.slice(i + 1).find((n) => n.startMs >= b.endMs - MINUTE && !n.done);
-        out.push({ id: `hu:${b.key}`, at, kind: 'heads', title: `${formatDuration(ms)} left · ${name}`, body: next ? `Next up: ${cap(p.name ? p.name(next) : next.title)}` : 'Time to start wrapping up.' });
+        out.push({ id: `hu:${b.key}`, at, kind: 'heads', title: `${formatDuration(ms)} left · ${name}`, body: next ? `Next up: ${cap(p.name ? p.name(next) : next.title)}` : 'Time to start wrapping up.', tag: b.key, until: b.endMs + 5 * MINUTE });
       }
     }
   }
@@ -106,14 +110,14 @@ export function planReminders(p: PlanInput): NativeReminder[] {
       const key = `${pr.date}:${pr.id}`;
       const pre = pr.at - r.before * MINUTE;
       if (r.before > 0 && soon(pre)) {
-        out.push({ id: `salah:${key}:pre`, at: pre, kind: 'salah', title: `${pr.name} in ${r.before} minutes`, body: `Adhan at ${t(pr.at)}${pr.jamaat ? ` · jamaat at ${t(pr.jamaat)}` : ''}` });
+        out.push({ id: `salah:${key}:pre`, at: pre, kind: 'salah', title: `${pr.name} in ${r.before} minutes`, body: `Adhan at ${t(pr.at)}${pr.jamaat ? ` · jamaat at ${t(pr.jamaat)}` : ''}`, tag: `salah:${key}`, until: pr.at + 5 * MINUTE });
       }
       if (r.atAdhan && soon(pr.at)) {
-        out.push({ id: `salah:${key}:adhan`, at: pr.at, kind: 'salah', title: `It’s time for ${pr.name}`, body: `${t(pr.at)} · ${pr.jamaat ? `Jamaat at ${t(pr.jamaat)}` : `Its time lasts until ${t(pr.end)}`}` });
+        out.push({ id: `salah:${key}:adhan`, at: pr.at, kind: 'salah', title: `It’s time for ${pr.name}`, body: `${t(pr.at)} · ${pr.jamaat ? `Jamaat at ${t(pr.jamaat)}` : `Its time lasts until ${t(pr.end)}`}`, tag: `salah:${key}`, until: pr.end });
       }
       const jam = pr.jamaat ? pr.jamaat - r.beforeJamaat * MINUTE : 0;
       if (pr.jamaat && r.beforeJamaat > 0 && soon(jam)) {
-        out.push({ id: `salah:${key}:jam`, at: jam, kind: 'salah', title: `Jamaat for ${pr.name} in ${r.beforeJamaat} minutes`, body: `At ${t(pr.jamaat)}. Time for wudu.` });
+        out.push({ id: `salah:${key}:jam`, at: jam, kind: 'salah', title: `Jamaat for ${pr.name} in ${r.beforeJamaat} minutes`, body: `At ${t(pr.jamaat)}. Time for wudu.`, tag: `salah:${key}`, until: pr.jamaat + 10 * MINUTE });
       }
     }
   }

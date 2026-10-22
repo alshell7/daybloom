@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keychain } from '../../lib/platform';
   import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -143,7 +144,7 @@
       <button class="trail-btn" onclick={check} aria-label="Check the link" title="Check the link"><Icon name="arrow-right" size={15} /></button>
     {/if}
   </div>
-  <p id="calendar-link-note" class="note">Daybloom keeps the link in your system keychain. It only reads the calendar.</p>
+  <p id="calendar-link-note" class="note">Daybloom keeps the link in {keychain}. It only reads the calendar.</p>
 
   {#if phase === 'checking'}
     <div class="checking" role="status" in:fly={enter(200)}>

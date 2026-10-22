@@ -9,6 +9,8 @@
 // row one, so the bar first tries to keep the week inline with only the cheap steps, and if that
 // fails it starts again with the week below. Same numbers in, same bar out.
 
+import { platform } from '../../lib/platform';
+
 export type DateMode = 'long' | 'short' | 'rel' | 'clock';
 export type ZoneMode = 'full' | 'compact' | 'menu';
 export type WeekMode = 'inline' | 'below' | 'menu';
@@ -91,8 +93,11 @@ export interface FitResult {
 
 /** The week strip's width for a chip size, with or without its Today button: the chevrons and
  *  the month-calendar button (all 34px), seven chips, and the gaps between them. */
+/** The week's buttons: back, on and the calendar (a phone swipes instead, so only the calendar). */
+const WEEK_BUTTONS = platform.isMobile ? 1 : 3;
+
 export function weekWidth(chip: number, today: number): number {
-  const base = 3 * BAR.chevron + 7 * chip + 9 * BAR.weekGap;
+  const base = WEEK_BUTTONS * BAR.chevron + 7 * chip + (6 + WEEK_BUTTONS) * BAR.weekGap;
   return today > 0 ? base + BAR.weekGap + BAR.todayGap + today : base;
 }
 

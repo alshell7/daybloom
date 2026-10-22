@@ -27,7 +27,7 @@
   import BacklogButton from './backlog/BacklogButton.svelte';
   import CalendarButton from './calendars/CalendarButton.svelte';
   import { fitBar } from './topbar/fit';
-  import { barCatalog, GROUPS, KBD, type BarItemDef, type GroupId } from './topbar/items';
+  import { barCatalog, GROUPS, KBD, keyed, type BarItemDef, type GroupId } from './topbar/items';
   import { barLive } from './topbar/live.svelte';
   import MoreMenu, { type MenuEntry, type MenuGroup } from './topbar/MoreMenu.svelte';
   import { popIn, popOut, slideFrom, springOut } from './topbar/motion';
@@ -281,17 +281,17 @@
   {:else if d.id === 'tracker'}
     <TrackerPill />
   {:else if d.id === 'ask'}
-    <button class="icon-btn" onclick={() => toggleSheet('assistant')} aria-pressed={view.sheet?.kind === 'assistant'} aria-label={`Ask Daybloom (${KBD.ask})`} title={`Ask Daybloom · ${KBD.ask}`}>
+    <button class="icon-btn" onclick={() => toggleSheet('assistant')} aria-pressed={view.sheet?.kind === 'assistant'} aria-label={keyed('Ask Daybloom', KBD.ask)} title={`Ask Daybloom · ${KBD.ask}`}>
       <Icon name="sparkles" size={18} />
     </button>
   {:else if d.id === 'backlog'}
     <BacklogButton />
   {:else if d.id === 'focus'}
-    <button class="icon-btn" onclick={openFocus} aria-pressed={view.sheet?.kind === 'focus' || !!timer.active} aria-label="Focus (F)" title="Focus · F">
+    <button class="icon-btn" onclick={openFocus} aria-pressed={view.sheet?.kind === 'focus' || !!timer.active} aria-label={keyed('Focus', 'F')} title="Focus · F">
       <Icon name="focus" size={18} />
     </button>
   {:else if d.id === 'insights'}
-    <button class="icon-btn" onclick={() => toggleSheet('insights')} aria-pressed={view.sheet?.kind === 'insights'} aria-label="Your week (I)" title="Your week · I">
+    <button class="icon-btn" onclick={() => toggleSheet('insights')} aria-pressed={view.sheet?.kind === 'insights'} aria-label={keyed('Your week', 'I')} title="Your week · I">
       <Icon name="chart" size={18} />
     </button>
   {:else if d.id === 'calendars'}
@@ -337,7 +337,7 @@
             aria-hidden={!dateShown}
             aria-haspopup="dialog"
             aria-expanded={calOpen}
-            aria-label={`${title}. Open the month (M)`}
+            aria-label={keyed(`${title}. Open the month`, 'M')}
             title="Open the month · M"
           >
             {#if rel}<span class="rel" class:ghost={!showRel} aria-hidden={!showRel} use:measure={'rel'}>{rel}</span>{/if}

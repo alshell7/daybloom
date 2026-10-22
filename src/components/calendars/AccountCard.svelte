@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keychain } from '../../lib/platform';
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -170,7 +171,7 @@
   {/if}
 
   <div class="foot">
-    <span class="where" title={isGoogle ? undefined : 'The full link is in your system keychain.'}>
+    <span class="where" title={isGoogle ? undefined : `The full link is in ${keychain}.`}>
       {#if isGoogle}Google account · read-only{:else}{account.displayUrl ?? 'Calendar link'}{/if}
     </span>
     {#if !confirming}
@@ -349,4 +350,12 @@
     opacity: 0.6;
   }
 
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .name-btn .pen {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
 </style>

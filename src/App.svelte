@@ -20,6 +20,8 @@
   import MainView from './views/MainView.svelte';
   import WidgetView from './views/WidgetView.svelte';
   import OverlayView from './views/OverlayView.svelte';
+  import LockScreen from './components/LockScreen.svelte';
+  import { lock, startLock } from './lib/lock.svelte';
   import CaptureView from './views/CaptureView.svelte';
   import { cuePreview, startScreenCues } from './lib/screenCues.svelte';
   import { startAddons, startAddonViews } from './lib/addons/runtime.svelte';
@@ -28,7 +30,7 @@
   import { eventStateFile } from './lib/stores/eventStates.svelte';
   import { followResets } from './lib/reset';
   import { startStarter } from './lib/starter.svelte';
-  import { startDevice } from './lib/native/device.svelte';
+  import { appShown, startDevice } from './lib/native/device.svelte';
   import { startReminders } from './lib/native/reminders.svelte';
   import { startWidgets } from './lib/native/widgets.svelte';
 
@@ -65,6 +67,7 @@
     let stopDevice: (() => void) | undefined;
     let stopReminders: (() => void) | undefined;
     let stopWidgets: (() => void) | undefined;
+    let stopLock: (() => void) | undefined;
     // "Auto" clock style: what this computer shows (region and time settings), read before the
     // first paint and again when the window comes back (the setting may have changed).
     const readClockStyle = () =>
@@ -78,7 +81,8 @@
         .catch(() => {});
     addEventListener('focus', readClockStyle);
     (async () => {
-      await Promise.all([settings.load(), eventStateFile.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load(), layout.load(), readClockStyle()]);
+      // The app lock is decided before the first paint: a locked app opens on its lock screen.
+      await Promise.all([settings.load(), eventStateFile.load(), taskFile.load(), timerFile.load(), progressFile.load(), streakFile.load(), cuePreview.load(), layout.load(), readClockStyle(), label === 'main' ? lock.load() : null]);
       // A sample day for a first launch only: never again once it was added or anything was deleted.
       if (label === 'main' && !settings.value.onboarded && taskFile.value.tasks.length === 0 && !taskFile.value.seeded && !taskFile.value.deleted?.length) {
         seedSampleDay(clock.now);
@@ -87,8 +91,13 @@
       if (label === 'main') void trashFile.load().then(() => trash.purge());
       view.date = view.today;
       ready = true;
-      // The planner is up, so a new web update started fine (src-tauri/src/ota.rs).
-      if (label === 'main') void tick().then(reportStarted);
+      // The planner is up, so a new web update started fine (src-tauri/src/ota.rs), and a phone
+      // can take its start screen away.
+      if (label === 'main')
+        void tick().then(() => {
+          reportStarted();
+          appShown();
+        });
       // Settings › AI (the planner first moves Alef's old brain setup there).
       void startAi(label === 'main').catch((e) => console.warn('[daybloom] ai', e));
       // The menu bar, sounds and reminders start at once; calendars catch up after.
@@ -111,6 +120,7 @@
         stopDevice = startDevice();
         stopReminders = startReminders();
         stopWidgets = startWidgets();
+        stopLock = startLock();
         stopPrivacy = platform.onPrivacyChange((on) => {
           if (settings.value.privacy.on !== on) settings.value.privacy.on = on;
         });
@@ -136,6 +146,7 @@
       stopDevice?.();
       stopReminders?.();
       stopWidgets?.();
+      stopLock?.();
     };
   });
 
@@ -188,6 +199,8 @@
 {#if ready}
   <!-- a zone change remounts the views so every local derivation re-reads the clock -->
   {#key clock.zone}
+    <!-- Behind the app lock: nothing to reach, by touch, keys or a screen reader. -->
+    <div class="views" inert={label === 'main' && lock.locked}>
     {#if label === 'widget'}
       <WidgetView />
     {:else if label === 'overlay'}
@@ -197,5 +210,15 @@
     {:else}
       <MainView />
     {/if}
+    </div>
   {/key}
+  {#if label === 'main' && lock.locked}
+    <LockScreen />
+  {/if}
 {/if}
+
+<style>
+  .views {
+    display: contents;
+  }
+</style>

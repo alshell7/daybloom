@@ -56,6 +56,9 @@
   import { breath } from '../lib/breath.svelte';
   import TopBar from '../components/TopBar.svelte';
   import { closeTopSheet } from '../lib/sheets';
+  import { popovers } from '../lib/popovers.svelte';
+  import { lock } from '../lib/lock.svelte';
+  import OverlayView from './OverlayView.svelte';
   import AlefFace from '../components/addons/alef/AlefFace.svelte';
   import AlefPosture from '../components/addons/alef/AlefPosture.svelte';
   import AlefPanel from '../components/addons/alef/AlefPanel.svelte';
@@ -153,6 +156,7 @@
   }
 
   function onKey(e: KeyboardEvent) {
+    if (lock.locked) return; // the lock screen has the keys
     // ⌘K / Ctrl+K: ask Daybloom, from anywhere.
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
@@ -180,6 +184,7 @@
       }
     }
     if (e.key === 'Escape') {
+      if (popovers.closeTop()) return;
       if (view.focus) leaveFocus();
       else if (view.sheet) {
         if (!closeTopSheet()) view.sheet = null;
@@ -302,6 +307,8 @@
     class:wide={timelineWide()}
     style:--rail-user={railDrag.active ? `${railDrag.width}px` : layout.value.railWidth ? `${layout.value.railWidth}px` : null}
   >
+    <!-- Under the focus view (opaque, the whole window) the dial keeps still: motion nobody
+         sees still costs frames. -->
     <section class="dial-col" aria-label="Dial">
       <div class="dial-box">
         {#key view.date}
@@ -317,7 +324,7 @@
           selectedKey={view.selected}
           headsUpKey={view.headsUpKey}
           showSeconds={settings.value.showSeconds}
-          reduced={view.reducedMotion}
+          reduced={view.reducedMotion || view.focus}
           {sleep}
           {wedge}
           hideKey={wedge?.key ?? null}
@@ -344,7 +351,7 @@
             hour12={view.hour12}
             tally={view.tally}
             timer={timed ? readoutTimer : null}
-            reduced={view.reducedMotion}
+            reduced={view.reducedMotion || view.focus}
             ontimer={onTimer}
             breath={view.breathing ? breath.state : null}
             onbreathe={(on) => (view.breatheAt = on ? clock.now : 0)}
@@ -394,6 +401,10 @@
   <VoiceDock />
   {#if view.focus}
     <FocusMode />
+  {/if}
+  <!-- A phone has no overlay window: its screen cues are drawn in here, while the app is open. -->
+  {#if platform.isMobile && (settings.value.screen.glow || settings.value.screen.bar || settings.value.screen.hud)}
+    <OverlayView />
   {/if}
   {#if !settings.value.onboarded}
     <Coach />

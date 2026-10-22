@@ -2,6 +2,7 @@
   // Settings › AI: set up an AI service once (Services), keep Daybloom's own models on this
   // computer (On this device), and choose what each part of Daybloom thinks, listens and speaks
   // with (Who uses what). Every choice is saved at once and the whole app follows.
+  import { thisDevice } from '../../lib/platform';
   import { onMount, tick } from 'svelte';
   import { ai, aiFile, FEATURES, type Feature } from '../../lib/ai/hub.svelte';
   import { can, PROVIDERS, type ProviderId, type Skill } from '../../lib/ai/providers';
@@ -66,7 +67,7 @@
   <h3>Services</h3>
   {#if fresh}
     <div class="intro" in:rise={{ still }}>
-      <p>Everything runs on this computer for now. Add a service once, and every part of Daybloom can use it.</p>
+      <p>Everything runs on {thisDevice} for now. Add a service once, and every part of Daybloom can use it.</p>
       <ol class="steps">
         <li><i>1</i> Add a key</li>
         <li><i>2</i> Give your OK</li>
@@ -114,7 +115,7 @@
   <div class="devs">
     {#each DEVICE_MODELS as m (m.id)}<DeviceRow model={m} />{/each}
   </div>
-  <p class="hint">Each one downloads once, is checked, and stays on this computer. They work offline, and nothing they hear or read leaves it. Needle and Whistle are by Cactus Compute (Apache-2.0).</p>
+  <p class="hint">Each one downloads once, is checked, and stays on {thisDevice}. They work offline, and nothing they hear or read leaves it. Needle and Whistle are by Cactus Compute (Apache-2.0).</p>
 </section>
 
 <section>

@@ -796,4 +796,12 @@
       scroll-snap-align: start;
     }
   }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .cards li .tick {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
 </style>

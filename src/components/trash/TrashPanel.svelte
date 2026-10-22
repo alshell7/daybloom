@@ -66,7 +66,7 @@
     const t = trash.restore(it.id);
     if (!t) return;
     view.spark(r.left + r.width / 2, r.top + r.height / 2, categoryColor(t.category, view.finish.dark));
-    if (settings.value.sound) sounds.done();
+    sounds.done();
     const day = it.date ?? t.date;
     if (day) {
       view.setDate(day);

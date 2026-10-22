@@ -158,4 +158,12 @@
     height: 36px;
     font-size: var(--t-sm);
   }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    li .rm {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
 </style>

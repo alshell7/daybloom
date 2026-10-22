@@ -3,6 +3,7 @@
   // and pop open, glances dart and come back, speech makes them bob. A requestAnimationFrame
   // loop runs only while something moves, then stops: at rest the canvas just sits there.
   import { onMount, untrack } from 'svelte';
+  import { attention } from '../../../lib/native/attention.svelte';
   import type { Eye } from '../../../lib/addons/alef/behaviors';
   import { drawEyes, eyeOf, KEYS, settled, step, stretchOf, tuning, withGaze, type EyeP, type Spring } from '../../../lib/addons/alef/eyes';
 
@@ -115,7 +116,8 @@
   let lifeOn = false;
   function life() {
     later(2200 + Math.random() * 4300, () => {
-      if (alive && !asleep && !reduced && !document.hidden && !look) {
+      // (A phone: only while someone is looking, see attention.svelte.ts.)
+      if (alive && attention.looking && !asleep && !reduced && !document.hidden && !look) {
         const r = Math.random();
         if (r < 0.66) doBlink(Math.random() < 0.2);
         else {

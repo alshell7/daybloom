@@ -102,7 +102,7 @@
     fresh = a.id;
     const r = from.getBoundingClientRect();
     view.spark(r.left + r.width / 2, r.top + r.height / 2, a.accent, true);
-    if (settings.value.sound) sounds.done();
+    sounds.done();
     clearTimeout(freshTimer);
     freshTimer = setTimeout(() => (fresh = null), 1300);
   }

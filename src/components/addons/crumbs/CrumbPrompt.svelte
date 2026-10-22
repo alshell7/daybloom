@@ -63,7 +63,7 @@
     if (!ask) return;
     const c = crumbs.add(ask.taskId, text, ask.reason);
     if (!c) return close();
-    if (settings.value.sound) sounds.tick();
+    sounds.tick();
     saved = true;
     setTimeout(close, rm ? 500 : 1300);
   }

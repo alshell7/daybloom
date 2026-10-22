@@ -105,6 +105,21 @@
     min-height: 40px;
     font-size: var(--t-sm);
   }
+  /* A phone: a control that doesn't fit beside its label goes under it, on the right. */
+  @media (max-width: 480px) {
+    .row {
+      flex-wrap: wrap;
+      row-gap: var(--s-2);
+    }
+    .row > :last-child:not(:first-child) {
+      margin-left: auto;
+    }
+    /* A switch stays beside its words; the words wrap instead. */
+    .row:has(> .switch) > :first-child {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
   .row > span:first-child {
     color: var(--ink-2);
   }

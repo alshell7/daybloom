@@ -401,4 +401,12 @@
     padding: 4px 0;
     font-size: var(--t-sm);
   }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .projects li .tools {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
 </style>

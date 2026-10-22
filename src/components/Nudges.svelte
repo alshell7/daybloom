@@ -8,6 +8,7 @@
   import Icon from '../lib/Icon.svelte';
   import { dismiss, nudges } from '../lib/nudges.svelte';
   import { sounds } from '../lib/sound';
+  import { swipeAway } from '../lib/swipeAway';
   import { clock } from '../lib/stores/clock.svelte';
   import { tasks } from '../lib/stores/tasks.svelte';
   import { timer } from '../lib/stores/timer.svelte';
@@ -18,7 +19,8 @@
   import { settings } from '../lib/stores/settings.svelte';
 
   // A small, kind stack of things worth a moment: check-ins, a nudge to start,
-  // something that fits the free time, and the evening wind-down. One at a time.
+  // something that fits the free time, and the evening wind-down. One at a time. On a phone,
+  // a swipe (sideways or down) is each card's "not now".
   let expanded = $state(false);
   let gapPick = $state(0);
 
@@ -53,7 +55,7 @@
 
 <div class="stack" aria-live="polite">
   {#if first}
-    <article class="card" class:urgent style:--c={first.color} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card" class:urgent style:--c={first.color} use:swipeAway={() => dismiss(`check:${first.key}`)} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name={first.icon} size={16} stroke={2.1} /></span>
         <div class="txt">
@@ -90,7 +92,7 @@
     {@const b = starter.offer}
     {@const fs = starter.of(b.key)}
     {@const busy = !!starter.making[b.key]}
-    <article class="card first" style:--c={b.color} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card first" style:--c={b.color} use:swipeAway={() => starter.dismiss(b)} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name="rocket" size={16} stroke={2.1} /></span>
         <div class="txt">
@@ -113,7 +115,7 @@
     </article>
   {:else if nudges.starter && !settings.value.nudges.firstStep}
     {@const s = nudges.starter}
-    <article class="card" style:--c={s.color} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card" style:--c={s.color} use:swipeAway={() => dismiss(`start:${s.key}`)} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name="rocket" size={16} stroke={2.1} /></span>
         <div class="txt">
@@ -130,7 +132,7 @@
       </div>
     </article>
   {:else if gap && idea}
-    <article class="card idea" in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card idea" use:swipeAway={() => dismiss(gap.id)} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name="sparkles" size={16} stroke={2.1} /></span>
         <div class="txt">
@@ -146,7 +148,7 @@
     </article>
   {:else if nudges.keepRhythm}
     {@const k = nudges.keepRhythm}
-    <article class="card rhythm" in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card rhythm" use:swipeAway={() => dismiss('rhythm')} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name="flame" size={16} stroke={2.1} /></span>
         <div class="txt">
@@ -164,7 +166,7 @@
       </div>
     </article>
   {:else if settings.value.onboarded && offerClear()}
-    <article class="card" in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card" use:swipeAway={() => keepSample()} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name="sparkles" size={16} stroke={2.1} /></span>
         <div class="txt">
@@ -178,7 +180,7 @@
       </div>
     </article>
   {:else if nudges.windDown}
-    <article class="card evening" in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
+    <article class="card evening" use:swipeAway={() => dismiss('winddown')} in:fly={{ x: -24, duration: view.reducedMotion ? 0 : 320, easing: cubicOut }} out:fly={{ x: -16, duration: 180 }}>
       <header>
         <span class="ico"><Icon name="sunset" size={16} stroke={2.1} /></span>
         <div class="txt">

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { haptic } from '../haptics';
-  import type { Snippet } from 'svelte';
+  import { attention } from '../native/attention.svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { fade, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import HoverCard from './HoverCard.svelte';
@@ -412,11 +413,40 @@
     }
     if (d.mode === 'create') {
       if (!d.moved) oncreate?.({ startMs: d.anchorMs, endMs: d.anchorMs + 30 * MINUTE });
-      else if (d.preview.endMs - d.preview.startMs >= STEP) oncreate?.(d.preview);
+      else if (d.preview.endMs - d.preview.startMs >= STEP) {
+        haptic('drop');
+        oncreate?.(d.preview);
+      }
     } else if (d.moved && d.key) {
+      haptic('drop');
       onadjust?.(d.key, d.preview);
     }
   }
+
+  /** Android took the touch (or it was interrupted): nothing is created or moved. */
+  function onCancel(e: PointerEvent) {
+    drag = null;
+    try {
+      svg.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  }
+
+  // A finger on the ring sweeps or moves a block, so the page holds still for it; on the face
+  // or outside the ring, a swipe scrolls the page (the dial's own touch-action is pan-y).
+  $effect(() => {
+    if (!svg || !interactive) return;
+    const el = svg;
+    const onTouch = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const { x, y } = local(e.touches[0] as unknown as PointerEvent);
+      const r = radiusOf(x, y);
+      if (r >= R.bezelIn - 24 && r <= R.case + 4) e.preventDefault();
+    };
+    el.addEventListener('touchstart', onTouch, { passive: false });
+    return () => el.removeEventListener('touchstart', onTouch);
+  });
 
   // Drag a Later item onto the ring: a ghost shows where it will land.
   let drop = $state<null | { startMs: number; minutes: number }>(null);
@@ -485,6 +515,17 @@
     const a = arcs.find((x) => x.current);
     return a ? { a0: a.a0, sweep: Math.max(4, a.a1 - a.a0), color: a.block.color } : null;
   });
+  // On a phone (see attention.svelte.ts) the aura takes two breaths when the app is opened or
+  // touched (a heads-up: four quick ones), then rests at its middle glow, and starts again from
+  // that same glow, so nothing jumps. Computers let it breathe on.
+  let wake = $state(0);
+  let rested = false;
+  $effect(() => {
+    void attention.glances;
+    if (!rested) return;
+    rested = false;
+    untrack(() => wake++);
+  });
 
   // 24 h dial: a sun or a moon rides the hand.
   const night = $derived.by(() => {
@@ -497,10 +538,6 @@
       ? { a0: toDeg(drag.preview.startMs), a1: toDeg(drag.preview.endMs), ms: drag.preview.endMs - drag.preview.startMs }
       : null,
   );
-  // A phone: a soft tick each time the sweep snaps to the next five minutes.
-  $effect(() => {
-    if (ghost?.ms) haptic('snap');
-  });
   const dragLabel = $derived.by(() => {
     if (!drag?.moved) return null;
     const p = drag.preview;
@@ -520,15 +557,18 @@
 
 <div class="dial-wrap" class:compact class:case={withCase} style:--face={finish.face} style:--ink={finish.ink} style:--signal={finish.signal}>
   {#if aura}
-    <div
-      class="aura"
-      class:fast={headsUpKey != null}
-      class:still={reduced}
-      style:--a0={`${aura.a0}deg`}
-      style:--sweep={`${aura.sweep}deg`}
-      style:--c={aura.color}
-      aria-hidden="true"
-    ></div>
+    {#key `${wake}|${headsUpKey != null}`}
+      <div
+        class="aura"
+        class:fast={headsUpKey != null}
+        class:still={reduced}
+        style:--a0={`${aura.a0}deg`}
+        style:--sweep={`${aura.sweep}deg`}
+        style:--c={aura.color}
+        onanimationend={() => (rested = true)}
+        aria-hidden="true"
+      ></div>
+    {/key}
   {/if}
   <svg
     bind:this={svg}
@@ -540,7 +580,7 @@
     onpointerdown={onDown}
     onpointermove={onMove}
     onpointerup={onUp}
-    onpointercancel={onUp}
+    onpointercancel={onCancel}
     onwheel={onWheel}
     ondragover={onDragOver}
     ondragleave={() => (drop = null)}
@@ -730,7 +770,7 @@
     {#if showNow}
       <!-- The hand lives between the numerals and the bezel; only a hairline crosses the
            inserts, so it never hides a number or a label. The arrow marks the bezel. -->
-      <g class="hand" style:transform={`rotate(${handAngle}deg)`}>
+      <g class="hand" class:step={!attention.looking} style:transform={`rotate(${handAngle}deg)`}>
         <line x1={C} y1={C - R.trackMajor - 6} x2={C} y2={C - R.bezelIn + 4} stroke={finish.signal} stroke-width={compact ? 12 : 8} stroke-linecap="round" />
         <line x1={C} y1={C - R.bezelIn + 4} x2={C} y2={C - R.bezelOut - 4} stroke={finish.signal} stroke-width={compact ? 4 : 2.5} />
         {#if presetId === 'gmt24' && !compact}
@@ -753,7 +793,7 @@
     <!-- Seconds bead: an HTML layer outside the SVG, stepping once a second, so the
          compositor moves it without repainting the dial. Re-synced every minute. -->
     {#key minuteKey}
-      <div class="seconds" style:transform={`rotate(${secondsAngle}deg)`} aria-hidden="true">
+      <div class="seconds" class:step={!attention.looking} style:transform={`rotate(${secondsAngle}deg)`} aria-hidden="true">
         <i style:background={finish.track} class:big={compact}></i>
       </div>
     {/key}
@@ -825,6 +865,14 @@
   .aura.fast {
     animation-duration: 4s;
   }
+  /* A phone: two breaths, from the middle glow back to it (a quarter in: 0.41), then still;
+     a heads-up breathes faster for about 16 s each time someone looks. */
+  :global([data-device='phone']) .aura:not(.fast, .still) {
+    animation: aura 8s ease-in-out -2s 2.25 both;
+  }
+  :global([data-device='phone']) .aura.fast:not(.still) {
+    animation: aura 4s ease-in-out -1s 4.25 both;
+  }
   .aura.still {
     animation: none;
     opacity: 0.35;
@@ -851,7 +899,7 @@
     width: 100%;
     height: 100%;
     display: block;
-    touch-action: none;
+    touch-action: pan-y;
     user-select: none;
     -webkit-user-select: none;
     overflow: visible;
@@ -875,6 +923,11 @@
     transform-box: view-box;
     transition: transform 0.8s var(--ease-out);
     pointer-events: none;
+  }
+  /* On a phone nobody is looking at, the hands step like a clock's (attention.svelte.ts). */
+  .hand.step,
+  .seconds.step {
+    transition: none;
   }
   .seconds {
     position: absolute;

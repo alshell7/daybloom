@@ -11,7 +11,7 @@
   import { atMinutes, formatDuration, formatTime, fromISODate, minutesOfDay, MINUTE, todayISO } from '../../../lib/engine/time';
   import Icon from '../../../lib/Icon.svelte';
   import TimeField from '../../pickers/TimeField.svelte';
-  import { platform } from '../../../lib/platform';
+  import { platform, thisDevice } from '../../../lib/platform';
   import { clock } from '../../../lib/stores/clock.svelte';
   import { view } from '../../../lib/stores/view.svelte';
   import Panel from '../../Panel.svelte';
@@ -213,7 +213,8 @@
             <button class="btn btn-soft sm" onclick={openAdd}><Icon name="plus" size={13} /> Add time</button>
           </div>
           {#if goalMin}
-            <span class="goal" aria-hidden="true"><i style:transform={`scaleX(${Math.min(1, todayMs / (goalMin * MINUTE))})`}></i></span>
+            <!-- by the minute: it glides a step a minute, not without pause -->
+            <span class="goal" aria-hidden="true"><i style:transform={`scaleX(${Math.min(1, Math.floor(todayMs / MINUTE) / goalMin)})`}></i></span>
           {/if}
           {#if adding}
             <form class="form" onsubmit={saveAdd} transition:slide={{ duration: view.reducedMotion ? 0 : 200 }}>
@@ -279,7 +280,7 @@
               <Icon name="app-window" size={20} />
               <div>
                 <b>See which apps you used while tracking</b>
-                <p>Daybloom notes the name of the app in front every 30 seconds, only while the stopwatch runs. It stays on this computer.</p>
+                <p>Daybloom notes the name of the app in front every 30 seconds, only while the stopwatch runs. It stays on {thisDevice}.</p>
                 <button class="btn btn-soft sm" onclick={() => tracker.setSettings({ trackApps: true })}>Turn on app activity</button>
               </div>
             </div>
@@ -304,7 +305,7 @@
           <div class="row"><span>Round exports to</span>
             <Segmented label="Rounding" value={String(tracker.settings.roundTo)} options={[0, 5, 6, 15].map((m) => ({ value: String(m), label: m ? `${m}m` : 'Exact' }))} onchange={(v) => tracker.setSettings({ roundTo: Number(v) as 0 | 5 | 6 | 15 })} />
           </div>
-          <p class="hint">Everything stays on this computer. Window titles can contain private text; they are off unless you turn them on.</p>
+          <p class="hint">Everything stays on {thisDevice}.{#if caps.titles} Window titles can contain private text; they are off unless you turn them on.{/if}</p>
         </section>
       {/if}
     </div>
@@ -314,10 +315,12 @@
 <style>
   .tp {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-4);
   }
   section {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--s-3);
   }
   h4 {
@@ -599,5 +602,13 @@
     margin: 0;
     color: var(--danger);
     font-size: var(--t-xs);
+  }
+
+  /* A touch screen has no hover to reveal it: it always shows. */
+  @media (hover: none) {
+    .entries li .del {
+      opacity: 1;
+      visibility: visible;
+    }
   }
 </style>

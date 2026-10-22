@@ -120,6 +120,18 @@
     display: grid;
     gap: 4px;
     justify-items: start;
+    min-width: 0;
+  }
+  /* A phone: the face above its feeling, each with the full width. */
+  @media (max-width: 400px) {
+    .stage {
+      flex-direction: column;
+      align-items: center;
+    }
+    .now {
+      justify-items: center;
+      text-align: center;
+    }
   }
   .core {
     font-size: var(--t-xs);

@@ -94,6 +94,20 @@
     gap: 6px;
     color: var(--ink-2);
   }
+  /* A phone: a control that doesn't fit beside its label goes under it, on the right. */
+  @media (max-width: 480px) {
+    .sync :global(.row) {
+      flex-wrap: wrap;
+      row-gap: var(--s-2);
+    }
+    .sync :global(.row > :last-child:not(:first-child)) {
+      margin-left: auto;
+    }
+    .sync :global(.row:has(> .switch) > :first-child) {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+  }
   .sync :global(.status) {
     min-width: 0;
     line-height: 1.4;

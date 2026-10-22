@@ -6,11 +6,12 @@
   import { fade, fly } from 'svelte/transition';
   import { session } from '../../lib/assistant/session.svelte';
   import Icon from '../../lib/Icon.svelte';
-  import { platform } from '../../lib/platform';
+  import { platform, thisDevice } from '../../lib/platform';
   import { view } from '../../lib/stores/view.svelte';
   import { micAdvice, micSettingsUrl, voice } from '../../lib/voice/voice.svelte';
   import Card from '../assistant/Card.svelte';
   import VoiceRing from './VoiceRing.svelte';
+  import { keyed } from '../topbar/items';
 
   // The capsule is the V key's surface. The mics in Quick add and Ask show their words in their
   // own field, but anything that needs you (download Whistle, no microphone, an error) shows here
@@ -149,7 +150,7 @@
         </p>
 
         {#if voice.phase === 'needs-model'}
-          <p class="say">Whistle turns your voice into text on this computer. It downloads once (17 MB) and works offline.</p>
+          <p class="say">Whistle turns your voice into text on {thisDevice}. It downloads once (17 MB) and works offline.</p>
           <div class="acts">
             <button class="btn-light" onclick={() => voice.download()}><Icon name="arrow-right" size={14} stroke={2.2} /> Get Whistle</button>
             <button class="btn-ghost" onclick={() => voice.cancel()}>Not now</button>
@@ -184,8 +185,8 @@
 
       {#if voice.phase === 'listening' || voice.phase === 'opening'}
         <div class="ctl">
-          <button class="round go" onclick={() => voice.stop()} aria-label="Send now (Enter)" title="Send now · Enter"><Icon name="arrow-right" size={16} stroke={2.3} /></button>
-          <button class="round" onclick={() => voice.cancel()} aria-label="Cancel (Esc)" title="Cancel · Esc"><Icon name="x" size={15} stroke={2.2} /></button>
+          <button class="round go" onclick={() => voice.stop()} aria-label={keyed('Send now', 'Enter')} title="Send now · Enter"><Icon name="arrow-right" size={16} stroke={2.3} /></button>
+          <button class="round" onclick={() => voice.cancel()} aria-label={keyed('Cancel', 'Esc')} title="Cancel · Esc"><Icon name="x" size={15} stroke={2.2} /></button>
         </div>
       {:else if voice.phase === 'result'}
         <div class="ctl">

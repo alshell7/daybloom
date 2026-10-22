@@ -57,7 +57,7 @@ export interface AiFile {
 /** What each feature can be set to, and what it does, for the settings page. */
 export const FEATURES: { id: Feature; name: string; icon: string; skills: Skill[]; blurb: string; device: Partial<Record<Skill, string>> }[] = [
   { id: 'alef', name: 'Alef', icon: 'bot', skills: ['think', 'speak'], blurb: 'Talks with you, plans with you and speaks up on its own', device: { think: 'This device', speak: 'Chirps' } },
-  { id: 'assistant', name: 'Ask Daybloom', icon: 'sparkles', skills: ['think'], blurb: 'Understands what you type or say (⌘K)', device: { think: 'Needle, on this device' } },
+  { id: 'assistant', name: 'Ask Daybloom', icon: 'sparkles', skills: ['think'], blurb: platform.isMobile ? 'Understands what you type or say' : `Understands what you type or say (${platform.os === 'mac' ? '⌘' : 'Ctrl '}K)`, device: { think: 'Needle, on this device' } },
   { id: 'starter', name: 'Getting started', icon: 'rocket', skills: ['think'], blurb: 'A tiny first step and a kind nudge when a block hasn’t started', device: { think: 'Built-in first steps' } },
   { id: 'smaller', name: 'Make it smaller', icon: 'layers', skills: ['think'], blurb: 'Splits a big task into small first steps', device: { think: 'Built-in ideas' } },
   { id: 'reality', name: 'Reality check', icon: 'hourglass', skills: ['think'], blurb: 'Plans real lengths from your own track record, with practical tips', device: { think: 'Your own numbers' } },

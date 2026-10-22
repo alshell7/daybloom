@@ -60,6 +60,11 @@ const isMobile = isTauri && typeof navigator !== 'undefined' && /android|iphone|
 /** The computer app, with its extra windows and tray. */
 const isDesktop = isTauri && !isMobile;
 
+/** This device, in the app's words: "this phone" or "this computer". */
+export const thisDevice = isMobile ? 'this phone' : 'this computer';
+/** Where tokens and keys are kept, in the app's words. */
+export const keychain = isMobile ? 'this phone’s secure storage' : 'your system keychain';
+
 export type WindowLabel = 'main' | 'widget' | 'overlay' | 'capture';
 
 /** Label of the current window. Browser dev uses `?view=widget` / `?view=overlay` / `?view=capture`. */

@@ -33,7 +33,7 @@
   function prayed(how: 'ontime' | 'jamaat' = 'ontime') {
     if (!m) return;
     waqt.markAs(isoOf(m.prayer.at), m.prayer.id, how);
-    if (settings.value.sound) sounds.done();
+    sounds.done();
     marked = true;
     setTimeout(() => (waqt.moment = null), rm ? 400 : 1400);
   }

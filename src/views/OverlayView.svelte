@@ -16,6 +16,7 @@
   import { settings } from '../lib/stores/settings.svelte';
   import { view } from '../lib/stores/view.svelte';
   import { hidingNames } from '../lib/privacy';
+  import { attention } from '../lib/native/attention.svelte';
 
   const cfg = $derived(settings.value.screen);
   const s = $derived(cueSubject(clock.now));
@@ -123,15 +124,16 @@
 <div
   class="ov"
   style:--c={s ? (cfg.color && cfg.color !== 'task' ? cfg.color : s.color) : 'transparent'}
-  style:--in-top={`${inset.top}px`}
-  style:--in-right={`${inset.right}px`}
-  style:--in-bottom={`${inset.bottom}px`}
-  style:--in-left={`${inset.left}px`}
+  style:--in-top={platform.isMobile ? 'calc(var(--safe-top, 0px) + 58px)' : `${inset.top}px`}
+  style:--in-right={platform.isMobile ? 'var(--safe-right, 0px)' : `${inset.right}px`}
+  style:--in-bottom={platform.isMobile ? 'var(--safe-bottom, 0px)' : `${inset.bottom}px`}
+  style:--in-left={platform.isMobile ? 'var(--safe-left, 0px)' : `${inset.left}px`}
+  class:in-app={platform.isMobile}
   aria-hidden="true"
 >
   {#if s && cfg.glow}
     <div class="glow-in" transition:fade={{ duration: reduced ? 0 : 900 }}>
-      <div class="glow {cfg.glowStrength} {stage}" use:breath={{ period: PERIOD[stage] ?? 6, fps: FPS[stage] ?? 15, still: reduced || stage === 'paused' }}></div>
+      <div class="glow {cfg.glowStrength} {stage}" use:breath={{ period: PERIOD[stage] ?? 6, fps: FPS[stage] ?? 15, still: reduced || stage === 'paused' || !attention.looking }}></div>
     </div>
   {/if}
 
@@ -173,6 +175,10 @@
     pointer-events: none;
     overflow: hidden;
     font-family: var(--font-ui);
+  }
+  /* A phone: drawn in the planner's own window, over the app and under its sheets' popovers. */
+  .ov.in-app {
+    z-index: 40;
   }
 
   /* ---- edge glow: painted once, then only its opacity breathes (see `breath`) */
