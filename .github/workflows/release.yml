@@ -209,7 +209,7 @@ jobs:
           packages: platform-tools
       - name: SDK platform, build tools and NDK
         if: env.HAS_KEY == 'true'
-        run: sdkmanager "platforms;android-37" "build-tools;36.0.0" "ndk;27.1.12297006" >/dev/null
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0" "ndk;27.1.12297006" >/dev/null
       - uses: dtolnay/rust-toolchain@stable
         if: env.HAS_KEY == 'true'
         with:
