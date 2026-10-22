@@ -7,6 +7,8 @@ release, in the app's update card, and once after the update.
 Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one plain sentence.`
 
 ## Next
+
+## 0.3.0
 ### New
 
 - **Daybloom on Android** — the planner, the dial and your day on your phone, drawn edge to edge, with the back gesture closing what is open. Install the APK from the release; the app tells you when a new version is ready and installs it with one tap.
