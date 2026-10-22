@@ -19,6 +19,7 @@
 //   mcp_set(on, rotate?)             -> McpStatus          MCP addon server on 127.0.0.1
 //   mcp_status()                     -> McpStatus
 //   mcp_reply(id, answer)            -> void               answers a `daybloom://mcp` request
+//   ota_status / ota_stage / ota_apply / ota_ready / ota_rollback   web updates (ota.svelte.ts)
 //
 // Events: `daybloom://state` {key, origin} is broadcast whenever a window saves,
 // `daybloom://tray` {action} is emitted by the native tray menu,

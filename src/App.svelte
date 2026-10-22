@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { activeTimeZone, atMinutes, formatTime, hourOf, setPrefers12h, setTimeZone, todayISO } from './lib/engine/time';
   import { platform, windowLabel } from './lib/platform';
   import { startScheduler } from './lib/scheduler.svelte';
@@ -12,6 +12,7 @@
   import { view } from './lib/stores/view.svelte';
   import { themeCss } from './lib/themes';
   import { startUpdateChecks } from './lib/updater.svelte';
+  import { reportStarted } from './lib/ota.svelte';
   import { startSync } from './lib/sync/sync.svelte';
   import { streakFile } from './lib/stores/streaks.svelte';
   import { layout } from './lib/stores/layout.svelte';
@@ -86,6 +87,8 @@
       if (label === 'main') void trashFile.load().then(() => trash.purge());
       view.date = view.today;
       ready = true;
+      // The planner is up, so a new web update started fine (src-tauri/src/ota.rs).
+      if (label === 'main') void tick().then(reportStarted);
       // Settings › AI (the planner first moves Alef's old brain setup there).
       void startAi(label === 'main').catch((e) => console.warn('[daybloom] ai', e));
       // The menu bar, sounds and reminders start at once; calendars catch up after.

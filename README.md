@@ -303,6 +303,13 @@ Daybloom checks for updates when it starts and every 6 hours. When an update is 
 2. Wait while the chip fills. Daybloom downloads the update and checks its signature.
 3. Daybloom restarts with the new version.
 
+Some updates change only the screens of Daybloom. Daybloom downloads these small updates before it tells you about them.
+
+1. Click **Refresh to update**.
+2. The window loads again with the new version. Daybloom does not restart.
+
+If you do not click, the update starts when you open Daybloom the next time. If an update does not start correctly, Daybloom goes back to the version before it and tells you. To go back yourself, open **Settings › App › Updates** and click **Go back to …**.
+
 To check manually, open **Settings › App › Updates** and click **Check now**.
 
 > [!IMPORTANT]
@@ -1046,15 +1053,26 @@ Build Windows bundles on Windows. The installer installs the WebView2 runtime if
 
 ```bash
 npm run release          # 0.1.3 → 0.1.4 (or: npm run release minor | major | 1.2.3)
+npm run release -- --web # force a web update; --native forces a full release
 ```
 
-The script changes the version in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml`. Then it makes a commit, an annotated tag `vX.Y.Z`, and pushes both. The tag starts `.github/workflows/release.yml`, which:
+The script changes the version in `package.json`, `package-lock.json` and `src-tauri/Cargo.toml`. Then it makes a commit, an annotated tag `vX.Y.Z`, and pushes both.
 
-1. builds the **macOS** (universal) and **Windows** (NSIS and MSI) installers, and signs each update file with the updater key;
-2. uploads them, their `.sig` files and `latest.json` to a draft release in this repo;
-3. publishes the release when both builds and the frontend checks pass.
+There are two kinds of release. The script selects the kind (`scripts/release-kind.mjs`):
 
-Installed apps read `https://github.com/alshell7/daybloom/releases/latest/download/latest.json`. They verify each download against the public key in `tauri.conf.json`.
+- **Native**: something in the app binary changed since the last native release. For example, a file in `src-tauri/` (Rust, plugins, capabilities, permissions, `Cargo.lock`), or the version of a `@tauri-apps` package. The script increases `RUNTIME` in `src-tauri/runtime.json` and writes the version in its `native` field.
+- **Web update**: only the web layer changed (HTML, CSS, JavaScript). Installed apps of the same runtime refresh to it. They do not install anything (`src-tauri/src/ota.rs`).
+
+The tag starts `.github/workflows/release.yml`, which:
+
+1. for a native release, builds the **macOS** (universal) and **Windows** (NSIS and MSI) installers, and signs each update file with the updater key;
+2. for each release, builds the web layer, packs it as `web-X.Y.Z-rN.zip` (N is the runtime), and signs it with the same key;
+3. uploads the files, their `.sig` files, `latest.json` and `web-latest.json` to a draft release in this repo. A web update copies `latest.json` from the release before it;
+4. publishes the release when all builds and the frontend checks pass.
+
+Installed apps read `https://github.com/alshell7/daybloom/releases/latest/download/latest.json` for installers and `web-latest.json` for web updates. They verify each download against the public key in `tauri.conf.json`. `web-latest.json` has the newest bundle for each runtime. Thus an app that is not updated yet still gets the web updates that fit it.
+
+A web update must call `ota_ready` within 15 seconds after it starts. If it does not, Daybloom goes back to the version before it and does not take that version again. To try a bundle on your computer, build a debug app (`npx tauri build --debug`). Then start it with `DAYBLOOM_OTA_FEED` (the URL of a local `web-latest.json`) and `DAYBLOOM_OTA_PUBKEY` (a test public key). Release builds ignore these two variables.
 
 Versions before 0.1.8 read the old feed repo [`alshell7/daybloom-releases`](https://github.com/alshell7/daybloom-releases). The release workflow copied v0.1.8 there one time. Thus old copies update to 0.1.8, and then use this repo. Keep the feed repo: copies that were not opened for a long time still need it.
 

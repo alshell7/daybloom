@@ -22,6 +22,7 @@
   import Segmented from './Segmented.svelte';
   import TimeField from './pickers/TimeField.svelte';
   import { checkForUpdates, installUpdate, loadVersion, updates } from '../lib/updater.svelte';
+  import { rollbackWebUpdate, web } from '../lib/ota.svelte';
   import type { VoiceLanguage } from '../lib/stores/settings.svelte';
 
   // Screen-cue colours: the task's own category colour, or one fixed calm colour.
@@ -581,7 +582,7 @@
           {:else if updates.status === 'available'}
             <div class="row">
               <span>Version {updates.version} is ready.</span>
-              <button class="btn btn-primary" onclick={() => installUpdate()}>Update &amp; restart</button>
+              <button class="btn btn-primary" onclick={() => installUpdate()}>{updates.kind === 'web' ? 'Refresh to update' : 'Update & restart'}</button>
             </div>
 
           {:else if updates.status === 'error'}
@@ -591,6 +592,9 @@
             <span>Check for updates automatically</span>
             <input type="checkbox" class="switch" bind:checked={settings.value.autoUpdate} />
           </label>
+          {#if web.active}
+            <p class="hint">Web update {web.active} runs on Daybloom {web.embedded}. <button class="linkish" onclick={() => rollbackWebUpdate().catch((e) => view.say(`Couldn’t go back: ${e}`))}>Go back to {web.previous ?? web.embedded}</button></p>
+          {/if}
           <p class="hint">Updates are signed; Daybloom refuses any download that doesn't match its key. <button class="linkish" onclick={() => (view.sheet = { kind: 'whatsnew' })}>See what’s new</button></p>
         </section>
         {/if}

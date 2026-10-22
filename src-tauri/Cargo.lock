@@ -786,12 +786,15 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 name = "daybloom"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "getrandom 0.3.4",
  "keyring",
+ "minisign-verify",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "reqwest 0.12.28",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
@@ -807,6 +810,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "webview2-com",
  "windows",
+ "zip",
 ]
 
 [[package]]
@@ -6344,6 +6348,7 @@ checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
 dependencies = [
  "arbitrary",
  "crc32fast",
+ "flate2",
  "indexmap 2.14.2",
  "memchr",
 ]
