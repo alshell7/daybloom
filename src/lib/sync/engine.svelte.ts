@@ -38,10 +38,12 @@ function onMobileData(): boolean {
   const c = (typeof navigator !== 'undefined' ? (navigator as Navigator & { connection?: { type?: string } }).connection : undefined) ?? null;
   return c?.type === 'cellular';
 }
-/** Quiet time after the last local change before syncing it. */
-export const SETTLE_MS = 20_000;
-/** Focus / visibility only syncs if the last sync is at least this old. */
-const FOCUS_GAP_MS = 60_000;
+/** Quiet time after the last local change before syncing it (a backend may ask for less). */
+export const SETTLE_MS = 5_000;
+/** While the app is in view, how often to look for changes from other devices (one listing). */
+export const LIVE_MS = 30_000;
+/** Focus / visibility only looks for news if the last look is at least this old. */
+const FOCUS_GAP_MS = 5_000;
 /** Refresh this device's heartbeat at least this often… */
 const HEARTBEAT_MS = 6 * 3_600_000;
 /** …or, when this sync wrote data anyway, if it's older than this. */
@@ -132,6 +134,10 @@ export interface SyncBackend<P extends object, I> {
   /** Remember what a connection test learned (GitHub: whether the repo is private). */
   learned?(cfg: P, info: I): void;
   defaultDeviceName(os?: string): string;
+  /** Quiet time after a local change before it goes up (default SETTLE_MS). */
+  settleMs?: number;
+  /** How often to look for other devices' changes while in view (default LIVE_MS). */
+  liveMs?: number;
 }
 
 export interface ConnectContext {
@@ -177,6 +183,8 @@ export interface SyncDeps {
   newId?: () => string;
   vault?: VaultKeeper;
   lock?: Lock;
+  /** Whether the app is on screen (live checks run only then). Default: the document's visibility. */
+  visible?: () => boolean;
 }
 
 interface BaseRecord<T> {
@@ -280,6 +288,10 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
   const keeper = deps.vault ?? memoryVaultKeeper();
   const lock = deps.lock ?? ((fn) => fn());
   const BASE_PREFIX = backend.basePrefix;
+  const settleMs = backend.settleMs ?? SETTLE_MS;
+  const liveMs = backend.liveMs ?? LIVE_MS;
+  const visible =
+    deps.visible ?? (() => typeof document !== 'undefined' && typeof document.visibilityState === 'string' && document.visibilityState === 'visible');
 
   function defaultConfig(): Config {
     return {
@@ -739,9 +751,54 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
       } finally {
         running = null;
       }
+      // An edit made while this sync was on the network is folded in here but not sent yet:
+      // send it now rather than at the next timed sync.
+      if (state.status.state === 'ok' && state.config.onChange && (await isDirty().catch(() => false))) followUp?.();
     })();
     return running;
   }
+  /** Set by start(): sends what is still waiting here, after a short pause. */
+  let followUp: (() => void) | null = null;
+
+  /**
+   * A cheap look for other devices' changes: one listing, compared with the versions of the
+   * last sync. Anything new there (or waiting here) starts a full sync. Problems stay quiet;
+   * the next full sync reports them.
+   */
+  async function peek(): Promise<boolean> {
+    await init();
+    const cfg = state.config;
+    if (!state.ready || !cfg.enabled || paused || running || !canSync() || now() < blockedUntil) return false;
+    if (cfg.every === 0) return false; // only by hand
+    if (!cfg.mobileData && onMobileData()) return false;
+    const conn = connection();
+    if (!conn) return false;
+    if (sealed(cfg) && !(await keeper.get())) return false;
+    lastPeek = now();
+    try {
+      const loc = locationOf(cfg);
+      const stores = await deps.stores();
+      const list = codecs(stores, { sealed: sealed(cfg) }).filter((c) => !skippedFile(c.file, cfg.skip));
+      const listing = await conn.remote.list();
+      const versionOf = (file: string) => listing.find((e) => e.name === file)?.version ?? null;
+      let news = false;
+      for (const c of list) {
+        const base = await loadRaw(c.key);
+        if (!base || base.loc !== loc || (base.sha ?? null) !== versionOf(c.file)) {
+          news = true;
+          break;
+        }
+      }
+      if (news || (await isDirty())) {
+        await run();
+        return true;
+      }
+    } catch (e) {
+      if (e instanceof SyncError && e.kind === 'rate-limit') blockedUntil = e.retryAt ?? now() + 60_000;
+    }
+    return false;
+  }
+  let lastPeek = 0;
 
   /** Background trigger: stays quiet while a problem waits for the user. */
   function auto() {
@@ -847,8 +904,11 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
   }
 
   /** Manual "Sync now": also retries after a problem that paused background syncs. */
-  function syncNow(): Promise<void> {
+  async function syncNow(): Promise<void> {
     paused = false;
+    // A sync already on its way may have read this device before the latest edit: wait for it,
+    // then sync again so "Sync now" always sends what you see.
+    if (running) await running.catch(() => {});
     return run();
   }
 
@@ -988,7 +1048,11 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     if (state.config.enabled) await run();
   }
 
-  /** Background syncing: on start, every 5 min, after local changes settle, on focus/online. */
+  /**
+   * Background syncing: on start, at the service's own pace, a few seconds after local changes
+   * settle, as soon as the app leaves the screen with changes waiting, and, while it's in view,
+   * a cheap look for other devices' changes every half minute or so (and on focus).
+   */
   function start(): () => void {
     let stopped = false;
     let settle: ReturnType<typeof setTimeout> | null = null;
@@ -1000,35 +1064,56 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
       const every = state.config.every;
       if (every > 0 && idleMinutes >= every) auto();
     }, 60_000);
+    // While in view: has another device written anything?
+    const live = setInterval(() => {
+      if (!stopped && visible() && now() - lastPeek >= liveMs - 50) void peek();
+    }, liveMs);
     const onFocus = () => {
-      if (now() - (state.config.lastSyncAt ?? 0) > FOCUS_GAP_MS) auto();
+      if (now() - lastPeek > FOCUS_GAP_MS) void peek();
     };
     const onOnline = () => {
       if (state.status.state === 'error' && state.status.kind === 'network') state.status = { state: 'idle' };
       auto();
     };
+    /** Leaving the screen (a phone may freeze the app next): send what's waiting now. */
+    const onHide = async () => {
+      if (stopped || !state.config.enabled || !state.config.onChange) return;
+      if (settle) {
+        clearTimeout(settle);
+        settle = null;
+      }
+      if (await isDirty().catch(() => false)) auto();
+    };
     const onVisibility = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') onFocus();
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState === 'visible') onFocus();
+      else void onHide();
     };
     const hasWindow = typeof window !== 'undefined' && typeof window.addEventListener === 'function';
     if (hasWindow) {
       window.addEventListener('focus', onFocus);
       window.addEventListener('online', onOnline);
+      window.addEventListener('pagehide', onHide);
       document.addEventListener('visibilitychange', onVisibility);
     }
+
+    const schedule = (ms: number) => {
+      if (settle) clearTimeout(settle);
+      settle = setTimeout(async () => {
+        settle = null;
+        if (stopped || !state.config.enabled || !state.config.onChange) return;
+        if (await isDirty().catch(() => true)) auto();
+      }, ms);
+    };
+    followUp = () => {
+      if (!stopped) schedule(Math.min(1_000, settleMs));
+    };
 
     Promise.resolve(deps.stores())
       .then((s) => {
         if (stopped) return;
         unwatch = s.watch?.(
-          () => {
-            if (settle) clearTimeout(settle);
-            settle = setTimeout(async () => {
-              settle = null;
-              if (stopped || !state.config.enabled || !state.config.onChange) return;
-              if (await isDirty().catch(() => true)) auto();
-            }, SETTLE_MS);
-          },
+          () => schedule(settleMs),
           () => state.ready && state.config.enabled,
         );
       })
@@ -1040,12 +1125,15 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
 
     return () => {
       stopped = true;
+      followUp = null;
       clearInterval(interval);
+      clearInterval(live);
       if (settle) clearTimeout(settle);
       unwatch?.();
       if (hasWindow) {
         window.removeEventListener('focus', onFocus);
         window.removeEventListener('online', onOnline);
+        window.removeEventListener('pagehide', onHide);
         document.removeEventListener('visibilitychange', onVisibility);
       }
     };
@@ -1097,6 +1185,7 @@ export function createSyncEngine<P extends object, I>(backend: SyncBackend<P, I>
     test,
     enable,
     syncNow,
+    peek,
     setOptions,
     disconnect,
     start,

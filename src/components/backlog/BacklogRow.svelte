@@ -911,6 +911,54 @@
     color: var(--ink);
     background: color-mix(in srgb, var(--ink) 8%, transparent);
   }
+  /* A phone: no grip (lists reorder in an item's details), a 44 px check and actions button, a
+     larger title that wraps to two lines, and rows tall enough to hit with a thumb. */
+  .line.phone {
+    grid-template-columns: 40px 30px minmax(0, 1fr) 44px;
+    column-gap: 8px;
+    min-height: 60px;
+    padding: 8px 2px 8px 0;
+  }
+  .line.phone .grip {
+    display: none;
+  }
+  .line.phone .check {
+    justify-self: center;
+    width: 26px;
+    height: 26px;
+    border-width: 2px;
+  }
+  .line.phone .check::before {
+    content: '';
+    position: absolute;
+    inset: -9px;
+    border-radius: 50%;
+  }
+  .line.phone .tile {
+    width: 30px;
+    height: 30px;
+  }
+  .line.phone .title {
+    font-size: 15px;
+    line-height: 1.32;
+  }
+  .line.phone .tx {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .line.phone .more {
+    width: 44px;
+    height: 44px;
+    margin-right: 0;
+  }
+  .line.phone .more:focus-visible,
+  .line.phone .check:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
   /* A touch screen: the title may take two lines rather than cut off at one. */
   @media (hover: none) {
     .tx {

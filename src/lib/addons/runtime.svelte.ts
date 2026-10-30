@@ -11,6 +11,7 @@ import { mcpFile, startMcp } from './mcp/mcp.svelte';
 import { startLandings } from './landings/landings.svelte';
 import { landingsFile } from './landings/pad.svelte';
 import { retroFile, startRetro } from './retro/retro.svelte';
+import { decisionFile, startDecision } from './decision/decision.svelte';
 import { alefFile, startAlef, startAlefView } from './alef/alef.svelte';
 import { viewsFile } from './views/views.svelte';
 import { view } from '../stores/view.svelte';
@@ -70,7 +71,19 @@ export function startAddons(): () => void {
   let stopLandings: (() => void) | null = null;
   let stopRetro: (() => void) | null = null;
   let stopAlef: (() => void) | null = null;
+  let stopDecision: (() => void) | null = null;
   const root = $effect.root(() => {
+    $effect(() => {
+      const on = isOn('decision');
+      if (on && !stopDecision) {
+        void loaded(decisionFile).then(() => {
+          if (isOn('decision') && !stopDecision) stopDecision = startDecision();
+        });
+      } else if (!on && stopDecision) {
+        stopDecision();
+        stopDecision = null;
+      }
+    });
     $effect(() => {
       const on = isOn('alef');
       if (on && !stopAlef) {
@@ -180,6 +193,7 @@ export function startAddons(): () => void {
     stopMcp?.();
     stopLandings?.();
     stopRetro?.();
+    stopDecision?.();
     stopAlef?.();
     stopTracker?.();
     stopFocus?.();

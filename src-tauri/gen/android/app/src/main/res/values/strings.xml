@@ -7,7 +7,15 @@
     <string name="widget_alef_desc">Alef, with one small next step for the block that is on</string>
     <string name="widget_done">Done</string>
     <string name="widget_start">Start 2 min</string>
-    <string name="tile_capture">Quick add</string>
+    <string name="tile_capture">Jot it down</string>
     <string name="shortcut_add">Add a block</string>
     <string name="shortcut_focus">Start a focus</string>
+    <string name="shortcut_jot">Jot it down</string>
+    <string name="shortcut_backlog">Backlog</string>
+    <string name="widget_backlog_name">Backlog</string>
+    <string name="widget_backlog_desc">What waits in your backlog, and one tap to jot down more</string>
+    <string name="widget_backlog_empty">Nothing waiting. Tap Jot to add something.</string>
+    <string name="widget_jot">+ Jot</string>
+    <string name="widget_jot_desc">Jot something down</string>
+    <string name="widget_jot_voice">Say something to jot down</string>
 </resources>

@@ -8,6 +8,11 @@
 // (rendered from the app's synthesiser, res/raw/tone_*.wav), growing gently, until it's
 // answered or the ring time runs out; on a locked or idle phone AlarmActivity opens full
 // screen. A focus session shows a quiet ongoing notification that counts down by itself.
+//
+// A reminder can carry buttons the planner chose for it (src/lib/native/notifyActions.ts):
+// Done, 10 more min, Track time, Prayed… A tap is kept here (`NotifyActions`) until the planner
+// takes it, so they work with Daybloom closed; "Remind in N min" is done here alone, and a
+// button that needs the planner on screen opens it.
 package app.daybloom.device
 
 import android.app.AlarmManager
@@ -22,6 +27,15 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 import org.json.JSONObject
+
+/** One button on a reminder. */
+data class NotifyButton(val act: String, val label: String, val arg: Int = 0, val open: Boolean = false) {
+  fun toJson(): JSONObject = JSONObject().put("act", act).put("label", label).put("arg", arg).put("open", open)
+
+  companion object {
+    fun from(o: JSONObject) = NotifyButton(o.optString("act"), o.optString("label"), o.optInt("arg", 0), o.optBoolean("open", false))
+  }
+}
 
 data class Reminder(
   val id: String,
@@ -41,11 +55,15 @@ data class Reminder(
   val tag: String = "",
   /** When it has had its moment: Android clears it then (0: when it's tapped or swiped). */
   val until: Long = 0,
+  /** What its buttons act on: a block key, or salah:<date>:<id>. */
+  val key: String = "",
+  val actions: List<NotifyButton> = emptyList(),
 ) {
   fun toJson(): JSONObject = JSONObject()
     .put("id", id).put("at", at).put("kind", kind).put("title", title).put("body", body)
     .put("tone", tone).put("ringForMin", ringForMin).put("snoozeMin", snoozeMin)
     .put("gentle", gentle).put("volume", volume).put("tag", tag).put("until", until)
+    .put("key", key).put("actions", JSONArray().also { a -> actions.forEach { a.put(it.toJson()) } })
 
   companion object {
     fun from(o: JSONObject) = Reminder(
@@ -61,6 +79,10 @@ data class Reminder(
       volume = o.optDouble("volume", 0.7).coerceIn(0.0, 1.0),
       tag = o.optString("tag", ""),
       until = o.optLong("until", 0),
+      key = o.optString("key", ""),
+      actions = o.optJSONArray("actions")?.let { a ->
+        (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let(NotifyButton::from) }.filter { it.act.isNotEmpty() && it.label.isNotEmpty() }.take(3)
+      } ?: emptyList(),
     )
   }
 }
@@ -70,6 +92,7 @@ object Reminders {
   const val FIRE = "app.daybloom.reminder.FIRE"
   const val SNOOZE = "app.daybloom.reminder.SNOOZE"
   const val STOP = "app.daybloom.reminder.STOP"
+  const val ACT = "app.daybloom.reminder.ACT"
   const val ALARM_ID = 7001
   const val FOCUS_ID = 7002
   private val TONES = listOf("dawn", "meadow", "harp", "chimes", "bedside", "musicbox", "tide")
@@ -239,6 +262,7 @@ object Reminders {
       .setGroup(GROUP)
       .setCategory(if (channel == "salah") NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_EVENT)
     if (r.until > now) b.setTimeoutAfter(r.until - now)
+    if (r.key.isNotEmpty()) for (a in r.actions) b.addAction(0, a.label, button(ctx, r, a))
     nm(ctx).notify(r.tag.ifEmpty { r.id }, ONE, b.build())
     summarize(ctx, channel)
   }
@@ -265,6 +289,56 @@ object Reminders {
     for (s in nm(ctx).activeNotifications) {
       if (s.notification.group == GROUP) nm(ctx).cancel(s.tag, s.id)
     }
+  }
+
+  /** A reminder's button: one that needs the planner opens it; the rest go to the receiver. */
+  private fun button(ctx: Context, r: Reminder, a: NotifyButton): PendingIntent {
+    val code = (a.act + r.id).hashCode()
+    if (a.open) {
+      val i = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)!!
+        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        .putExtra("daybloom.action", a.act)
+        .putExtra("daybloom.key", r.key)
+        .putExtra("daybloom.dismiss", r.tag.ifEmpty { r.id })
+      return PendingIntent.getActivity(ctx, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+    val i = Intent(ctx, ReminderReceiver::class.java).setAction(ACT)
+      .putExtra("r", r.toJson().toString())
+      .putExtra("act", a.act)
+      .putExtra("arg", a.arg)
+      .putExtra("label", a.label)
+    return PendingIntent.getBroadcast(ctx, code, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+  }
+
+  /** Clears a reminder's notification (by its tag, as `post` shows it). */
+  fun dismiss(ctx: Context, tag: String) = nm(ctx).cancel(tag, ONE)
+
+  /** A button was pressed in the shade. */
+  fun act(ctx: Context, r: Reminder, act: String, arg: Int, label: String) {
+    val tag = r.tag.ifEmpty { r.id }
+    if (act == "remind") {
+      // Again in a few minutes, the same reminder (no planner needed).
+      dismiss(ctx, tag)
+      val again = r.copy(id = "again:${r.id}", at = System.currentTimeMillis() + arg.coerceIn(1, 120) * 60_000L, until = 0)
+      save(ctx, load(ctx).filter { it.id != again.id } + again)
+      arm(ctx, again)
+      return
+    }
+    NotifyActions.add(ctx, act, r.key, arg)
+    // A quiet word that it was heard, then it goes.
+    val done = NotificationCompat.Builder(ctx, if (r.kind == "salah") "salah" else "reminders")
+      .setSmallIcon(R_drawable.stat(ctx))
+      .setContentTitle(label)
+      .setContentText(r.title)
+      .setSilent(true)
+      .setOnlyAlertOnce(true)
+      .setGroup(GROUP)
+      .setContentIntent(openApp(ctx))
+      .setAutoCancel(true)
+      .setTimeoutAfter(4_000)
+      .build()
+    nm(ctx).notify(tag, ONE, done)
+    NotifyActions.tell()
   }
 
   private fun action(ctx: Context, what: String, r: Reminder): PendingIntent {
@@ -354,8 +428,55 @@ class ReminderReceiver : BroadcastReceiver() {
       Reminders.FIRE -> r?.let { Reminders.fire(ctx, it) }
       Reminders.SNOOZE -> r?.let { Reminders.snooze(ctx, it) }
       Reminders.STOP -> Reminders.stop(ctx)
+      Reminders.ACT -> r?.let {
+        Reminders.act(ctx, it, intent.getStringExtra("act") ?: return, intent.getIntExtra("arg", 0), intent.getStringExtra("label") ?: "Done")
+      }
       Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIME_CHANGED,
       Intent.ACTION_TIMEZONE_CHANGED, AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> Reminders.rearm(ctx)
+    }
+  }
+}
+
+/**
+ * Buttons pressed in the notification shade, until the planner takes them (`notifyPending`).
+ * While the planner is running it hears of each one at once (`tell`).
+ */
+object NotifyActions {
+  private const val PREFS = "daybloom_notify_actions"
+  /** Set by DevicePlugin while the planner's page is loaded. */
+  @Volatile var listener: (() -> Unit)? = null
+
+  private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+  @Synchronized fun add(ctx: Context, act: String, key: String, arg: Int) {
+    if (key.isEmpty()) return
+    val a = try {
+      JSONArray(prefs(ctx).getString("q", "[]"))
+    } catch (e: Exception) {
+      JSONArray()
+    }
+    a.put(JSONObject().put("act", act).put("key", key).put("arg", arg).put("at", System.currentTimeMillis()))
+    // A day of taps is plenty; the planner normally takes them within seconds.
+    val keep = JSONArray()
+    for (i in maxOf(0, a.length() - 50) until a.length()) keep.put(a.get(i))
+    prefs(ctx).edit().putString("q", keep.toString()).commit()
+  }
+
+  @Synchronized fun take(ctx: Context): JSONArray {
+    val text = prefs(ctx).getString("q", "[]") ?: "[]"
+    prefs(ctx).edit().remove("q").commit()
+    return try {
+      JSONArray(text)
+    } catch (e: Exception) {
+      JSONArray()
+    }
+  }
+
+  fun tell() {
+    try {
+      listener?.invoke()
+    } catch (e: Exception) {
+      // The planner takes them when it next opens.
     }
   }
 }

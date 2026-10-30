@@ -31,7 +31,7 @@ import { transcribe, wavOf } from '../ai/providers';
 import { platform } from '../platform';
 
 export type VoicePhase = 'idle' | 'needs-model' | 'downloading' | 'opening' | 'listening' | 'finishing' | 'thinking' | 'result' | 'error';
-export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd' | 'note' | 'alef';
+export type VoiceSurface = 'overlay' | 'assistant' | 'quickadd' | 'note' | 'alef' | 'jot';
 
 export interface SpokenToken {
   id: number;

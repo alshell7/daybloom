@@ -6,7 +6,7 @@
 import { platform } from '../platform';
 import { settings } from '../stores/settings.svelte';
 
-export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef' | 'views';
+export type AddonId = 'work' | 'tracker' | 'crumbs' | 'smaller' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef' | 'views' | 'decision';
 
 export interface AddonMeta {
   id: AddonId;
@@ -18,7 +18,7 @@ export interface AddonMeta {
   accent: string;
   features: { icon: string; text: string }[];
   /** Sheet that opens the addon (addons that live on blocks have none: see `where`). */
-  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef';
+  sheet?: 'work' | 'tracker' | 'crumbs' | 'reality' | 'waqt' | 'mcp' | 'landings' | 'retro' | 'alef' | 'decision';
   /** Where to find an addon that has no panel of its own. */
   where?: string;
   shortcut?: string;
@@ -193,6 +193,22 @@ const ALL: AddonMeta[] = [
       { icon: 'shield', text: 'Calendar events and salah stay in place; free time shows between them' },
     ],
     where: 'Switch between List, Board and Gantt at the top of the timeline.',
+  },
+  {
+    id: 'decision',
+    group: 'ai',
+    name: 'Decision',
+    tagline: 'Jot it down; it knows where it goes',
+    description: 'A tiny model on this device reads what you jot down and suggests where it belongs: today, tomorrow, the backlog or someday, how urgent it is and what kind of thing it is. You see every suggestion and confirm it with one tap, and each choice teaches it your way. It can also sort what waits in your Inbox. Nothing leaves your device.',
+    icon: 'route',
+    accent: '#D99A06',
+    features: [
+      { icon: 'route', text: 'Today, tomorrow, the backlog or someday: a suggestion for every line you jot' },
+      { icon: 'check-check', text: 'You confirm or change it in one tap, and it learns from you' },
+      { icon: 'inbox', text: '“Sort my Inbox”: moves you approve, one by one or all at once' },
+      { icon: 'shield', text: 'A 6 MB model that runs on this device, on a computer and a phone' },
+    ],
+    sheet: 'decision',
   },
   {
     id: 'mcp',

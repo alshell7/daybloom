@@ -796,6 +796,17 @@
       scroll-snap-align: start;
     }
   }
+  /* A phone: one column at a time, the next one peeking in, snapping as you swipe. */
+  @media (max-width: 560px) {
+    .board,
+    .board.week {
+      grid-auto-columns: calc(100% - 40px);
+      scroll-snap-type: x mandatory;
+      scroll-padding: 0;
+      height: min(68vh, 600px);
+      min-height: 340px;
+    }
+  }
 
   /* A touch screen has no hover to reveal it: it always shows. */
   @media (hover: none) {

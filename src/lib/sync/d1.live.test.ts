@@ -121,5 +121,20 @@ describe.runIf(LIVE)('Cloudflare D1 sync: live', () => {
     expect(titles(mac)).toEqual(['Call the bank', 'Dentist at four', 'Water the plants']);
     expect(titles(phone)).toEqual(titles(mac));
     expect(mac.svc.devices.map((d) => d.name).sort()).toEqual(['Live Mac', 'Live phone']);
+
+    // Edits travel too: a title, notes and a step on one device reach the other.
+    const m1 = mac.data.tasks.tasks.find((x) => x.id === 'live-1')!;
+    m1.title = 'Dentist at five';
+    m1.notes = 'Bring the card';
+    m1.subtasks = [{ id: 's1', title: 'Call first', done: false }];
+    await mac.svc.syncNow();
+    await phone.svc.syncNow();
+    const p1 = phone.data.tasks.tasks.find((x) => x.id === 'live-1')!;
+    expect(p1).toMatchObject({ title: 'Dentist at five', notes: 'Bring the card', subtasks: [{ id: 's1', title: 'Call first', done: false }] });
+    p1.subtasks[0].done = true;
+    p1.subtasks[0].title = 'Call them first';
+    await phone.svc.syncNow();
+    await mac.svc.syncNow();
+    expect(mac.data.tasks.tasks.find((x) => x.id === 'live-1')!.subtasks).toEqual([{ id: 's1', title: 'Call them first', done: true }]);
   }, 180_000);
 });

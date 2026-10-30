@@ -2,7 +2,8 @@
 // rebuilt when blocks, settings or Waqt change and every quarter hour, sent only when it
 // differs — and shows the running focus timer as a quiet notification that counts down by
 // itself. In the open app the in-app sounds still play; the notifications come from Android,
-// so nothing arrives twice.
+// so nothing arrives twice. A reminder's buttons (notifyActions.ts) are pressed in Android's
+// shade; the taps wait there (Reminders.kt) until the planner takes them, here.
 
 import { untrack } from 'svelte';
 import { isOn } from '../addons/registry';
@@ -18,6 +19,101 @@ import { shownTitle } from '../privacy';
 import { alarmFile } from '../alarms.svelte';
 import { deviceCall } from './device.svelte';
 import { PLAN_HOURS, planReminders, type PrayerTime } from './reminders';
+import type { NotifyAct } from './notifyActions';
+import type { Block } from '../engine/types';
+
+/** What the buttons may offer: the Time Tracker and Work's billable blocks, when they're on. */
+async function smartness(): Promise<NonNullable<Parameters<typeof planReminders>[0]['smart']>> {
+  const tracker = isOn('tracker') ? (await import('../addons/tracker/tracker.svelte')).tracker : null;
+  const work = isOn('work') ? (await import('../addons/work/work.svelte')).work : null;
+  return {
+    tracker: !!tracker,
+    billable: (b: Block) => {
+      try {
+        return !!work?.resolve(b.key)?.billable;
+      } catch {
+        return false;
+      }
+    },
+    tracking: (b: Block) => !!tracker?.isTracking({ blockKey: b.key }),
+  };
+}
+
+export interface NotifyTap {
+  act: NotifyAct;
+  key: string;
+  arg?: number;
+  /** When the button was pressed (ms): a late-applied tap still counts from then. */
+  at: number;
+}
+
+const FIVE = 5 * MINUTE;
+const roundUp = (ms: number) => Math.ceil(ms / FIVE) * FIVE;
+
+/** Applies one button pressed in the notification shade. Unknown or stale taps do nothing. */
+export async function applyNotifyAction(t: NotifyTap): Promise<string | null> {
+  const actions = await import('../actions');
+  if (t.key.startsWith('salah:')) {
+    const [, date, id] = t.key.split(':');
+    if (!date || !id || (t.act !== 'prayed' && t.act !== 'jamaat') || !isOn('waqt')) return null;
+    const { waqt } = await import('../addons/waqt/waqt.svelte');
+    if (!waqt.marks(date)[id as keyof ReturnType<typeof waqt.marks>]) waqt.mark(date, id as never, t.act);
+    return t.act === 'jamaat' ? 'Marked in jamaat' : 'Marked prayed';
+  }
+  const b = view.blockByKey(t.key) ?? blocksInRange(taskFile.value.tasks, view.events, t.at - 26 * 60 * MINUTE, t.at + 50 * 60 * MINUTE, view.finish.dark).find((x) => x.key === t.key) ?? null;
+  if (!b) return null;
+  switch (t.act) {
+    case 'done':
+      if (!b.done) actions.toggleDone(b.key);
+      return `“${b.title}” done`;
+    case 'skip':
+      if (b.kind === 'event' && !b.skipped) actions.skipEvent(b.key);
+      return null;
+    case 'later':
+      if (b.kind === 'task' && !b.done) actions.toBacklog(b.key);
+      return null;
+    case 'extend': {
+      // From the moment of the tap: ten more minutes then, not ten more from whenever the app opens.
+      const end = Math.max(b.endMs, roundUp(t.at)) + (t.arg ?? 10) * MINUTE;
+      if (b.kind === 'task' && end > b.endMs) actions.adjust(b.key, b.startMs, end);
+      return `${t.arg ?? 10} more minutes for “${b.title}”`;
+    }
+    case 'startNow': {
+      const from = roundUp(t.at - FIVE + 1);
+      if (b.kind === 'task' && from < b.startMs) actions.adjust(b.key, from, from + (b.endMs - b.startMs));
+      return `“${b.title}” starts now`;
+    }
+    case 'track': {
+      if (!isOn('tracker')) return null;
+      const { tracker } = await import('../addons/tracker/tracker.svelte');
+      if (tracker.isTracking({ blockKey: b.key })) return null;
+      const e = tracker.start({ blockKey: b.key, taskId: b.taskId });
+      if (t.at < e.startMs) tracker.update(e.id, { startMs: Math.max(b.startMs - 30 * MINUTE, t.at) }, { force: true });
+      return `Tracking “${b.title}”`;
+    }
+    case 'start2': {
+      const { starter } = await import('../starter.svelte');
+      if (!timer.active) starter.start(b);
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Takes the taps Android kept and applies them, oldest first. */
+export async function takeNotifyActions() {
+  const r = await deviceCall<{ items: NotifyTap[] }>('notifyPending').catch(() => null);
+  const said: string[] = [];
+  for (const t of (r?.items ?? []).sort((a, z) => a.at - z.at)) {
+    const line = await applyNotifyAction(t).catch((e) => {
+      console.warn('[daybloom] notification action', e);
+      return null;
+    });
+    if (line) said.push(line);
+  }
+  if (said.length === 1) view.say(said[0]);
+  else if (said.length > 1) view.say(`${said.length} changes from your notifications`);
+}
 
 async function prayersAhead(): Promise<{ prayers: PrayerTime[]; remind: { before: number; atAdhan: boolean; beforeJamaat: number } } | null> {
   if (!isOn('waqt')) return null;
@@ -56,6 +152,7 @@ export function startReminders(): () => void {
       prayers: w?.prayers,
       waqtRemind: w?.remind,
       snoozed: alarmFile.value.snoozed.map((s) => ({ key: s.key, title: s.title, at: s.at, startMs: s.startMs, tone: s.tone })),
+      smart: await smartness().catch(() => undefined),
     });
     const s = timer.active ? timer.status(now) : null;
     if (s && !s.paused) {
@@ -135,8 +232,18 @@ export function startReminders(): () => void {
     });
   });
 
-  void sync();
+  // Taps in the shade: as soon as Android has one (app open), and whenever the app comes back.
+  const onActed = () => void takeNotifyActions();
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') void takeNotifyActions();
+  };
+  addEventListener('daybloom:notify-action', onActed);
+  document.addEventListener('visibilitychange', onVisible);
+
+  void takeNotifyActions().then(() => sync());
   return () => {
+    removeEventListener('daybloom:notify-action', onActed);
+    document.removeEventListener('visibilitychange', onVisible);
     if (pending) clearTimeout(pending);
     stop();
   };

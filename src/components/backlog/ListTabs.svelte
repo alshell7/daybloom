@@ -57,12 +57,13 @@
       role="tab"
       aria-selected={l.id === value}
       tabindex={l.id === value ? 0 : -1}
+      aria-label={counts[l.id] ? `${l.label}, ${counts[l.id]} ${counts[l.id] === 1 ? 'item' : 'items'}` : l.label}
       onclick={() => onchange(l.id)}
     >
       <span class="ico"><Icon name={l.icon} size={14} stroke={2} /></span>
-      <span>{l.label}</span>
+      <span class="lb">{l.label}</span>
       {#if counts[l.id]}
-        <span class="n tnum"><Rolling text={String(counts[l.id])} reduced={view.reducedMotion} /></span>
+        <span class="n tnum" aria-hidden="true"><Rolling text={String(counts[l.id])} reduced={view.reducedMotion} /></span>
       {/if}
     </button>
   {/each}
@@ -110,6 +111,11 @@
   button[aria-selected='true'] {
     color: var(--ink);
   }
+  .lb {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .ico {
     display: grid;
     color: var(--ink-3);
@@ -127,9 +133,35 @@
     color: var(--ink-3);
     background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
+  /* Narrow (a phone): four equal tabs that always fit, tall enough to tap, the count as a
+     small badge after the name. */
   @container backlog (max-width: 420px) {
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+    }
     .ico {
       display: none;
+    }
+    button {
+      height: 40px;
+      gap: 4px;
+      padding: 0 2px;
+      font-size: 13px;
+    }
+    button {
+      position: relative;
+    }
+    .n {
+      position: absolute;
+      top: 2px;
+      right: 4px;
+      min-width: 15px;
+      padding: 0 3px;
+      font-size: 10px;
+      line-height: 14px;
+      text-align: center;
     }
   }
 </style>

@@ -41,11 +41,26 @@ describe('D1 client', () => {
     expect(await d.list()).toEqual([]);
     expect(await d.get('tasks.json')).toBeNull();
     const a = await d.put('tasks.json', '{"a":1}', null);
-    expect(a.version).toBe('1');
-    const b = await d.put('tasks.json', '{"a":2}', '1');
-    expect(b.version).toBe('2');
-    expect(await d.get('tasks.json')).toEqual({ text: '{"a":2}', version: '2' });
-    expect(await d.list()).toEqual([{ name: 'tasks.json', version: '2' }]);
+    expect(a.version).toBe('1.1000');
+    const b = await d.put('tasks.json', '{"a":2}', a.version);
+    expect(b.version).toBe('2.1000');
+    expect(await d.get('tasks.json')).toEqual({ text: '{"a":2}', version: '2.1000' });
+    expect(await d.list()).toEqual([{ name: 'tasks.json', version: '2.1000' }]);
+    // A version stored by an older Daybloom (the bare revision) still writes.
+    expect((await d.put('tasks.json', '{"a":3}', '2')).version).toBe('3.1000');
+  });
+
+  it('a file written again after a removal has a new version, not its old "1"', async () => {
+    const fake = new FakeD1();
+    const id = fake.addDatabase();
+    let t = 1_000;
+    const d = createD1Client({ accountId: FAKE_ACCOUNT, databaseId: id, token: FAKE_TOKEN, fetch: fake.fetch, now: () => t });
+    const first = await d.put('ai.json', 'old', null);
+    await d.remove('ai.json', first.version);
+    t = 2_000;
+    const again = await d.put('ai.json', 'new', null);
+    expect(again.version).not.toBe(first.version);
+    expect((await d.list())[0].version).toBe(again.version);
   });
 
   it('catches a write that lost a race', async () => {

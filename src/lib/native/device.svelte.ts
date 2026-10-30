@@ -14,7 +14,7 @@ import { view } from '../stores/view.svelte';
 import { voice } from '../voice/voice.svelte';
 
 export async function deviceCall<T = unknown>(method: string, args: Record<string, unknown> = {}): Promise<T | null> {
-  if (!platform.isMobile) return null;
+  if (!platform.isMobile || !platform.isNative) return null;
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<T>('device_call', { method, args });
 }

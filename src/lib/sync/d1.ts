@@ -125,6 +125,21 @@ export interface D1Client extends SyncRemote {
   readonly requests: number;
 }
 
+/**
+ * A file's version: its revision and when it was written. The revision alone repeats once a
+ * file is removed and written again (from 1), and a device that remembered the old "1" would
+ * take the new file for the copy it already has.
+ */
+function versionOf(r: { rev: unknown; updated_at?: unknown }): string {
+  const at = Number(r.updated_at);
+  return Number.isFinite(at) && at > 0 ? `${Number(r.rev)}.${at}` : String(Number(r.rev));
+}
+
+/** The revision inside a version (older devices stored the bare number). */
+function revOf(version: string): number {
+  return Number(String(version).split('.')[0]);
+}
+
 export function createD1Client(o: Options & { databaseId: string; device?: string }): D1Client {
   const { call } = createCaller(o);
   const now = o.now ?? Date.now;
@@ -178,14 +193,14 @@ export function createD1Client(o: Options & { databaseId: string; device?: strin
     },
 
     async list() {
-      const { rows } = await read(() => query('SELECT name, rev FROM daybloom_files ORDER BY name'), { rows: [], changes: 0 });
-      return rows.map((r) => ({ name: String(r.name), version: String(r.rev) }));
+      const { rows } = await read(() => query('SELECT name, rev, updated_at FROM daybloom_files ORDER BY name'), { rows: [], changes: 0 });
+      return rows.map((r) => ({ name: String(r.name), version: versionOf(r) }));
     },
 
     async get(name) {
-      const { rows } = await read(() => query('SELECT body, rev FROM daybloom_files WHERE name = ?', [name]), { rows: [], changes: 0 });
+      const { rows } = await read(() => query('SELECT body, rev, updated_at FROM daybloom_files WHERE name = ?', [name]), { rows: [], changes: 0 });
       const r = rows[0];
-      return r ? { text: String(r.body), version: String(r.rev) } : null;
+      return r ? { text: String(r.body), version: versionOf(r) } : null;
     },
 
     async put(name, text, version) {
@@ -194,19 +209,20 @@ export function createD1Client(o: Options & { databaseId: string; device?: strin
       }
       await ensureSchema();
       const device = o.device ?? '';
+      const at = now();
       if (version === null) {
-        const r = await query('INSERT INTO daybloom_files (name, rev, body, device, updated_at) VALUES (?, 1, ?, ?, ?) ON CONFLICT(name) DO NOTHING', [name, text, device, now()]);
+        const r = await query('INSERT INTO daybloom_files (name, rev, body, device, updated_at) VALUES (?, 1, ?, ?, ?) ON CONFLICT(name) DO NOTHING', [name, text, device, at]);
         if (r.changes === 0) throw new SyncError('conflict', 'That file was created on another device a moment ago.', 409);
-        return { version: '1' };
+        return { version: versionOf({ rev: 1, updated_at: at }) };
       }
-      const rev = Number(version);
-      const r = await query('UPDATE daybloom_files SET rev = rev + 1, body = ?, device = ?, updated_at = ? WHERE name = ? AND rev = ?', [text, device, now(), name, rev]);
+      const rev = revOf(version);
+      const r = await query('UPDATE daybloom_files SET rev = rev + 1, body = ?, device = ?, updated_at = ? WHERE name = ? AND rev = ?', [text, device, at, name, rev]);
       if (r.changes === 0) throw new SyncError('conflict', 'That file changed on another device a moment ago.', 409);
-      return { version: String(rev + 1) };
+      return { version: versionOf({ rev: rev + 1, updated_at: at }) };
     },
 
     async remove(name, version) {
-      await read(() => query('DELETE FROM daybloom_files WHERE name = ? AND rev = ?', [name, Number(version)]), { rows: [], changes: 0 });
+      await read(() => query('DELETE FROM daybloom_files WHERE name = ? AND rev = ?', [name, revOf(version)]), { rows: [], changes: 0 });
     },
   };
 }

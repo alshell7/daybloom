@@ -9,6 +9,8 @@
   import { formatTime } from '../../lib/engine/time';
   import { settings } from '../../lib/stores/settings.svelte';
   import { view } from '../../lib/stores/view.svelte';
+  import { layout } from '../../lib/stores/layout.svelte';
+  import Segmented from '../Segmented.svelte';
 
   interface Access {
     notifications: boolean;
@@ -91,7 +93,7 @@
           : 'Keeps every reminder on the minute. Your status bar then shows the next one as an alarm. Daybloom turns this on by itself if a reminder comes late.',
   );
 
-  async function pin(kind: 'dial' | 'alef') {
+  async function pin(kind: 'dial' | 'alef' | 'backlog') {
     note = '';
     const r = await deviceCall<{ asked: boolean }>('pinWidget', { kind }).catch(() => null);
     if (!r?.asked) note = 'Your home screen doesn’t let apps add widgets. Long-press the home screen, tap Widgets and find Daybloom.';
@@ -111,6 +113,23 @@
 
 <section aria-labelledby="phone-heading">
   <h3 id="phone-heading">Phone</h3>
+  <p class="label">Layout</p>
+  <div class="row">
+    <span class="what">
+      <span>Dial and timeline</span>
+      <span class="why">{layout.value.phone === 'pages' ? 'Two pages: swipe sideways between the dial and the timeline.' : 'One screen: the timeline follows the dial as you scroll.'}</span>
+    </span>
+    <Segmented
+      label="Dial and timeline"
+      value={layout.value.phone}
+      options={[
+        { value: 'stack', label: 'One screen' },
+        { value: 'pages', label: 'Two pages' },
+      ]}
+      onchange={(v) => (layout.value.phone = v)}
+    />
+  </div>
+
   <p class="label">Reminders and alarms</p>
   {#each rows as r (r.id)}
     <div class="row">
@@ -155,6 +174,7 @@
   <p class="label">Home screen</p>
   <div class="actions">
     <button class="btn btn-soft" onclick={() => pin('dial')}><Icon name="dial" size={14} /> Add the dial</button>
+    <button class="btn btn-soft" onclick={() => pin('backlog')}><Icon name="inbox" size={14} /> Add the backlog</button>
     {#if isOn('alef')}<button class="btn btn-soft" onclick={() => pin('alef')}><Icon name="bot" size={14} /> Add Alef</button>{/if}
   </div>
   {#if note}<p class="hint" aria-live="polite">{note}</p>{/if}

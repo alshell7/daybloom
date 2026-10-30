@@ -41,7 +41,7 @@ Your day is a dial. Each block is an arc on the ring, and the orange hand is now
 
 - [What Daybloom does](#what-daybloom-does)
 - [Install](#install)
-- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [AI](#set-up-ai), [help to start](#get-help-to-start), [alarms](#set-an-alarm), [world clock](#compare-time-zones), [Trash](#restore-from-the-trash), [top bar](#choose-the-top-bar-buttons), [done](#see-what-youve-done), [month](#see-the-month), [start fresh](#start-fresh), [Board and Gantt](#see-the-timeline-as-a-board-or-a-gantt-chart), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync), [shortcuts](#keyboard-shortcuts)
+- [Guide](#guide): [the dial](#read-the-dial), [add blocks](#add-a-block), [change blocks](#change-a-block), [finish blocks](#finish-a-block), [backlog](#use-the-backlog), [assistant](#ask-daybloom), [voice](#talk-to-daybloom), [your week](#see-your-week), [gentle support](#get-gentle-support), [focus sessions](#start-a-focus-session), [screen cues](#use-screen-cues), [privacy mode](#use-privacy-mode), [addons](#use-addons), [Work](#bill-your-time-with-work), [Time Tracker](#track-your-time), [Breadcrumbs](#leave-breadcrumbs), [Make it smaller](#make-a-task-smaller), [Reality check](#plan-with-real-times), [Waqt](#keep-salah-times-with-waqt), [Decision](#let-decision-place-what-you-jot), [MCP](#connect-ai-apps-with-mcp), [Alef](#meet-alef), [AI](#set-up-ai), [help to start](#get-help-to-start), [alarms](#set-an-alarm), [world clock](#compare-time-zones), [Trash](#restore-from-the-trash), [top bar](#choose-the-top-bar-buttons), [done](#see-what-youve-done), [month](#see-the-month), [start fresh](#start-fresh), [Board and Gantt](#see-the-timeline-as-a-board-or-a-gantt-chart), [Soft landings](#land-softly-after-meetings), [Retrospection](#look-back-with-retrospection), [widget](#use-the-desktop-widget), [themes](#change-the-theme), [time zones](#change-the-time-zone), [calendars](#connect-calendars), [sync](#sync), [shortcuts](#keyboard-shortcuts)
 - [Your data](#your-data)
 - [For developers](#for-developers)
 
@@ -218,6 +218,9 @@ Claude, Codex and other AI apps can read your day, find free time and add or mov
 <tr>
 <td valign="top">
 
+### Decision: jot it, it knows where it goes
+A tiny model on your device reads what you jot down and suggests where it belongs: today, tomorrow, the backlog or someday. You confirm each suggestion with one tap, and it learns your way.
+
 ### Alef: a small robot friend
 Alef lives in the middle of your dial. Its eyes show how it feels about your day. It keeps you company while you work, cheers when you finish, and helps you plan when you talk to it.
 
@@ -290,7 +293,11 @@ Get the newest installers from [**Releases**](https://github.com/alshell7/dayblo
 4. When Daybloom first has a reminder for you, Android asks to allow notifications. Tap **Allow**.
 5. To check what reminders and alarms may do, open **Settings › Phone**. Tap **Turn on** next to any item that is off.
 
-To add the widgets, open **Settings › Phone** and tap **Add the dial** or **Add Alef**.
+To add the widgets, open **Settings › Phone** and tap **Add the dial**, **Add the backlog** or **Add Alef**.
+
+In **Settings › Phone › Layout**, choose **One screen** (the timeline follows the dial as you scroll) or **Two pages** (swipe sideways between the dial and the timeline).
+
+Reminders on a phone have buttons that fit the moment: **Done**, **10 more min**, **Start now**, **Remind in 5 min**, **Not today**, **Start 2 min** for a block with steps, **Track time** or **Bill time** with the Time Tracker, **Skip it** for calendar events, and **Prayed** or **In jamaat** for salah. They work when Daybloom is closed. Daybloom applies them the next time it opens.
 
 > [!NOTE]
 > The Android app updates like the computer apps: the **Update** chip shows a new version, and Android installs it after you tap **Install**.
@@ -402,6 +409,14 @@ When a block ends without a tick, Daybloom asks “Did you finish?”. Select on
 | **Let go** | The block stays as it is. Daybloom does not ask again. |
 
 ### Use the backlog
+
+**Jot it down (the fastest way):**
+
+- On a phone, tap the **+** button at the bottom right. Hold it to say it instead. You can also long-press the app icon and tap **Jot it down**, use the **Jot it down** tile in quick settings, tap **+ Jot** on the Backlog widget, or share text to Daybloom.
+- On a computer, push <kbd>J</kbd>.
+- Write one thing on each line, for example “call the bank tomorrow”, “gym 6pm”, “learn piano someday”.
+- Under each line, Daybloom shows where it will go: **Today**, **Tomorrow**, **Next**, **Inbox** or **Someday**. Tap another place to change it. Then tap **Add**.
+- With the **Decision** addon on, a small model on your device suggests the place, the kind of task and the urgency. A line with a time goes onto the dial. A line that does not say when waits in the **Inbox** until you sort it.
 
 **Add a task quickly:**
 
@@ -626,6 +641,16 @@ Reality check never changes your plans by itself.
 - **Reminders:** Daybloom reminds you before the adhan, at the adhan and before jamaat. Change the times or turn the sound off under **Reminders**.
 - **Mark a prayer:** click the circle next to a prayer. One click: prayed. Two clicks: prayed in jamaat.
 - **Your mosque’s times:** if your mosque gives fixed times, enter them under **Your mosque’s times**. Daybloom uses them in place of the calculated times.
+
+### Let Decision place what you jot
+
+Decision reads each line you jot down and suggests where it belongs. It runs [TinyDecide](https://huggingface.co/TheREZOR/TinyDecide) (Apache-2.0, 6 MB) on your device. Nothing you write leaves the device.
+
+1. Open **Addons** and switch on **Decision**. The model downloads one time.
+2. Jot something down. Each line shows Decision's suggestion and the reason, for example “Sounds like a someday idea”.
+3. Tap **Add** to keep the suggestions, or tap another place first. Each choice teaches Decision. After a few choices, its suggestions follow your way of writing. What it learns syncs with your other devices.
+
+To sort the Inbox, open the backlog and tap **Sort the Inbox with Decision**, or open the Decision panel and tap **Suggest moves**. Check the moves that you want, then tap **Move**. In the Decision panel, you can also try any line, see how sure it is, forget what it learned, or remove the model.
 
 ### Connect AI apps with MCP
 
@@ -891,7 +916,7 @@ Calendar events are read-only. In the timeline they have a striped, outlined cap
 
 ### Sync
 
-Sync keeps your blocks, settings and badges the same on all your devices. It also syncs the Trash, what you did with calendar events, your AI setup, and the data of these addons: Work, Time Tracker, Breadcrumbs, Reality check, Waqt, Alef, Retrospection and Soft landings. There is no Daybloom server. Use one of these services, or both:
+Sync keeps your blocks, settings and badges the same on all your devices. It also syncs the Trash, what you did with calendar events, your AI setup, and the data of these addons: Work, Time Tracker, Breadcrumbs, Reality check, Waqt, Alef, Retrospection, Soft landings and Decision. There is no Daybloom server. Use one of these services, or both:
 
 - **GitHub:** small files in a private repo that you own.
 - **Cloudflare D1:** a database in your own Cloudflare account. It is always encrypted.
@@ -923,7 +948,7 @@ Sync keeps your blocks, settings and badges the same on all your devices. It als
 5. If the repository already has data, select **Use the repo's** or **Combine both**.
 6. Click **Start syncing**.
 
-Daybloom syncs a short time after each change, and every 5 minutes. The token stays in the system keychain. Settings that apply to one computer only, for example the volume and the widget position, do not sync.
+Daybloom syncs a few seconds after each change, and every 5 minutes. While Daybloom is open, it also checks every few seconds for changes from your other devices, so edits show on them almost at once. When you leave Daybloom, it sends what is waiting right away. The token stays in the system keychain. Settings that apply to one computer only, for example the volume and the widget position, do not sync.
 
 To encrypt the repo, turn on **Encrypt with your master password**. Daybloom moves the files, sealed, into a `vault` folder and removes the plain files. Update Daybloom on your other devices first. Git history can still have the old plain files. For a clean start, use a new repository.
 
@@ -977,6 +1002,7 @@ To find a setting fast, type a word in **Find a setting**, for example “sound�
 | <kbd>Space</kbd> | Finish the selected block |
 | <kbd>Delete</kbd> | Remove the selected block |
 | <kbd>B</kbd> | Backlog |
+| <kbd>J</kbd> | Jot it down |
 | <kbd>I</kbd> | Your week |
 | <kbd>F</kbd> | Start a focus session (or show the running session) |
 | <kbd>V</kbd> | Hold to talk, or tap to talk hands-free |

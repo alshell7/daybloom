@@ -56,7 +56,9 @@ export type TrayAction = 'new-block' | 'focus-now' | 'open-settings';
 
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 /** The Android (or iOS) app: one window, no tray, dock, widget or screen cues. */
-const isMobile = isTauri && typeof navigator !== 'undefined' && /android|iphone|ipad/i.test(navigator.userAgent);
+/** Development only: `?phone` shows the phone layout in a browser tab (native calls do nothing). */
+const devPhone = !!import.meta.env?.DEV && typeof location !== 'undefined' && new URLSearchParams(location.search).has('phone');
+const isMobile = (isTauri && typeof navigator !== 'undefined' && /android|iphone|ipad/i.test(navigator.userAgent)) || devPhone;
 /** The computer app, with its extra windows and tray. */
 const isDesktop = isTauri && !isMobile;
 

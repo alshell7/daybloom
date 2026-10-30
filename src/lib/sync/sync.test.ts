@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS, type Settings } from '../stores/settings.svelte';
 import { pickSharedTracker } from './addons';
 import { decodeBase64, encodeBase64, type FetchLike } from './github';
 import type { Tombstone } from './merge';
-import { BASE_PREFIX, createSyncService, SETTLE_MS, SYNC_INTERVAL_MS, TOKEN_ACCOUNT, type SyncService, type SyncStores } from './sync.svelte';
+import { BASE_PREFIX, createSyncService, LIVE_MS, SETTLE_MS, SYNC_INTERVAL_MS, TOKEN_ACCOUNT, type SyncService, type SyncStores } from './sync.svelte';
 
 // A test-only token for the fake repo below. Nothing here talks to the real GitHub.
 const TOKEN = 'github_pat_TEST_ONLY_fake_repo_token_0000000';
@@ -106,7 +106,7 @@ interface Device {
   touch(): void;
 }
 
-function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<Settings> = {}, opts: { canSync?: () => boolean } = {}): Device {
+function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<Settings> = {}, opts: { canSync?: () => boolean; visible?: () => boolean } = {}): Device {
   const data: Data = {
     tasks: { version: 1, tasks: [], deleted: [] },
     settings: structuredClone({ ...DEFAULT_SETTINGS, ...settings }),
@@ -152,6 +152,7 @@ function makeDevice(repo: FakeRepo, id: string, name: string, settings: Partial<
     sleep: async () => {},
     newId: () => id,
     canSync: opts.canSync,
+    visible: opts.visible,
   });
   return {
     svc,
@@ -528,7 +529,55 @@ describe('github sync, end to end', () => {
     expect(repo.puts + repo.gets).toBe(0);
   });
 
-  it('syncs on start, ~20 s after local changes settle, and every 5 minutes', async () => {
+  it('while in view, an edit on one device shows on the other within seconds', async () => {
+    vi.useFakeTimers();
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac', {}, { visible: () => true });
+    const b = makeDevice(repo, 'phone-b', 'Phone', {}, { visible: () => true });
+    a.data.tasks.tasks.push(task('t1', { title: 'Dentist', notes: '', subtasks: [] }));
+    await connect(a, 'Work Mac');
+    await connect(b, 'Phone', 'replace');
+    const stopA = a.svc.start();
+    const stopB = b.svc.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // A new title, notes and a step on the Mac…
+    clock.t += 1000;
+    Object.assign(a.data.tasks.tasks[0], { title: 'Dentist at 4', notes: 'Bring the card', subtasks: [{ id: 's1', title: 'Call first', done: false }] });
+    a.touch();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS);
+    // …are on the phone by its next look, with no Sync now.
+    await vi.advanceTimersByTimeAsync(LIVE_MS);
+    expect(b.data.tasks.tasks[0]).toMatchObject({ title: 'Dentist at 4', notes: 'Bring the card', subtasks: [{ id: 's1', title: 'Call first', done: false }] });
+
+    // A look that finds nothing new reads one listing and writes nothing.
+    const puts = repo.puts;
+    await vi.advanceTimersByTimeAsync(LIVE_MS);
+    expect(repo.puts).toBe(puts);
+    stopA();
+    stopB();
+  });
+
+  it('an edit made during a sync goes up right after it, and Sync now waits for the running one', async () => {
+    const repo = new FakeRepo();
+    const a = makeDevice(repo, 'mac-a', 'Work Mac');
+    a.data.tasks.tasks.push(task('t1'));
+    await connect(a, 'Work Mac');
+    // A first edit is on its way up when a second one lands.
+    a.data.tasks.tasks[0].title = 'First';
+    let edited = false;
+    repo.beforePut = (path) => {
+      if (edited || !path.endsWith('tasks.json')) return;
+      edited = true;
+      a.data.tasks.tasks[0].title = 'Renamed mid-sync';
+    };
+    const first = a.svc.syncNow();
+    await a.svc.syncNow();
+    await first;
+    expect(repo.read('tasks.json').tasks[0].title).toBe('Renamed mid-sync');
+  });
+
+  it('syncs on start, a few seconds after local changes settle, and every 5 minutes', async () => {
     vi.useFakeTimers();
     const repo = new FakeRepo();
     const a = makeDevice(repo, 'mac-a', 'Work Mac');
@@ -539,7 +588,7 @@ describe('github sync, end to end', () => {
     const afterStart = listings();
     expect(afterStart).toBeGreaterThan(0); // the launch sync
 
-    // A local change: nothing for 19 s, then one sync that writes it.
+    // A local change: nothing until it settles, then one sync that writes it.
     clock.t += 1000;
     a.data.tasks.tasks.push(task('new'));
     a.touch();

@@ -19,6 +19,7 @@
     wide = false,
     genieFrom = undefined,
     dismissOutside = true,
+    tall = false,
   }: {
     title: string;
     onclose: () => void;
@@ -30,6 +31,8 @@
     genieFrom?: string;
     /** A click outside the panel closes it (on by default). */
     dismissOutside?: boolean;
+    /** On a phone, nearly the whole screen (lists you scroll and work in). */
+    tall?: boolean;
   } = $props();
 
   let panel = $state<HTMLDivElement>();
@@ -84,7 +87,7 @@
 </script>
 
 <!-- An inspector, not a modal: the dial stays live beside it. -->
-<div class="panel" class:wide role="dialog" aria-label={title} style:--accent={accent} bind:this={panel} in:enter out:leave>
+<div class="panel" class:wide class:tall role="dialog" aria-label={title} style:--accent={accent} bind:this={panel} in:enter out:leave>
   <header>
     <h2>{title}</h2>
     <button class="icon-btn" onclick={onclose} aria-label="Close"><Icon name="x" size={18} /></button>
@@ -164,6 +167,12 @@
       bottom: 8px;
       width: auto;
       max-height: 78vh;
+    }
+  }
+  @media (max-width: 860px) {
+    .panel.tall {
+      top: calc(var(--safe-top, 0px) + 56px);
+      max-height: none;
     }
   }
   /* A phone: 16 px sides instead of 24, so a 360 px screen keeps its room for the content. */

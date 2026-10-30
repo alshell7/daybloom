@@ -35,8 +35,14 @@
   // ── Scale ──────────────────────────────────────────────────────────────────
   let scroller = $state<HTMLDivElement>();
   let viewW = $state(0);
-  const labelW = $derived(viewW && viewW < 560 ? 56 : byKind ? 108 : 96);
-  const fit = $derived(fitPxh(Math.max(240, viewW - labelW - 24), settings.value.wake, settings.value.sleep));
+  /** A phone-sized chart: icons (or short day names) for labels, and hours wide enough to read. */
+  const narrow = $derived(!!viewW && viewW < 560);
+  const labelW = $derived(narrow ? (byKind ? 40 : 52) : byKind ? 108 : 96);
+  /** On a phone the waking day doesn't fit legibly: an hour is at least this wide, and it scrolls. */
+  const NARROW_MIN_PXH = 72;
+  const fit = $derived(
+    Math.max(fitPxh(Math.max(240, viewW - labelW - 24), settings.value.wake, settings.value.sleep), narrow ? NARROW_MIN_PXH : 0),
+  );
   /** The scale while a pinch is under way (kept in the file when it ends). */
   let pinch = $state<number | null>(null);
   const pxh = $derived(pinch ?? (viewsFile.value.gantt.pxh || fit));
@@ -99,6 +105,7 @@
     };
   }
   const dayName = (d: ISODate) => (d === view.today ? 'Today' : d === addDays(view.today, 1) ? 'Tomorrow' : (({ dow, day }) => `${dow} ${day}`)(formatDayShort(d)));
+  const shortDay = (d: ISODate) => (d === view.today ? 'Today' : (({ dow, day }) => `${dow.slice(0, 3)} ${day}`)(formatDayShort(d)));
   const rowLabel = (r: Row) => (r.category ? CATEGORY_BY_ID[r.category].label : dayName(r.date));
   const planned = (r: Row) => formatDuration(lay.bars.filter((x) => x.row === r.id && x.block.kind === 'task').reduce((a, x) => a + (x.e - x.s), 0) * MINUTE);
 
@@ -420,7 +427,8 @@
   $effect(() => {
     if (placed || viewW <= 0) return;
     placed = true;
-    untrack(() => toNow(false));
+    // After the grid has its width for this scale (a phone's wider hours land a frame later).
+    untrack(() => void tick().then(() => requestAnimationFrame(() => toNow(false))));
   });
   let jumps = ganttCmd.jump;
   $effect(() => {
@@ -471,8 +479,8 @@
           {#if r.category}
             <span class="kind" style:--c={categoryColor(r.category, view.dark)}><Icon name={CATEGORY_BY_ID[r.category].icon} size={13} stroke={2} /></span>
           {/if}
-          <span class="name">
-            <span class="n">{rowLabel(r)}</span>
+          <span class="name" class:hidden={narrow && !!r.category}>
+            <span class="n">{narrow && !r.category ? shortDay(r.date) : rowLabel(r)}</span>
             {#if !r.category && !r.empty && labelW > 60}<span class="sum tnum">{planned(r)}</span>{/if}
           </span>
         </div>
@@ -680,6 +688,9 @@
   }
   .label.empty {
     color: var(--ink-3);
+  }
+  .name.hidden {
+    display: none;
   }
   .label.empty .kind {
     opacity: 0.55;
@@ -1111,6 +1122,17 @@
   @media (max-width: 860px) {
     .gantt {
       max-height: min(70vh, 620px);
+    }
+  }
+  /* A phone: a lean label column (an icon, or a short day name) leaves the room to the hours. */
+  @media (max-width: 560px) {
+    .label {
+      padding: 0 6px 0 9px;
+      gap: 4px;
+      font-size: var(--t-xs, 12px);
+    }
+    .label .name {
+      line-height: 1.15;
     }
   }
 </style>

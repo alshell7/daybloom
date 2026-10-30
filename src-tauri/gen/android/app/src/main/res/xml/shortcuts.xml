@@ -1,6 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Long-press the app icon: add a block, or start a focus. -->
+<!-- Long-press the app icon: jot something down, open the backlog, add a block, or start a focus. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="jot"
+        android:enabled="true"
+        android:icon="@drawable/ic_stat_daybloom"
+        android:shortcutShortLabel="@string/shortcut_jot">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="app.daybloom"
+            android:targetClass="app.daybloom.MainActivity">
+            <extra android:name="daybloom.action" android:value="jot" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="backlog"
+        android:enabled="true"
+        android:icon="@drawable/ic_stat_daybloom"
+        android:shortcutShortLabel="@string/shortcut_backlog">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="app.daybloom"
+            android:targetClass="app.daybloom.MainActivity">
+            <extra android:name="daybloom.action" android:value="backlog" />
+        </intent>
+    </shortcut>
     <shortcut
         android:shortcutId="add"
         android:enabled="true"
@@ -10,7 +34,7 @@
             android:action="android.intent.action.VIEW"
             android:targetPackage="app.daybloom"
             android:targetClass="app.daybloom.MainActivity">
-            <extra android:name="daybloom.action" android:value="capture" />
+            <extra android:name="daybloom.action" android:value="add" />
         </intent>
     </shortcut>
     <shortcut

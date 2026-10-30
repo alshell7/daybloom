@@ -123,6 +123,15 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_alef_info" />
         </receiver>
         <receiver
+            android:name=".device.BacklogWidget"
+            android:exported="false"
+            android:label="@string/widget_backlog_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_backlog_info" />
+        </receiver>
+        <receiver
             android:name=".device.WidgetReceiver"
             android:exported="false" />
 

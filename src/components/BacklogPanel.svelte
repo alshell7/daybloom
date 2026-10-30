@@ -42,6 +42,7 @@
   import ListTabs from './backlog/ListTabs.svelte';
   import PlanView from './backlog/PlanView.svelte';
   import Panel from './Panel.svelte';
+  import { isOn } from '../lib/addons/registry';
 
   let filter = $state<Filter>({ query: '', categories: [], energy: [], priority: [] });
   let mode = $state<'list' | 'plan'>('list');
@@ -315,7 +316,7 @@
 <svelte:window onkeydown={onWindowKey} />
 
 {#if view.sheet?.kind === 'backlog'}
-  <Panel title="Backlog" onclose={() => (view.sheet = null)} wide genieFrom="backlog" dismissOutside>
+  <Panel title="Backlog" onclose={() => (view.sheet = null)} wide tall genieFrom="backlog" dismissOutside>
     <div class="backlog">
       {#if mode === 'plan' && plan}
         <div class="mode" in:fly={{ x: 16, duration: rm ? 0 : 300, easing: cubicOut }}>
@@ -350,6 +351,14 @@
           <div class="tabs-row">
             <ListTabs value={prefs.tab} counts={tally} onchange={(v) => (prefs.tab = v)} />
           </div>
+
+          {#if prefs.tab === 'inbox' && isOn('decision') && tally.inbox >= 2}
+            <button class="sort-inbox" onclick={() => (view.sheet = { kind: 'decision' })}>
+              <Icon name="route" size={14} />
+              <span>Sort the Inbox with Decision</span>
+              <Icon name="chevron-right" size={14} />
+            </button>
+          {/if}
 
           <FindBar bind:this={findBar} bind:filter sort={prefs.sort} onsort={(s) => (prefs.sort = s)} showSort={prefs.tab !== 'done'} onarrowdown={() => shown[0] && focusRow(shown[0].id)} />
 
@@ -604,5 +613,25 @@
   .free b {
     font-weight: 500;
     color: var(--ink-2);
+  }
+  .sort-inbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: var(--r-md);
+    font-size: var(--t-sm);
+    color: var(--ink-2);
+    background: color-mix(in srgb, #d99a06 9%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #d99a06 28%, transparent);
+  }
+  .sort-inbox span {
+    flex: 1;
+    text-align: left;
+  }
+  .sort-inbox:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 </style>

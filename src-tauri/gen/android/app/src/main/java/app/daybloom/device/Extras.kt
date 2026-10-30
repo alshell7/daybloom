@@ -244,7 +244,7 @@ class CaptureTile : TileService() {
     super.onClick()
     val i = packageManager.getLaunchIntentForPackage(packageName)!!
       .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-      .putExtra("daybloom.action", "capture")
+      .putExtra("daybloom.action", "jot")
     if (Build.VERSION.SDK_INT >= 34) {
       startActivityAndCollapse(PendingIntent.getActivity(this, 7201, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
     } else {

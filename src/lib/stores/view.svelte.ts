@@ -33,6 +33,8 @@ export type Sheet =
   | { kind: 'whatsnew'; version?: string }
   | { kind: 'landings' }
   | { kind: 'retro' }
+  | { kind: 'decision' }
+  | { kind: 'jot'; text?: string; voice?: boolean }
   | { kind: 'trash' }
   | { kind: 'reset' }
   | { kind: 'alef'; tab?: 'talk' | 'alef' | 'feelings' };

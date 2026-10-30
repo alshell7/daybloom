@@ -4,6 +4,7 @@
 // their stores over. Device-only parts (tracker app names, Alef's volume…) never leave.
 
 import type { AlefFile } from '../addons/alef/alef.svelte';
+import { decisionUnused, mergeDecisionFiles, type DecisionFile } from '../addons/decision/file';
 import type { CrumbsFile } from '../addons/crumbs/migrate';
 import type { LandingsFile } from '../addons/landings/pad.svelte';
 import type { RealityFile } from '../addons/reality/reality';
@@ -115,6 +116,8 @@ export interface SyncStores {
   alef?: Synced<AlefFile>;
   retro?: Synced<RetroFile>;
   landings?: Synced<LandingsFile>;
+  /** What the Decision addon learned from your choices. */
+  decision?: Synced<DecisionFile>;
   /** Calendar subscriptions: only with the vault on, since their links sync as secrets. */
   calendars?: Synced<CalendarsData>;
   /** Only used when the vault is on: keys and links never sync in the clear. */
@@ -156,6 +159,7 @@ export const DATA_FILES = [
   'alef.json',
   'retro.json',
   'landings.json',
+  'decision.json',
   'calendars.json',
   'secrets.json',
 ];
@@ -164,7 +168,7 @@ export const DATA_FILES = [
 export type SyncGroup = 'settings' | 'addons' | 'ai' | 'calendars' | 'keys';
 export const SYNC_GROUPS: { id: SyncGroup; label: string; files: string[] }[] = [
   { id: 'settings', label: 'Settings and look', files: ['settings.json'] },
-  { id: 'addons', label: 'Addons’ data', files: ['work.json', 'tracker.json', 'crumbs.json', 'reality.json', 'waqt.json', 'alef.json', 'retro.json', 'landings.json'] },
+  { id: 'addons', label: 'Addons’ data', files: ['work.json', 'tracker.json', 'crumbs.json', 'reality.json', 'waqt.json', 'alef.json', 'retro.json', 'landings.json', 'decision.json'] },
   { id: 'ai', label: 'AI setup', files: ['ai.json'] },
   { id: 'calendars', label: 'Calendar links', files: ['calendars.json'] },
   { id: 'keys', label: 'AI keys and calendar sign-ins', files: ['secrets.json'] },
@@ -292,6 +296,7 @@ export function codecs(s: SyncStores, opts: { sealed?: boolean } = {}): Codec<an
     list.push(alef);
   }
   if (s.retro) list.push(plainCodec('retro', { unused: retroUnused, ...s.retro }, mergeRetroFiles));
+  if (s.decision) list.push(plainCodec('decision', { unused: decisionUnused, ...s.decision }, mergeDecisionFiles));
   if (s.landings) {
     const l = s.landings;
     const landings: Codec<SharedLandingsFile> = {

@@ -103,6 +103,7 @@ object WidgetData {
     val m = AppWidgetManager.getInstance(ctx)
     for (id in m.getAppWidgetIds(ComponentName(ctx, DialWidget::class.java))) DialWidget.draw(ctx, m, id)
     for (id in m.getAppWidgetIds(ComponentName(ctx, AlefWidget::class.java))) AlefWidget.draw(ctx, m, id)
+    for (id in m.getAppWidgetIds(ComponentName(ctx, BacklogWidget::class.java))) BacklogWidget.draw(ctx, m, id)
     schedule(ctx)
   }
 
@@ -311,6 +312,53 @@ class AlefWidget : AppWidgetProvider() {
         v.setOnClickPendingIntent(start, WidgetData.launch(ctx, "start2", cur.key))
       } else v.setViewVisibility(start, View.GONE)
       v.setOnClickPendingIntent(id(ctx, "root"), WidgetData.launch(ctx, "alef", null))
+      m.updateAppWidget(wid, v)
+    }
+  }
+}
+
+/** The backlog at a glance (the snapshot's `backlog`): what's next, and a tap to jot more. */
+class BacklogWidget : AppWidgetProvider() {
+  override fun onUpdate(ctx: Context, m: AppWidgetManager, ids: IntArray) {
+    for (id in ids) draw(ctx, m, id)
+  }
+
+  companion object {
+    private fun id(ctx: Context, name: String) = ctx.resources.getIdentifier(name, "id", ctx.packageName)
+
+    fun draw(ctx: Context, m: AppWidgetManager, wid: Int) {
+      val v = RemoteViews(ctx.packageName, ctx.resources.getIdentifier("widget_backlog", "layout", ctx.packageName))
+      val d = WidgetData.data(ctx)
+      val b = d?.optJSONObject("backlog")
+      val ink = WidgetData.color(d?.optString("ink"), Color.parseColor("#1A2230"))
+      val ink2 = WidgetData.color(d?.optString("ink2"), Color.parseColor("#4A5568"))
+      v.setInt(id(ctx, "bg"), "setColorFilter", WidgetData.color(d?.optString("ground"), Color.parseColor("#EEF1F5")))
+      val n = b?.optInt("n", 0) ?: 0
+      v.setTextViewText(id(ctx, "head"), if (n > 0) "Backlog · $n" else "Backlog")
+      v.setTextColor(id(ctx, "head"), ink)
+      v.setTextColor(id(ctx, "jot"), ink)
+      v.setTextColor(id(ctx, "voice"), ink)
+      val items = b?.optJSONArray("items")
+      for (i in 0 until 4) {
+        val tv = id(ctx, "item$i")
+        val o = items?.optJSONObject(i)
+        if (o == null) {
+          v.setViewVisibility(tv, View.GONE)
+          continue
+        }
+        val mark = if (o.optInt("p", 0) == 1) "⚑ " else "• "
+        val tag = o.optString("l").let { if (it.isNotEmpty()) "  ·  $it" else "" }
+        v.setTextViewText(tv, mark + o.optString("t") + tag)
+        v.setTextColor(tv, if (i == 0) ink else ink2)
+        v.setViewVisibility(tv, View.VISIBLE)
+        v.setOnClickPendingIntent(tv, WidgetData.launch(ctx, "backlog", null))
+      }
+      v.setViewVisibility(id(ctx, "empty"), if (items == null || items.length() == 0) View.VISIBLE else View.GONE)
+      v.setTextColor(id(ctx, "empty"), ink2)
+      v.setOnClickPendingIntent(id(ctx, "jot"), WidgetData.launch(ctx, "jot", null))
+      v.setOnClickPendingIntent(id(ctx, "voice"), WidgetData.launch(ctx, "jotVoice", null))
+      v.setOnClickPendingIntent(id(ctx, "head"), WidgetData.launch(ctx, "backlog", null))
+      v.setOnClickPendingIntent(id(ctx, "root"), WidgetData.launch(ctx, "backlog", null))
       m.updateAppWidget(wid, v)
     }
   }

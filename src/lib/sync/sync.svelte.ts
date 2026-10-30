@@ -15,6 +15,7 @@ import { untrack } from 'svelte';
 import { migrateAlef, alefFile } from '../addons/alef/alef.svelte';
 import { crumbsFile } from '../addons/crumbs/crumbs.svelte';
 import { landingsFile, migrateLandings } from '../addons/landings/pad.svelte';
+import { decisionFile, migrateDecision } from '../addons/decision/decision.svelte';
 import { realityFile } from '../addons/reality/reality.svelte';
 import { migrateRetro, retroFile } from '../addons/retro/retro.svelte';
 import { trackerFile } from '../addons/tracker/tracker.svelte';
@@ -45,7 +46,7 @@ import { deepEqual } from './merge';
 
 export type { Binding, SyncStores } from './codecs';
 export type { DeviceInfo, SyncStatus } from './engine.svelte';
-export { SETTLE_MS, SYNC_INTERVAL_MS } from './engine.svelte';
+export { LIVE_MS, SETTLE_MS, SYNC_INTERVAL_MS } from './engine.svelte';
 
 /** Keychain account holding the GitHub personal access token. */
 export const TOKEN_ACCOUNT = 'github-sync';
@@ -164,6 +165,9 @@ export const d1Backend: SyncBackend<D1Place, D1Database> = {
   basePrefix: D1_BASE_PREFIX,
   tokenAccount: D1_TOKEN_ACCOUNT,
   alwaysSealed: true,
+  // One small query per look, so edits can travel within seconds.
+  settleMs: 1_500,
+  liveMs: 10_000,
   defaults: () => ({ accountId: '', databaseId: '', databaseName: '' }),
   normalize(c, p) {
     if (p.accountId !== undefined) c.accountId = p.accountId.trim().toLowerCase();
@@ -258,7 +262,7 @@ function bindApp(): Promise<SyncStores> {
     // an addon that is switched off is never loaded), so a sync never writes defaults over
     // data that's sitting on disk. The Work store starts its load on import; `loadWork`
     // shares that one rather than reading the file twice.
-    const files = [taskFile, settings, progressFile, streakFile, trackerFile, crumbsFile, realityFile, waqtFile, trashFile, eventStateFile, aiFile, alefFile, retroFile, landingsFile];
+    const files = [taskFile, settings, progressFile, streakFile, trackerFile, crumbsFile, realityFile, waqtFile, trashFile, eventStateFile, aiFile, alefFile, retroFile, landingsFile, decisionFile];
     await Promise.all([...files.filter((s) => !s.ready).map((s) => s.load()), workFile.ready ? null : loadWork()]);
     const { calendarService } = await import('../calendar/service');
     await calendarService.init().catch(() => {});
@@ -279,7 +283,14 @@ function bindApp(): Promise<SyncStores> {
       delete: (a) => platform.secrets.delete(a),
     };
     return {
-      tasks: bind(taskFile),
+      tasks: {
+        read: () => plain(taskFile.value),
+        // The file's own flags (the sample day was offered, kept) stay on this device.
+        write: (v) => {
+          const { seeded, sampleKept } = taskFile.value;
+          taskFile.value = { ...plain(v), ...(seeded ? { seeded } : {}), ...(sampleKept !== undefined ? { sampleKept } : {}) };
+        },
+      },
       settings: bind(settings),
       progress: bind(progressFile),
       streaks: bind(streakFile),
@@ -294,6 +305,7 @@ function bindApp(): Promise<SyncStores> {
       alef: synced(alefFile, migrateAlef),
       retro: synced(retroFile, migrateRetro),
       landings: synced(landingsFile, migrateLandings),
+      decision: synced(decisionFile, migrateDecision),
       calendars: {
         read: () => ({ version: 1, accounts: calendarService.exportAccounts() }),
         write: (v) => void calendarService.applyAccounts(v.accounts),

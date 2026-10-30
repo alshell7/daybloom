@@ -5,6 +5,7 @@
 
 import { formatDuration, formatTime, MINUTE } from '../engine/time';
 import type { Block, Task } from '../engine/types';
+import { actionsFor, type NotifyButton, type NotifyContext } from './notifyActions';
 
 export const PLAN_HOURS = 48;
 
@@ -23,6 +24,10 @@ export interface NativeReminder {
   tag?: string;
   /** When the notification has had its moment and clears itself (ms). */
   until?: number;
+  /** What its buttons act on: a block key, or `salah:<date>:<id>`. */
+  key?: string;
+  /** Its buttons (notifyActions.ts). */
+  actions?: NotifyButton[];
 }
 
 export interface PrayerTime {
@@ -50,6 +55,8 @@ export interface PlanInput {
   waqtRemind?: { before: number; atAdhan: boolean; beforeJamaat: number };
   /** Snoozes still waiting (from the alarm store). */
   snoozed?: { key: string; title: string; at: number; startMs: number; tone: string }[];
+  /** What the buttons may offer: the Time Tracker, Work's billable blocks. Without it, no buttons. */
+  smart?: { tracker: boolean; billable: (b: Block) => boolean; tracking: (b: Block) => boolean };
 }
 
 const cap = (s: string, n = 80) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
@@ -66,6 +73,9 @@ export function planReminders(p: PlanInput): NativeReminder[] {
     if (b.done) continue;
     const name = cap((p.name ? p.name(b) : b.title) || (b.kind === 'task' ? 'Your next block' : 'An event'));
     const task = b.kind === 'task' ? p.taskOf(b) : null;
+    const sm = p.smart;
+    const buttons = (kind: NotifyContext['kind']) =>
+      sm ? { key: b.key, actions: actionsFor({ kind, block: b, task, tracker: sm.tracker, billable: sm.billable(b), tracking: sm.tracking(b) }) } : {};
 
     if (task?.alarm && soon(b.startMs)) {
       out.push({
@@ -81,19 +91,19 @@ export function planReminders(p: PlanInput): NativeReminder[] {
         volume: p.alarm.volume,
       });
     } else if (p.notify && soon(b.startMs)) {
-      out.push({ id: `go:${b.key}`, at: b.startMs, kind: 'start', title: `Now: ${name}`, body: `${formatDuration(b.endMs - b.startMs)} · until ${t(b.endMs)}`, tag: b.key, until: b.endMs });
+      out.push({ id: `go:${b.key}`, at: b.startMs, kind: 'start', title: `Now: ${name}`, body: `${formatDuration(b.endMs - b.startMs)} · until ${t(b.endMs)}`, tag: b.key, until: b.endMs, ...buttons('start') });
     }
 
     if (p.notify) {
       for (const m of task?.alerts ?? []) {
         const at = b.startMs - m * MINUTE;
-        if (m > 0 && soon(at)) out.push({ id: `al:${b.key}:${m}`, at, kind: 'before', title: `In ${m} minutes: ${name}`, body: `Starts at ${t(b.startMs)}`, tag: b.key, until: b.startMs + 5 * MINUTE });
+        if (m > 0 && soon(at)) out.push({ id: `al:${b.key}:${m}`, at, kind: 'before', title: `In ${m} minutes: ${name}`, body: `Starts at ${t(b.startMs)}`, tag: b.key, until: b.startMs + 5 * MINUTE, ...buttons('before') });
       }
       const ms = p.headsUpMin * MINUTE;
       const at = b.endMs - ms;
       if (ms > 0 && b.endMs - b.startMs > ms * 1.5 && soon(at)) {
         const next = timed.slice(i + 1).find((n) => n.startMs >= b.endMs - MINUTE && !n.done);
-        out.push({ id: `hu:${b.key}`, at, kind: 'heads', title: `${formatDuration(ms)} left · ${name}`, body: next ? `Next up: ${cap(p.name ? p.name(next) : next.title)}` : 'Time to start wrapping up.', tag: b.key, until: b.endMs + 5 * MINUTE });
+        out.push({ id: `hu:${b.key}`, at, kind: 'heads', title: `${formatDuration(ms)} left · ${name}`, body: next ? `Next up: ${cap(p.name ? p.name(next) : next.title)}` : 'Time to start wrapping up.', tag: b.key, until: b.endMs + 5 * MINUTE, ...buttons('heads') });
       }
     }
   }
@@ -108,16 +118,17 @@ export function planReminders(p: PlanInput): NativeReminder[] {
   if (r && p.prayers) {
     for (const pr of p.prayers) {
       const key = `${pr.date}:${pr.id}`;
+      const salah = (moment: 'pre' | 'adhan' | 'jam') => (p.smart ? { key: `salah:${key}`, actions: actionsFor({ kind: 'salah', salah: { moment, jamaat: !!pr.jamaat } }) } : {});
       const pre = pr.at - r.before * MINUTE;
       if (r.before > 0 && soon(pre)) {
-        out.push({ id: `salah:${key}:pre`, at: pre, kind: 'salah', title: `${pr.name} in ${r.before} minutes`, body: `Adhan at ${t(pr.at)}${pr.jamaat ? ` · jamaat at ${t(pr.jamaat)}` : ''}`, tag: `salah:${key}`, until: pr.at + 5 * MINUTE });
+        out.push({ id: `salah:${key}:pre`, at: pre, kind: 'salah', title: `${pr.name} in ${r.before} minutes`, body: `Adhan at ${t(pr.at)}${pr.jamaat ? ` · jamaat at ${t(pr.jamaat)}` : ''}`, tag: `salah:${key}`, until: pr.at + 5 * MINUTE, ...salah('pre') });
       }
       if (r.atAdhan && soon(pr.at)) {
-        out.push({ id: `salah:${key}:adhan`, at: pr.at, kind: 'salah', title: `It’s time for ${pr.name}`, body: `${t(pr.at)} · ${pr.jamaat ? `Jamaat at ${t(pr.jamaat)}` : `Its time lasts until ${t(pr.end)}`}`, tag: `salah:${key}`, until: pr.end });
+        out.push({ id: `salah:${key}:adhan`, at: pr.at, kind: 'salah', title: `It’s time for ${pr.name}`, body: `${t(pr.at)} · ${pr.jamaat ? `Jamaat at ${t(pr.jamaat)}` : `Its time lasts until ${t(pr.end)}`}`, tag: `salah:${key}`, until: pr.end, ...salah('adhan') });
       }
       const jam = pr.jamaat ? pr.jamaat - r.beforeJamaat * MINUTE : 0;
       if (pr.jamaat && r.beforeJamaat > 0 && soon(jam)) {
-        out.push({ id: `salah:${key}:jam`, at: jam, kind: 'salah', title: `Jamaat for ${pr.name} in ${r.beforeJamaat} minutes`, body: `At ${t(pr.jamaat)}. Time for wudu.`, tag: `salah:${key}`, until: pr.jamaat + 10 * MINUTE });
+        out.push({ id: `salah:${key}:jam`, at: jam, kind: 'salah', title: `Jamaat for ${pr.name} in ${r.beforeJamaat} minutes`, body: `At ${t(pr.jamaat)}. Time for wudu.`, tag: `salah:${key}`, until: pr.jamaat + 10 * MINUTE, ...salah('jam') });
       }
     }
   }

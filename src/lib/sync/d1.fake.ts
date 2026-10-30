@@ -71,10 +71,10 @@ export class FakeD1 {
     }
     const t = db.tables?.get('daybloom_files');
     if (!t) return cfError(400, 7500, 'no such table: daybloom_files: SQLITE_ERROR');
-    if (sql.startsWith('SELECT name, rev FROM daybloom_files')) return done([...t].sort(([a], [b]) => a.localeCompare(b)).map(([name, r]) => ({ name, rev: r.rev })));
-    if (sql.startsWith('SELECT body, rev FROM daybloom_files WHERE name = ?')) {
+    if (sql.startsWith('SELECT name, rev, updated_at FROM daybloom_files')) return done([...t].sort(([a], [b]) => a.localeCompare(b)).map(([name, r]) => ({ name, rev: r.rev, updated_at: r.updated_at })));
+    if (sql.startsWith('SELECT body, rev, updated_at FROM daybloom_files WHERE name = ?')) {
       const r = t.get(p[0]);
-      return done(r ? [{ body: r.body, rev: r.rev }] : []);
+      return done(r ? [{ body: r.body, rev: r.rev, updated_at: r.updated_at }] : []);
     }
     if (sql.startsWith('INSERT INTO daybloom_files')) {
       await this.beforeWrite?.(p[0]);

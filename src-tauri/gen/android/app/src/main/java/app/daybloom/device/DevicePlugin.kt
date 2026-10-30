@@ -103,7 +103,7 @@ class WidgetArgs {
 
 @InvokeArg
 class PinArgs {
-  /** dial | alef */
+  /** dial | alef | backlog */
   var kind: String = "dial"
 }
 
@@ -290,6 +290,11 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     }
     val action = intent?.getStringExtra("daybloom.action") ?: return null
     intent.removeExtra("daybloom.action")
+    // A reminder's button that opened the planner: that reminder has done its job.
+    intent.getStringExtra("daybloom.dismiss")?.let {
+      Reminders.dismiss(activity, it)
+      intent.removeExtra("daybloom.dismiss")
+    }
     return JSObject().put("action", action).put("key", intent.getStringExtra("daybloom.key") ?: "")
   }
 
@@ -309,6 +314,10 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
 
   override fun load(webView: WebView) {
     this.webView = webView
+    // A button pressed in the shade while the planner runs: it takes it at once.
+    NotifyActions.listener = {
+      activity.runOnUiThread { this.webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybloom:notify-action'))", null) }
+    }
     // Behind the page, the theme's ground colour (the web view's own default is white).
     activity.runOnUiThread { webView.setBackgroundColor(Appearance.ground(activity)) }
     pendingAction = actionOf(activity.intent)
@@ -533,7 +542,11 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   fun pinWidget(invoke: Invoke) {
     val kind = invoke.parseArgs(PinArgs::class.java).kind
     val m = android.appwidget.AppWidgetManager.getInstance(activity)
-    val cls = if (kind == "alef") AlefWidget::class.java else DialWidget::class.java
+    val cls = when (kind) {
+      "alef" -> AlefWidget::class.java
+      "backlog" -> BacklogWidget::class.java
+      else -> DialWidget::class.java
+    }
     val ok = m.isRequestPinAppWidgetSupported && m.requestPinAppWidget(android.content.ComponentName(activity, cls), null, null)
     invoke.resolve(JSObject().put("asked", ok))
   }
@@ -547,6 +560,13 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     pendingAction?.let { r.put("intent", it) }
     pendingAction = null
     invoke.resolve(r)
+  }
+
+  /** Buttons pressed on reminders since the planner last asked (oldest first). */
+  @Command
+  fun notifyPending(invoke: Invoke) {
+    val items = NotifyActions.take(activity)
+    invoke.resolve(JSObject().put("items", items))
   }
 
   // -- location (Waqt's prayer times) -------------------------------------------------------

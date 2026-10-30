@@ -1,7 +1,8 @@
 //! On-device weights store for the assistant models by Cactus Compute (Apache-2.0): Needle
 //! (`needle3.cact`, tool calling) and Whistle (`whistle.cact`, speech to text); and Alef's
 //! voice: the tiny-tts model and its word lists (Apache-2.0) and the ONNX Runtime it runs on
-//! (MIT). Each file may only come from its own pinned source (`source_of`).
+//! (MIT); and the Decision addon's TinyDecide model by REZOR (Apache-2.0). Each file may only
+//! come from its own pinned source (`source_of`).
 //!
 //! The weights are not bundled. They download once, only when the user asks, from a pinned
 //! Hugging Face revision into `app_data_dir()/models/`, and are SHA-256 verified before they
@@ -30,13 +31,15 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The model files this store may hold. The first one is the default.
-const MODELS: [&str; 6] = [
+const MODELS: [&str; 8] = [
     "needle3.cact",
     "whistle.cact",
     "tinytts.onnx",
     "tinytts-cmudict.json",
     "tinytts-g2p.json",
     "ort-wasm-simd-threaded.wasm",
+    "tinydecide-model.bin",
+    "tinydecide-meta.json",
 ];
 const PROGRESS_EVENT: &str = "daybloom://needle-progress";
 
@@ -47,6 +50,7 @@ fn source_of(name: &str) -> (&'static str, &'static str) {
         "tinytts.onnx" => ("huggingface.co", "/backtracking/tiny-tts/resolve/"),
         "tinytts-cmudict.json" | "tinytts-g2p.json" => ("cdn.jsdelivr.net", "/npm/tiny-tts@5.0.1/"),
         "ort-wasm-simd-threaded.wasm" => ("cdn.jsdelivr.net", "/npm/onnxruntime-web@1.29.0/dist/"),
+        "tinydecide-model.bin" | "tinydecide-meta.json" => ("huggingface.co", "/TheREZOR/TinyDecide/resolve/"),
         _ => ("huggingface.co", "/Cactus-Compute/"),
     }
 }
@@ -408,6 +412,8 @@ mod tests {
     fn each_voice_file_comes_only_from_its_pinned_place() {
         assert!(check_source("tinytts.onnx", "https://huggingface.co/backtracking/tiny-tts/resolve/6d0cc902621451fcd47462b50ee0aabc6a852e25/tinytts.onnx").is_ok());
         assert!(check_source("tinytts.onnx", "https://huggingface.co/Cactus-Compute/needle3/resolve/x/needle3.cact").is_err());
+        assert!(check_source("tinydecide-model.bin", "https://huggingface.co/TheREZOR/TinyDecide/resolve/aa745b7/model.bin").is_ok());
+        assert!(check_source("tinydecide-model.bin", "https://huggingface.co/Cactus-Compute/needle3/resolve/x/needle3.cact").is_err());
         assert!(check_source("tinytts-cmudict.json", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/cmudict.json").is_ok());
         assert!(check_source("tinytts-cmudict.json", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.2/cmudict.json").is_err());
         assert!(check_source("tinytts-g2p.json", "https://cdn.jsdelivr.net/npm/tiny-tts@5.0.1/../evil/x").is_err());

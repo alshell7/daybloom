@@ -7,6 +7,23 @@ release, in the app's update card, and once after the update.
 Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one plain sentence.`
 
 ## Next
+### New
+
+- **Jot it down** — the fastest way to get things out of your head: one thing per line, and each line shows where it will go before anything is added — on your day, tomorrow, or in the backlog's Next, Inbox or Someday. Tap another place to change it. On a phone, tap the + button (hold it to say it), long-press the app icon, use the quick-settings tile, or share text to Daybloom; on a computer, press J.
+- **A Backlog widget** — your backlog on the home screen: what's next, with Jot and voice one tap away. Add it in Settings › Phone.
+- **Buttons on your phone's reminders** — each reminder offers what fits the moment: Done, 10 more min, Start now, Remind me in a few minutes, Not today, Start 2 min for a block with steps, Track time (or Bill time for billable Work blocks) with the Time Tracker, Skip for calendar events, and Prayed or In jamaat for salah. They work with Daybloom closed.
+- **Dial and timeline: one screen or two pages** — on a phone, choose in Settings › Phone whether the timeline follows the dial as you scroll, or sits on its own page you swipe to.
+
+### Addons
+
+- **Decision** — a tiny model on your device (TinyDecide, 6 MB) reads what you jot down and suggests where it belongs, how urgent it is and what kind of thing it is. You see every suggestion and confirm it with one tap, and each choice teaches it your way. It can also sort what waits in your Inbox, with moves you approve. Nothing you write leaves your device; what it learns syncs with your other devices.
+
+### Fixes
+
+- **Sync keeps up** — edits to titles, steps, notes, settings and addon data now reach your other devices within seconds while Daybloom is open, instead of waiting up to five minutes. A change is sent as soon as Daybloom goes to the background, a change made during a sync is sent right after it, and Sync now always sends what you see.
+- **Cloudflare D1 never mixes up versions** — a file written again after it was removed is always seen as new, so no device keeps an old copy by mistake.
+- **Timeline views on a phone** — the Board shows one column at a time and snaps as you swipe; the Gantt chart has readable hours, a slim label column, and opens at now.
+- **A cleaner backlog on a phone** — the list tabs always fit, rows are easier to tap, titles wrap instead of fading out, and the backlog opens tall.
 
 ## 0.3.0
 ### New

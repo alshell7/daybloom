@@ -2,6 +2,10 @@
   import { untrack } from 'svelte';
   import { adjust, createFromRange, createNext, leaveFocus, removeBlock, toggleDone } from '../lib/actions';
   import Dial from '../lib/dial/Dial.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import JotSheet from '../components/jot/JotSheet.svelte';
+  import JotButton from '../components/jot/JotButton.svelte';
+  import DecisionPanel from '../components/addons/decision/DecisionPanel.svelte';
   import Readout from '../lib/dial/Readout.svelte';
   import { cubicOut } from 'svelte/easing';
   import { blockKey } from '../lib/engine/blocks';
@@ -216,6 +220,11 @@
     else if (k === 'w') toggleWidget();
     else if (k === ',') view.sheet = { kind: 'settings' };
     else if (k === 'b') view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' };
+    else if (k === 'j') {
+      // The J itself mustn't land in the box that opens.
+      e.preventDefault();
+      view.sheet = view.sheet?.kind === 'jot' ? null : { kind: 'jot' };
+    }
     else if (k === 'i') view.sheet = view.sheet?.kind === 'insights' ? null : { kind: 'insights' };
     else if (['1', '2', '3', '4'].includes(k)) settings.value.preset = PRESET_ORDER[Number(k) - 1] as PresetId;
     else if (k === ' ' && view.selected) {
@@ -264,6 +273,24 @@
   );
 
   const mac = platform.isNative && platform.os === 'mac';
+
+  // A phone can show the dial and the timeline as two pages, swiped sideways (Settings › Phone).
+  const pages = $derived(platform.isMobile && layout.value.phone === 'pages');
+  let stageEl = $state<HTMLElement>();
+  let page = $state(0);
+  function onStageScroll() {
+    if (!pages || !stageEl) return;
+    page = Math.round(stageEl.scrollLeft / Math.max(1, stageEl.clientWidth));
+  }
+  function goPage(i: number) {
+    stageEl?.scrollTo({ left: i * stageEl.clientWidth, behavior: view.reducedMotion ? 'auto' : 'smooth' });
+    page = i;
+  }
+  // Picking a block on the timeline page shows it on the dial when you swipe back; a new
+  // capture or a "show this block" from elsewhere brings the timeline into view.
+  $effect(() => {
+    if (!pages) page = 0;
+  });
   const sleep = $derived({ wake: settings.value.wake, sleep: settings.value.sleep });
 </script>
 
@@ -300,6 +327,9 @@
   <TopBar {mac} ontogglewidget={toggleWidget} />
 
   <main
+    bind:this={stageEl}
+    onscroll={onStageScroll}
+    class:pages
     class="stage"
     class:custom={railDrag.active ? !railDrag.auto : layout.value.railWidth > 0}
     class:resizing={railDrag.active}
@@ -366,13 +396,23 @@
       <PresetBar />
     </section>
 
-    <DayRail />
+    <div class="rail-page"><DayRail /></div>
   </main>
+  {#if platform.isMobile && !view.focus}<JotButton />{/if}
+  {#if pages}
+    <div class="pager" role="tablist" aria-label="Pages">
+      <button role="tab" aria-selected={page === 0} onclick={() => goPage(0)}><Icon name="dial" size={15} /><span>Dial</span></button>
+      <button role="tab" aria-selected={page === 1} onclick={() => goPage(1)}><Icon name="list" size={15} /><span>Timeline</span></button>
+      <span class="pager-thumb" style:translate={`${page * 100}% 0`} aria-hidden="true"></span>
+    </div>
+  {/if}
 
   <BlockSheet />
   <SettingsSheet />
   <InsightsPanel />
   <BacklogPanel />
+  <JotSheet />
+  {#if isOn('decision')}<DecisionPanel />{/if}
   <WindDown />
   <AssistantPanel />
   <FocusLauncher />
@@ -462,13 +502,16 @@
     min-width: 240px;
   }
 
+  .rail-page {
+    display: contents;
+  }
   @media (max-width: 860px) {
     .stage {
       grid-template-columns: 1fr;
       grid-template-rows: auto 1fr;
       overflow-y: auto;
-      /* The last rows scroll clear of a phone's gesture bar. */
-      padding-bottom: var(--safe-bottom);
+      /* The last rows scroll clear of a phone's gesture bar (and its + button). */
+      padding-bottom: calc(var(--safe-bottom) + 84px);
     }
     .dial-col {
       padding: var(--s-3) var(--s-4) var(--s-4);
@@ -476,5 +519,82 @@
     .dial-box {
       width: min(100%, 54vh, 520px);
     }
+  }
+  /* A phone, two pages: the dial, then the timeline, each its own screen, snapping sideways. */
+  .stage.pages {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 0;
+  }
+  .stage.pages::-webkit-scrollbar {
+    display: none;
+  }
+  .stage.pages > .dial-col,
+  .stage.pages > .rail-page {
+    flex: 0 0 100%;
+    min-width: 0;
+    height: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  .stage.pages > .dial-col {
+    align-content: center;
+    padding-bottom: calc(var(--safe-bottom) + 64px);
+  }
+  .stage.pages > .dial-col .dial-box {
+    width: min(100%, 64vh, 520px);
+  }
+  .stage.pages > .rail-page {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-bottom: calc(var(--safe-bottom) + 64px);
+  }
+  .pager {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--safe-bottom) + 12px);
+    translate: -50% 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 4px;
+    border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--raised) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(1.3);
+    box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
+    isolation: isolate;
+  }
+  .pager button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 104px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: var(--r-pill);
+    font: 500 var(--t-sm) / 1 var(--font-ui);
+    color: var(--ink-2);
+    transition: color var(--dur-2) var(--ease-out);
+  }
+  .pager button[aria-selected='true'] {
+    color: var(--ink);
+  }
+  .pager-thumb {
+    position: absolute;
+    z-index: -1;
+    top: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    height: 40px;
+    border-radius: var(--r-pill);
+    background: var(--sunken);
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition: translate var(--dur-3) var(--ease-out);
   }
 </style>

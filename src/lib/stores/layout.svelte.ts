@@ -23,8 +23,12 @@ export interface RailFilter {
 }
 export const NO_FILTER: RailFilter = { hide: [], done: false, free: false, categories: [] };
 
-export const layout = persisted<{ railWidth: number; filter: RailFilter }>('layout', { railWidth: 0, filter: NO_FILTER }, (raw) => ({
+/** A phone: the dial and the timeline on one scrolling screen, or as two pages you swipe between. */
+export type PhoneLayout = 'stack' | 'pages';
+
+export const layout = persisted<{ railWidth: number; filter: RailFilter; phone: PhoneLayout }>('layout', { railWidth: 0, filter: NO_FILTER, phone: 'stack' }, (raw) => ({
   railWidth: Number.isFinite(raw?.railWidth) && raw.railWidth > 0 ? Math.round(raw.railWidth) : 0,
+  phone: raw?.phone === 'pages' ? 'pages' : 'stack',
   filter: {
     hide: Array.isArray(raw?.filter?.hide) ? raw.filter.hide.filter((x: unknown) => typeof x === 'string') : [],
     done: raw?.filter?.done === true,

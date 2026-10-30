@@ -11,6 +11,7 @@ import { drawEyes, eyeOf } from '../addons/alef/eyes';
 import { restPose } from '../addons/alef/face';
 import { isOn } from '../addons/registry';
 import { toggleDone } from '../actions';
+import { openItems } from '../backlog';
 import { blocksInRange } from '../engine/blocks';
 import { MINUTE } from '../engine/time';
 import type { Block } from '../engine/types';
@@ -60,6 +61,10 @@ async function snapshot(): Promise<string> {
   }
   const cur = view.now.current;
   const next = view.now.next;
+  // The Backlog widget: Next first, then by priority and your order.
+  const open = openItems(taskFile.value.tasks);
+  const rank = (l?: string | null) => (l === 'next' ? 0 : l === 'inbox' || !l ? 1 : 2);
+  const top = [...open].sort((a, z) => rank(a.list) - rank(z.list) || (a.priority ?? 9) - (z.priority ?? 9) || (a.order ?? 0) - (z.order ?? 0)).slice(0, 4);
   return JSON.stringify({
     v: 1,
     finish: { face: f.face, bezel: f.bezel, ink: f.ink, track: f.track, signal: f.signal, lume: f.lume, rim: f.rim, dark: f.dark },
@@ -67,6 +72,10 @@ async function snapshot(): Promise<string> {
     ink: css('--ink') || f.ink,
     ink2: css('--ink-2') || f.ink,
     blocks,
+    backlog: {
+      n: open.length,
+      items: top.map((t) => ({ t: shownTitle(t.title, t.category), l: t.list === 'next' ? 'Next' : t.list === 'someday' ? 'Someday' : 'Inbox', p: t.priority ?? 0 })),
+    },
     alef: a && {
       ...a,
       name: 'Alef',
@@ -91,10 +100,19 @@ async function takePending() {
 }
 
 function act(i: { action: string; key: string; text?: string }) {
-  if (i.action === 'capture') {
+  // Quick capture from anywhere (share, the tile, the app icon, the Backlog widget): Jot.
+  if (i.action === 'capture' || i.action === 'jot' || i.action === 'jotVoice') {
+    view.sheet = { kind: 'jot', text: i.text ?? '', voice: i.action === 'jotVoice' };
+    return;
+  }
+  if (i.action === 'add') {
     view.sheet = null;
     // Give the planner a frame to show the field.
     setTimeout(() => dispatchEvent(new CustomEvent('daybloom:capture', { detail: { text: i.text ?? '' } })), 250);
+    return;
+  }
+  if (i.action === 'backlog') {
+    view.sheet = { kind: 'backlog' };
     return;
   }
   if (i.action === 'focus') {

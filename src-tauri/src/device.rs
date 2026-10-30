@@ -43,6 +43,7 @@ const METHODS: &[&str] = &[
     "openSettings",
     "widgets",
     "widgetPending",
+    "notifyPending",
     "pinWidget",
     "location",
     "microphone",
