@@ -7,6 +7,8 @@ release, in the app's update card, and once after the update.
 Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one plain sentence.`
 
 ## Next
+
+## 0.4.0
 ### New
 
 - **Pick for me** — when nothing feels startable, Daybloom deals a few cards from your backlog and you choose one. Each card says honestly why it's there (due soon, fits your free minutes, waited a week), comes with a tiny first step, and invites you in its own way: a mystery card to turn over, a ten-minute dare, just the first step, do it badly on purpose, beat the clock. Start it as a short focus, let a card go for now, or deal again. Daybloom learns which kinds of cards you actually start. With an AI service for Getting started, each card's first step and invitation are written for that exact task. Open it from the backlog, from free time in the timeline, or press P. Choose how many cards, playful cards or not, and more with the gear.
