@@ -198,6 +198,24 @@ class Decision {
     return { suggestion: interpretCapture(answers, rules), answers };
   }
 
+  /** Where each task sits in the Eisenhower matrix, by its words alone (you confirm each). */
+  async matrix(items: { id: string; title: string }[]): Promise<{ taskId: string; urgent: boolean; important: boolean; why: string }[]> {
+    const qs: Question[] = [
+      { id: 'urgent', type: 'noul', text: 'This is urgent.' },
+      { id: 'important', type: 'noul', text: 'This matters for health, people, work or goals.' },
+    ];
+    const out: { taskId: string; urgent: boolean; important: boolean; why: string }[] = [];
+    for (const it of items) {
+      const [u, i] = await this.ask(it.title, qs);
+      const pu = u?.type === 'noul' ? u.p : 0;
+      const pi = i?.type === 'noul' ? i.p : 0;
+      const urgent = pu >= 0.6;
+      const important = pi >= 0.55;
+      out.push({ taskId: it.id, urgent, important, why: urgent && important ? 'Sounds pressing and meaningful' : important ? 'Sounds like it matters' : urgent ? 'Sounds time-bound' : 'Nothing pressing in it' });
+    }
+    return out;
+  }
+
   /** What could move out of the Inbox, and where (you confirm each). */
   async triage(items: { id: string; title: string }[]): Promise<TriageMove[]> {
     const out: TriageMove[] = [];

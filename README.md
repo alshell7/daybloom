@@ -418,6 +418,29 @@ When a block ends without a tick, Daybloom asks “Did you finish?”. Select on
 - Under each line, Daybloom shows where it will go: **Today**, **Tomorrow**, **Next**, **Inbox** or **Someday**. Tap another place to change it. Then tap **Add**.
 - With the **Decision** addon on, a small model on your device suggests the place, the kind of task and the urgency. A line with a time goes onto the dial. A line that does not say when waits in the **Inbox** until you sort it.
 
+**Pick for me:**
+
+When nothing feels startable, tap **Pick for me** in the backlog, tap **Pick something** on free time in the timeline, or push <kbd>P</kbd>.
+
+- Daybloom deals a few cards from your backlog: things that are due soon, fit the free time before your next block, suit the hour, or have waited a long time. Each card shows why it is there.
+- Each card invites you in its own way: a **Mystery card** (turn it over), a **10-minute dare**, **Just the first step**, **Do it badly**, **Two minutes**, **Fresh eyes** or **Beat the clock**. Each one has a tiny first step.
+- Tap **Start** to begin a short focus on it. Tap **Not this one** to let it go for a couple of days, or **Deal again** for new cards. Daybloom never chooses for you.
+- Daybloom learns which kinds of cards you start, on this device. With an AI service for **Getting started** (Settings › AI), each card's first step and words are written for that task.
+- Tap the gear to choose 2, 3 or 4 cards, turn the playful cards off, include Someday, show **Pick something** in free time, or turn the AI words off.
+
+**See the backlog as a matrix:**
+
+In the backlog, tap **Matrix**. Your open tasks sort into four quadrants (Eisenhower):
+
+| | Urgent | Not urgent |
+|---|---|---|
+| **Important** | **Do now** | **Schedule** |
+| **Less important** | **Make it quick** | **Let go** |
+
+- A task is urgent when its due date is within two days, and important when its priority is **Must** or **Should**. To place a task yourself, drag it to another quadrant, or tap it and pick one. Your choice stays.
+- Each quadrant has a next move: **Pick one to start**, **Give them a day**, **Pick a quick one** or **Move to Someday**.
+- With an AI service for Getting started, or the Decision addon, tap **Suggest places**. Check the suggestions, then tap **Place**.
+
 **Add a task quickly:**
 
 - Click the **Backlog** button (tray) in the top bar. Type the task and push <kbd>Enter</kbd>. The card stays open for the next task.
@@ -1003,6 +1026,7 @@ To find a setting fast, type a word in **Find a setting**, for example “sound�
 | <kbd>Delete</kbd> | Remove the selected block |
 | <kbd>B</kbd> | Backlog |
 | <kbd>J</kbd> | Jot it down |
+| <kbd>P</kbd> | Pick for me |
 | <kbd>I</kbd> | Your week |
 | <kbd>F</kbd> | Start a focus session (or show the running session) |
 | <kbd>V</kbd> | Hold to talk, or tap to talk hands-free |

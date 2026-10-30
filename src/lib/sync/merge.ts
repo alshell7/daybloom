@@ -78,6 +78,7 @@ export const SHARED_SETTINGS = [
   'alarm',
   'topBar',
   'breathe',
+  'pick',
   'widget.own',
   'widget.preset',
   'widget.finish',

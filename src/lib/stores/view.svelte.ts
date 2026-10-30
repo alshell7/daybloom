@@ -35,6 +35,7 @@ export type Sheet =
   | { kind: 'retro' }
   | { kind: 'decision' }
   | { kind: 'jot'; text?: string; voice?: boolean }
+  | { kind: 'pick'; only?: string[] }
   | { kind: 'trash' }
   | { kind: 'reset' }
   | { kind: 'alef'; tab?: 'talk' | 'alef' | 'feelings' };

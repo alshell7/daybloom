@@ -12,6 +12,8 @@
   import { clock } from '../lib/stores/clock.svelte';
   import { taskFile, tasks } from '../lib/stores/tasks.svelte';
   import { view } from '../lib/stores/view.svelte';
+  import { openItems } from '../lib/backlog';
+  import { settings } from '../lib/stores/settings.svelte';
   import RailBlock from './RailBlock.svelte';
   import Rolling from '../lib/dial/Rolling.svelte';
   import QuickAdd from './QuickAdd.svelte';
@@ -331,7 +333,13 @@
             <div class="gap" class:gone={row.endMs <= clock.minute} style:--gh={`${ghost(len)}px`}>
               <span class="gap-time tnum">{formatTime(row.startMs, view.hour12)}</span>
               <span class="ghost" aria-hidden="true"></span>
-              <span class="gap-label">{#if row.landing}<Icon name="leaf" size={11} /> {formatDuration(len)} to land{:else}{formatDuration(len)} free{/if}</span>
+              <span class="gap-label">
+                {#if row.landing}<Icon name="leaf" size={11} /> {formatDuration(len)} to land{:else}{formatDuration(len)} free{/if}
+                <!-- Free right now, with something waiting: deal a few cards to choose from. -->
+                {#if !row.landing && settings.value.pick.inGaps && view.isToday && row.startMs <= clock.minute + 10 * MINUTE && row.endMs - Math.max(row.startMs, clock.minute) >= 15 * MINUTE && openItems(taskFile.value.tasks).length}
+                  <button class="gap-pick" onclick={() => (view.sheet = { kind: 'pick' })}><Icon name="shuffle" size={11} /> Pick something</button>
+                {/if}
+              </span>
               <button
                 class="gap-add"
                 aria-label={`Add a block at ${formatTime(row.startMs, view.hour12)}`}
@@ -1093,5 +1101,22 @@
       inset: -11px;
       border-radius: 50%;
     }
+  }
+  .gap-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
+    margin-left: 6px;
+    padding: 0 10px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: #db4f94;
+    background: color-mix(in srgb, #db4f94 12%, transparent);
+  }
+  .gap-pick:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 </style>

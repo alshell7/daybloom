@@ -2,7 +2,7 @@
   import type { ListId, SortMode } from '../lib/backlog';
 
   // Remembered while the app runs, so reopening the panel lands where you left it.
-  const prefs = $state<{ tab: ListId; sort: SortMode; nudgeHiddenOn: string }>({ tab: 'inbox', sort: 'manual', nudgeHiddenOn: '' });
+  const prefs = $state<{ tab: ListId; sort: SortMode; nudgeHiddenOn: string; view: 'list' | 'matrix' }>({ tab: 'inbox', sort: 'manual', nudgeHiddenOn: '', view: 'list' });
   import { trashFile } from '../lib/stores/trash.svelte';
 </script>
 
@@ -41,6 +41,7 @@
   import FindBar from './backlog/FindBar.svelte';
   import ListTabs from './backlog/ListTabs.svelte';
   import PlanView from './backlog/PlanView.svelte';
+  import MatrixView from './backlog/MatrixView.svelte';
   import Panel from './Panel.svelte';
   import { isOn } from '../lib/addons/registry';
 
@@ -56,6 +57,9 @@
   const target = $derived<BacklogList>(prefs.tab === 'done' ? 'inbox' : prefs.tab);
   const reorderable = $derived(prefs.sort === 'manual' && prefs.tab !== 'done');
   const filtered = $derived(filterActive(filter));
+  // The matrix: everything open except Someday (that's already "let go, for now").
+  const matrixItems = $derived(openItems(all).filter((t) => t.list !== 'someday'));
+  const openCount = $derived(openItems(all).length);
 
   // ── Gentle urgency ──
   const due = $derived(dueNow(all, today));
@@ -348,6 +352,21 @@
 
           <Capture {target} oncaptured={captured} />
 
+          <div class="views">
+            <div class="seg" role="radiogroup" aria-label="Show the backlog as">
+              <button role="radio" aria-checked={prefs.view === 'list'} class:on={prefs.view === 'list'} onclick={() => (prefs.view = 'list')}><Icon name="list" size={14} /> List</button>
+              <button role="radio" aria-checked={prefs.view === 'matrix'} class:on={prefs.view === 'matrix'} onclick={() => (prefs.view = 'matrix')}><Icon name="layout-grid" size={14} /> Matrix</button>
+            </div>
+            <button class="pick-btn" onclick={() => (view.sheet = { kind: 'pick' })} disabled={!openCount} title="Deal a few cards and choose one (P)">
+              <Icon name="shuffle" size={14} /> Pick for me
+            </button>
+          </div>
+
+          {#if prefs.view === 'matrix'}
+            <div in:fly={{ y: 6, duration: rm ? 0 : 240, easing: cubicOut }}>
+              <MatrixView items={matrixItems} {today} onplan={(ids) => openPlan(ids)} />
+            </div>
+          {:else}
           <div class="tabs-row">
             <ListTabs value={prefs.tab} counts={tally} onchange={(v) => (prefs.tab = v)} />
           </div>
@@ -428,6 +447,7 @@
               {/if}
             </div>
           {/key}
+          {/if}
         </div>
       {/if}
     </div>
@@ -631,6 +651,55 @@
     text-align: left;
   }
   .sort-inbox:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+  .views {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: var(--s-1);
+  }
+  .seg {
+    display: inline-flex;
+    padding: 3px;
+    border-radius: var(--r-pill);
+    background: var(--sunken);
+  }
+  .seg button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-sm);
+    color: var(--ink-2);
+  }
+  .seg button.on {
+    color: var(--ink);
+    background: var(--raised);
+    box-shadow: var(--shadow-1);
+  }
+  .pick-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: var(--r-pill);
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #db4f94, #8670e6);
+    box-shadow: 0 6px 16px -8px #db4f94;
+  }
+  .pick-btn:disabled {
+    opacity: 0.45;
+  }
+  .seg button:focus-visible,
+  .pick-btn:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }

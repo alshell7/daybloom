@@ -46,6 +46,8 @@ function normalize(t: Partial<Task>): Task {
     priority: t.priority ?? null,
     due: t.due ?? null,
     energy: t.energy ?? null,
+    ...(typeof t.urgent === 'boolean' ? { urgent: t.urgent } : {}),
+    ...(typeof t.important === 'boolean' ? { important: t.important } : {}),
     order: t.order ?? now,
     doneAt: t.doneAt ?? null,
     acks: t.acks ?? [],

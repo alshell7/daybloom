@@ -78,6 +78,10 @@ export interface Task {
   due?: ISODate | null;
   /** How much energy it takes: 1 low, 2 medium, 3 high (for matching to the day). */
   energy?: 1 | 2 | 3 | null;
+  /** Eisenhower: set by you (true/false), or null to read it from the due date (urgent) and
+   *  the priority (important). See lib/matrix.ts. */
+  urgent?: boolean | null;
+  important?: boolean | null;
   /** Manual order inside its backlog list (ascending). */
   order?: number;
   /** An undated task finished from the backlog (epoch ms). */

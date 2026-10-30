@@ -4,6 +4,7 @@
   import Dial from '../lib/dial/Dial.svelte';
   import Icon from '../lib/Icon.svelte';
   import JotSheet from '../components/jot/JotSheet.svelte';
+  import PickSheet from '../components/pick/PickSheet.svelte';
   import JotButton from '../components/jot/JotButton.svelte';
   import DecisionPanel from '../components/addons/decision/DecisionPanel.svelte';
   import Readout from '../lib/dial/Readout.svelte';
@@ -220,6 +221,7 @@
     else if (k === 'w') toggleWidget();
     else if (k === ',') view.sheet = { kind: 'settings' };
     else if (k === 'b') view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' };
+    else if (k === 'p' && !e.shiftKey && !e.metaKey && !e.ctrlKey) view.sheet = view.sheet?.kind === 'pick' ? null : { kind: 'pick' };
     else if (k === 'j') {
       // The J itself mustn't land in the box that opens.
       e.preventDefault();
@@ -412,6 +414,7 @@
   <InsightsPanel />
   <BacklogPanel />
   <JotSheet />
+  <PickSheet />
   {#if isOn('decision')}<DecisionPanel />{/if}
   <WindDown />
   <AssistantPanel />

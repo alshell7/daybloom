@@ -1,4 +1,5 @@
 import type { Minutes } from '../engine/types';
+import { DEFAULT_PICK, type PickSettings } from '../pick';
 import type { WidgetLayer } from '../platform';
 import type { FinishId, PresetId } from '../presets';
 import type { ThemeId } from '../themes';
@@ -152,6 +153,8 @@ export interface Settings {
     /** Stop ringing by itself after this many minutes. */
     ringFor: number;
   };
+  /** Pick for me (lib/pick.ts): how the backlog deals its cards. */
+  pick: PickSettings;
 }
 
 export type VoiceLanguage = 'auto' | 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pl';
@@ -203,6 +206,7 @@ export const DEFAULT_SETTINGS: Settings = {
   topBar: { hidden: [] },
   breathe: { pattern: 'box', seconds: 4, rounds: 4, sound: 'breath' },
   alarm: { tone: 'dawn', volume: 0.7, snooze: 5, gentle: true, ringFor: 3 },
+  pick: DEFAULT_PICK,
 };
 
 export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) => ({
@@ -229,6 +233,11 @@ export const settings = persisted<Settings>('settings', DEFAULT_SETTINGS, (raw) 
     zones: Array.isArray(raw?.worldClock?.zones) ? raw.worldClock.zones.filter((z: unknown): z is string => typeof z === 'string' && !!z).slice(0, 2) : [],
   },
   alarm: { ...DEFAULT_SETTINGS.alarm, ...(raw?.alarm ?? {}) },
+  pick: {
+    ...DEFAULT_PICK,
+    ...(raw?.pick ?? {}),
+    choices: [2, 3, 4].includes(raw?.pick?.choices) ? raw.pick.choices : DEFAULT_PICK.choices,
+  },
   breathe: { ...DEFAULT_SETTINGS.breathe, ...(raw?.breathe ?? {}) },
   topBar: { hidden: Array.isArray(raw?.topBar?.hidden) ? raw.topBar.hidden.filter((x: unknown): x is string => typeof x === 'string').slice(0, 40) : [] },
 }));
