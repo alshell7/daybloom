@@ -7,6 +7,8 @@ release, in the app's update card, and once after the update.
 Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one plain sentence.`
 
 ## Next
+
+## 0.4.1
 ### New
 
 - **Quick add from the home screen** — tap + Jot on the Backlog widget. A field opens over your home screen, keyboard ready.
