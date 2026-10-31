@@ -18,4 +18,8 @@
     <string name="widget_jot">+ Jot</string>
     <string name="widget_jot_desc">Jot something down</string>
     <string name="widget_jot_voice">Say something to jot down</string>
+    <string name="quick_add_title">Add to your backlog</string>
+    <string name="quick_add_hint">Add a task</string>
+    <string name="quick_add_send">Add</string>
+    <string name="quick_add_note">“by fri”, “!!” and “someday” are understood.</string>
 </resources>

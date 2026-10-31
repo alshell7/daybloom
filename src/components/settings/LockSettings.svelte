@@ -145,6 +145,12 @@
 </div>
 
 <style>
+  .hint {
+    margin: var(--s-2) 0 0;
+    font-size: var(--t-xs);
+    line-height: 1.5;
+    color: var(--ink-3);
+  }
   .lockset {
     display: grid;
     gap: 2px;

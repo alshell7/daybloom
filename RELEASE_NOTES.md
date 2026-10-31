@@ -7,28 +7,46 @@ release, in the app's update card, and once after the update.
 Format: `### New`, `### Addons` and `### Fixes`, each with `- **Name** — one plain sentence.`
 
 ## Next
+### New
+
+- **Quick add from the home screen** — tap + Jot on the Backlog widget. A field opens over your home screen, keyboard ready.
+- **Decision in Settings › AI** — choose TinyDecide (6 MB or 10 MB) or any AI service.
+- **Style the + button** — pick its shape, colour and side in Settings › Phone.
+
+### Addons
+
+- **Decision finds more** — who, where and how long, shown on each jotted line.
+- **Sort the matrix** — one tap places your tasks, with Undo. Your own moves teach Decision.
+
+### Fixes
+
+- **Widgets** — no more white text on a white card.
+- **Update button on a phone** — asks for install permission first, then carries on by itself.
+- **Settings on a phone** — the tabs stay put and switch cleanly.
+- **Two pages** — the page switcher and the + button line up. The dial shows after switching.
+- **Backlog on a phone** — rows and choices fit the screen. The top-bar button opens the backlog.
+- **App lock** — its note is the right size.
 
 ## 0.4.0
 ### New
 
-- **Pick for me** — when nothing feels startable, Daybloom deals a few cards from your backlog and you choose one. Each card says honestly why it's there (due soon, fits your free minutes, waited a week), comes with a tiny first step, and invites you in its own way: a mystery card to turn over, a ten-minute dare, just the first step, do it badly on purpose, beat the clock. Start it as a short focus, let a card go for now, or deal again. Daybloom learns which kinds of cards you actually start. With an AI service for Getting started, each card's first step and invitation are written for that exact task. Open it from the backlog, from free time in the timeline, or press P. Choose how many cards, playful cards or not, and more with the gear.
-- **The Eisenhower matrix** — see your backlog as Do now, Schedule, Make it quick and Let go. Urgency comes from due dates and importance from priority until you place a task yourself; drag or tap to move one. Each quadrant has its next move: pick one to start, give them a day, pick a quick one, or move them to Someday. With an AI service or the Decision addon, Suggest places proposes where unsorted items belong, for you to check first.
-
-- **Jot it down** — the fastest way to get things out of your head: one thing per line, and each line shows where it will go before anything is added — on your day, tomorrow, or in the backlog's Next, Inbox or Someday. Tap another place to change it. On a phone, tap the + button (hold it to say it), long-press the app icon, use the quick-settings tile, or share text to Daybloom; on a computer, press J.
-- **A Backlog widget** — your backlog on the home screen: what's next, with Jot and voice one tap away. Add it in Settings › Phone.
-- **Buttons on your phone's reminders** — each reminder offers what fits the moment: Done, 10 more min, Start now, Remind me in a few minutes, Not today, Start 2 min for a block with steps, Track time (or Bill time for billable Work blocks) with the Time Tracker, Skip for calendar events, and Prayed or In jamaat for salah. They work with Daybloom closed.
-- **Dial and timeline: one screen or two pages** — on a phone, choose in Settings › Phone whether the timeline follows the dial as you scroll, or sits on its own page you swipe to.
+- **Pick for me** — a few backlog cards to choose from, each with a reason and a tiny first step. Press P.
+- **Eisenhower matrix** — the backlog as Do now, Schedule, Make it quick and Let go.
+- **Jot it down** — one thing per line. See where each goes, change it, then add. Tap + or press J.
+- **Backlog widget** — your backlog on the home screen.
+- **Buttons on reminders** — Done, 10 more min, Remind me later and more, even with Daybloom closed.
+- **One screen or two pages** — for the dial and timeline, in Settings › Phone.
 
 ### Addons
 
-- **Decision** — a tiny model on your device (TinyDecide, 6 MB) reads what you jot down and suggests where it belongs, how urgent it is and what kind of thing it is. You see every suggestion and confirm it with one tap, and each choice teaches it your way. It can also sort what waits in your Inbox, with moves you approve. Nothing you write leaves your device; what it learns syncs with your other devices.
+- **Decision** — a small model on your device suggests where each jotted line belongs. You confirm.
 
 ### Fixes
 
-- **Sync keeps up** — edits to titles, steps, notes, settings and addon data now reach your other devices within seconds while Daybloom is open, instead of waiting up to five minutes. A change is sent as soon as Daybloom goes to the background, a change made during a sync is sent right after it, and Sync now always sends what you see.
-- **Cloudflare D1 never mixes up versions** — a file written again after it was removed is always seen as new, so no device keeps an old copy by mistake.
-- **Timeline views on a phone** — the Board shows one column at a time and snaps as you swipe; the Gantt chart has readable hours, a slim label column, and opens at now.
-- **A cleaner backlog on a phone** — the list tabs always fit, rows are easier to tap, titles wrap instead of fading out, and the backlog opens tall.
+- **Sync keeps up** — edits reach your other devices within seconds.
+- **Cloudflare D1** — no more mixed-up file versions.
+- **Timeline views on a phone** — the Board and Gantt fit the screen.
+- **Backlog on a phone** — tabs fit and rows are easier to tap.
 
 ## 0.3.0
 ### New

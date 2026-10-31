@@ -85,6 +85,16 @@
             android:taskAffinity="app.daybloom.alarm"
             android:theme="@style/Theme.daybloom" />
 
+        <!-- Quick add from the Backlog widget: a field over the home screen, the keyboard up. -->
+        <activity
+            android:name=".device.QuickAddActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.daybloom.quickadd"
+            android:theme="@style/Theme.daybloom.QuickAdd"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize" />
+
         <!-- Plays a ringing alarm's tone while the app is closed. -->
         <service
             android:name=".device.AlarmService"

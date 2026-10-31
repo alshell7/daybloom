@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A widget's card on a dark theme. The code picks this or widget_bg by the theme's brightness,
+     so the card is dark (with light text) even where a launcher ignores the tint. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FF0D121C" />
+    <corners android:radius="24dp" />
+</shape>

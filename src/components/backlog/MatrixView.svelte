@@ -1,9 +1,9 @@
 <script lang="ts">
   // The backlog as an Eisenhower matrix: urgent × important, four quadrants with their own next
   // move. Drag an item to another quadrant (a computer), or tap it and pick one (a phone). A task
-  // you place keeps its place; the rest follow their due date and priority. With an AI service
-  // or the Decision addon, "Suggest places" proposes where the unsorted ones belong, for you to
-  // check before anything moves.
+  // you place keeps its place; the rest follow their due date and priority. "Sort" asks Decision
+  // (TinyDecide or its AI service) or an AI service and moves them at once, with an Undo; what
+  // moved glows for a moment, and moving one yourself afterwards teaches Decision.
   import { slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { dueLabel } from '../../lib/backlog';
@@ -24,9 +24,12 @@
   let over = $state<Quadrant | null>(null);
 
   function moveTo(t: Task, q: Quadrant) {
-    tasks.update(t.id, patchFor(q));
+    const p = patchFor(q);
+    tasks.update(t.id, p);
     openId = null;
     haptic('drop');
+    // Your own move teaches Decision how you see urgency and importance.
+    if (who === 'decision') void import('../../lib/addons/decision/decision.svelte').then(({ decision }) => decision.learnPlace(t.title, !!p.urgent, !!p.important));
   }
 
   // Drag between quadrants (pointer devices).
@@ -44,29 +47,31 @@
     if (t) moveTo(t, q);
   }
 
-  // Suggestions, confirmed before they apply.
-  let guesses = $state<(MatrixGuess & { on: boolean; title: string; to: Quadrant })[] | null>(null);
+  // Sort: moves at once, with an Undo; what moved glows for a moment.
   let asking = $state(false);
+  let moved = $state<Set<string>>(new Set());
+  let note = $state('');
   const who = $derived(suggester());
   const unsorted = $derived(items.filter((t) => !placedByYou(t)).length);
-  async function suggest() {
+  async function sort() {
     asking = true;
+    note = '';
     try {
-      const got = await suggestPlaces(items);
-      guesses = got.map((g) => {
-        const q: Quadrant = g.urgent && g.important ? 'do' : g.important ? 'plan' : g.urgent ? 'quick' : 'drop';
-        return { ...g, on: true, title: tasks.get(g.taskId)?.title ?? '', to: q };
-      });
+      const got: MatrixGuess[] = await suggestPlaces(items);
+      if (!got.length) {
+        note = 'Everything already sits where it fits.';
+        return;
+      }
+      const undo = place(got);
+      moved = new Set(got.map((g) => g.taskId));
+      haptic('done');
+      view.say(`Sorted: ${got.length} ${got.length === 1 ? 'task moved' : 'tasks moved'}`, { label: 'Undo', run: undo }, 8000);
+      setTimeout(() => (moved = new Set()), 2600);
+    } catch (e) {
+      note = `Couldn’t sort right now. ${e instanceof Error ? e.message : ''}`.trim();
     } finally {
       asking = false;
     }
-  }
-  function apply() {
-    if (!guesses) return;
-    const chosen = guesses.filter((g) => g.on);
-    const undo = place(chosen);
-    view.say(`Placed ${chosen.length} in the matrix`, { label: 'Undo', run: undo });
-    guesses = null;
   }
 
   const action: Record<Quadrant, { label: string; icon: string; run: (ids: string[]) => void }> = {
@@ -86,39 +91,14 @@
 </script>
 
 <div class="matrix-wrap">
-  {#if who && unsorted && !guesses}
-    <button class="suggest" onclick={suggest} disabled={asking}>
-      <Icon name={who === 'ai' ? 'sparkles' : 'route'} size={14} />
-      <span>{asking ? 'Reading your backlog…' : `Suggest places for ${unsorted} unsorted ${unsorted === 1 ? 'item' : 'items'}`}</span>
+  {#if who && unsorted}
+    <button class="suggest" onclick={sort} disabled={asking}>
+      <Icon name={asking ? 'refresh' : 'route'} size={14} />
+      <span>{asking ? 'Sorting…' : `Sort ${unsorted} ${unsorted === 1 ? 'task' : 'tasks'} into the matrix`}</span>
       <small>{who === 'ai' ? 'AI' : 'Decision'}</small>
     </button>
   {/if}
-  {#if guesses}
-    <section class="guesses" transition:slide={{ duration: rm ? 0 : 220, easing: cubicOut }} aria-label="Suggested places">
-      {#if guesses.length}
-        <ul>
-          {#each guesses as g (g.taskId)}
-            {@const q = QUADRANTS.find((x) => x.id === g.to)!}
-            <li>
-              <label>
-                <input type="checkbox" bind:checked={g.on} />
-                <span class="gt">{g.title}</span>
-                <span class="gq"><Icon name={q.icon} size={11} /> {q.title}</span>
-              </label>
-              {#if g.why}<small>{g.why}</small>{/if}
-            </li>
-          {/each}
-        </ul>
-        <div class="gacts">
-          <button class="btn btn-quiet" onclick={() => (guesses = null)}>Not now</button>
-          <button class="btn btn-primary" onclick={apply} disabled={!guesses.some((g) => g.on)}>Place {guesses.filter((g) => g.on).length}</button>
-        </div>
-      {:else}
-        <p class="muted">No suggestions this time.</p>
-        <button class="btn btn-quiet" onclick={() => (guesses = null)}>OK</button>
-      {/if}
-    </section>
-  {/if}
+  {#if note}<p class="muted" role="status">{note}</p>{/if}
 
   <div class="axes" aria-hidden="true"><span>Urgent</span><span>Not urgent</span></div>
   <div class="matrix" role="list" aria-label="Eisenhower matrix">
@@ -143,7 +123,7 @@
         </header>
         <ul>
           {#each list as t (t.id)}
-            <li style:--c={categoryColor(t.category, view.finish.dark)}>
+            <li style:--c={categoryColor(t.category, view.finish.dark)} class:moved={moved.has(t.id)}>
               <button class="item" class:open={openId === t.id} draggable="true" ondragstart={(e) => dragStart(e, t)} onclick={() => (openId = openId === t.id ? null : t.id)} aria-expanded={openId === t.id}>
                 <i class="dot"></i>
                 <span class="it">{t.title}</span>
@@ -194,54 +174,6 @@
   .suggest small {
     font-size: var(--t-xs, 12px);
     color: var(--ink-3);
-  }
-  .guesses {
-    padding: 8px 12px;
-    border-radius: var(--r-md);
-    background: var(--sunken);
-  }
-  .guesses ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .guesses li {
-    padding: 6px 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .guesses label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 36px;
-  }
-  .guesses input {
-    width: 20px;
-    height: 20px;
-  }
-  .gt {
-    flex: 1;
-    min-width: 0;
-    color: var(--ink);
-  }
-  .gq {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--t-xs, 12px);
-    color: var(--ink-2);
-  }
-  .guesses small {
-    display: block;
-    padding-left: 30px;
-    font-size: var(--t-xs, 12px);
-    color: var(--ink-3);
-  }
-  .gacts {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 8px;
   }
   .muted {
     margin: 0 0 6px;
@@ -404,6 +336,15 @@
     color: var(--ink-2);
     background: var(--raised);
     box-shadow: inset 0 0 0 1px var(--line);
+  }
+  li.moved .item {
+    animation: glow 2.4s var(--ease-out);
+  }
+  @keyframes glow {
+    0%,
+    40% {
+      background: color-mix(in srgb, var(--q) 26%, transparent);
+    }
   }
   .none {
     padding: 6px;

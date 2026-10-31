@@ -48,6 +48,7 @@ export function readLine(raw: string, nowMs: number): JotLine | null {
       priority: item?.priority ?? null,
       energy: item?.energy ?? null,
       category: item?.category ?? suggest(quick.title)?.category ?? null,
+      line,
     },
   };
 }
@@ -67,6 +68,8 @@ export interface JotPlan {
   category: CategoryId | null;
   priority: 1 | 2 | 3 | null;
   energy: 1 | 2 | 3 | null;
+  /** A length the model heard ("takes about two hours"), when none was written plainly. */
+  minutes?: number | null;
 }
 
 /** The task a line becomes. `slot` finds a free time on a day (busy.ts freeSlot). */
@@ -85,7 +88,7 @@ export function taskFor(
   if (p.dest === 'today' || p.dest === 'tomorrow') {
     const day = l.writtenDate && l.writtenDate >= today ? l.writtenDate : p.dest === 'today' ? today : addDays(today, 1);
     const date = p.dest === 'tomorrow' && day === today ? addDays(today, 1) : day;
-    const duration = l.quick.duration ?? l.item?.duration ?? 30;
+    const duration = l.quick.duration ?? p.minutes ?? l.item?.duration ?? 30;
     if (l.hints.hasTime && l.quick.start != null) {
       return { ...base, date, start: l.quick.start, duration, recurrence: l.quick.recurrence, ...(l.quick.alarm ? { alarm: {} } : {}) };
     }
@@ -97,7 +100,7 @@ export function taskFor(
     ...base,
     date: null,
     start: null,
-    duration: l.item?.duration ?? l.quick.duration ?? 30,
+    duration: l.quick.duration ?? p.minutes ?? l.item?.duration ?? 30,
     due: l.item?.due ?? null,
     list: p.dest,
   };

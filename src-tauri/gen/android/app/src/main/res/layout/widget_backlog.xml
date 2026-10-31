@@ -29,6 +29,7 @@
             android:orientation="horizontal">
 
             <TextView
+                android:textColor="#151C2A"
                 android:id="@+id/head"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
@@ -41,6 +42,7 @@
                 android:fontFamily="sans-serif-medium" />
 
             <TextView
+                android:textColor="#151C2A"
                 android:id="@+id/voice"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
@@ -52,6 +54,7 @@
                 android:contentDescription="@string/widget_jot_voice" />
 
             <TextView
+                android:textColor="#151C2A"
                 android:id="@+id/jot"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
@@ -65,13 +68,18 @@
                 android:contentDescription="@string/widget_jot_desc" />
         </LinearLayout>
 
-        <TextView android:id="@+id/item0" style="@style/WidgetBacklogItem" />
-        <TextView android:id="@+id/item1" style="@style/WidgetBacklogItem" />
-        <TextView android:id="@+id/item2" style="@style/WidgetBacklogItem" />
-        <TextView android:id="@+id/item3" style="@style/WidgetBacklogItem" />
+        <TextView android:textColor="#151C2A"
+                android:id="@+id/item0" style="@style/WidgetBacklogItem" />
+        <TextView android:textColor="#151C2A"
+                android:id="@+id/item1" style="@style/WidgetBacklogItem" />
+        <TextView android:textColor="#151C2A"
+                android:id="@+id/item2" style="@style/WidgetBacklogItem" />
+        <TextView android:textColor="#151C2A"
+                android:id="@+id/item3" style="@style/WidgetBacklogItem" />
 
         <TextView
-            android:id="@+id/empty"
+            android:textColor="#151C2A"
+                android:id="@+id/empty"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"

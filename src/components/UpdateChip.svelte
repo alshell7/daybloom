@@ -11,6 +11,7 @@
   import Icon from '../lib/Icon.svelte';
   import { countLine, parseNotes } from '../lib/releaseNotes';
   import { view } from '../lib/stores/view.svelte';
+  import { platform } from '../lib/platform';
   import { installUpdate, updates } from '../lib/updater.svelte';
   import NotesList from './NotesList.svelte';
   import Popover from './pickers/Popover.svelte';
@@ -20,7 +21,9 @@
   const busy = $derived(updates.status === 'downloading' || updates.status === 'installing');
   const failed = $derived(updates.status === 'error' && updateNotice.tried && !!updates.version);
   const offer = $derived(updates.status === 'available' && !updateWaiting());
-  const phase = $derived(busy ? updates.status : failed ? 'failed' : offer ? 'offer' : null);
+  /** A phone waiting for Android's "Install unknown apps" switch. */
+  const permission = $derived(updates.status === 'permission');
+  const phase = $derived(busy ? updates.status : failed ? 'failed' : permission ? 'permission' : offer ? 'offer' : null);
   const web = $derived(updates.kind === 'web');
 
   // An open panel leaves the dial little room: the offer steps away until it closes (nothing
@@ -129,20 +132,33 @@
             </p>
           {:else if phase === 'downloading'}
             <p class="t">Updating to <b class="tnum">{updates.version}</b></p>
-            <p class="s tnum">{pct}% · Daybloom restarts when it’s done</p>
+            <p class="s tnum">{platform.isMobile ? 'Downloading and checking it…' : `${pct}% · Daybloom restarts when it’s done`}</p>
+          {:else if phase === 'permission'}
+            <p class="t">One step: allow installs</p>
+            <p class="s">Turn on “Allow from this source” for Daybloom, then come back. The update carries on by itself.</p>
           {:else if phase === 'installing' && web}
             <p class="t">Refreshing…</p>
             <p class="s">Starting <span class="tnum">{updates.version}</span></p>
+          {:else if phase === 'installing' && platform.isMobile}
+            <p class="t">Installing <span class="tnum">{updates.version}</span></p>
+            <p class="s">Tap Update in Android’s installer.</p>
           {:else if phase === 'installing'}
             <p class="t">Restarting…</p>
             <p class="s">Installing <span class="tnum">{updates.version}</span></p>
           {:else}
             <p class="t">Couldn’t update</p>
-            <p class="s" title={updates.error}>{web ? 'Daybloom stays on this version for now.' : 'Check your connection, then try again.'}</p>
+            <p class="s" title={updates.error}>{web ? 'Daybloom stays on this version for now.' : updates.error && platform.isMobile ? updates.error : 'Check your connection, then try again.'}</p>
           {/if}
         </div>
       {/key}
 
+      {#if phase === 'permission'}
+        <div class="acts">
+          <button class="btn btn-quiet sm" onclick={() => ((updates.status = 'available'), later())}>Not now</button>
+          <span class="sp"></span>
+          <button class="btn btn-primary sm" onclick={install}>Allow installs</button>
+        </div>
+      {/if}
       {#if phase === 'offer' || phase === 'failed'}
         <div class="acts">
           {#if phase === 'offer' && groups.length}

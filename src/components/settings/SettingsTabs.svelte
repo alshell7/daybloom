@@ -50,7 +50,9 @@
   .tabs {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(var(--n), 1fr);
+    /* minmax(0, …): equal cells even when a name is wider than its share (a phone with a large
+       system font), so the thumb always sits on its tab. */
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
     padding: 3px;
     border-radius: var(--r-md);
     background: var(--sunken);
@@ -95,9 +97,15 @@
     transform: scale(0.92);
   }
   .lbl {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-size: var(--t-xs);
     font-weight: 500;
     white-space: nowrap;
+  }
+  button {
+    min-width: 0;
   }
   /* A phone: a taller tab for a finger. */
   @media (pointer: coarse) {

@@ -341,6 +341,9 @@
   >
     <!-- Under the focus view (opaque, the whole window) the dial keeps still: motion nobody
          sees still costs frames. -->
+    <!-- Switching between one screen and two pages rebuilds the dial: Android's web view leaves
+         its SVG unlaid-out when the stage changes from a grid to a sideways scroller under it. -->
+    {#key pages}
     <section class="dial-col" aria-label="Dial">
       <div class="dial-box">
         {#key view.date}
@@ -397,12 +400,13 @@
       </div>
       <PresetBar />
     </section>
+    {/key}
 
     <div class="rail-page"><DayRail /></div>
   </main>
-  {#if platform.isMobile && !view.focus}<JotButton />{/if}
+  {#if platform.isMobile && !view.focus}<JotButton docked={pages} />{/if}
   {#if pages}
-    <div class="pager" role="tablist" aria-label="Pages">
+    <div class="pager" class:left={layout.value.fab.side === 'right' && layout.value.fab.on} class:right={layout.value.fab.side === 'left' && layout.value.fab.on} role="tablist" aria-label="Pages">
       <button role="tab" aria-selected={page === 0} onclick={() => goPage(0)}><Icon name="dial" size={15} /><span>Dial</span></button>
       <button role="tab" aria-selected={page === 1} onclick={() => goPage(1)}><Icon name="list" size={15} /><span>Timeline</span></button>
       <span class="pager-thumb" style:translate={`${page * 100}% 0`} aria-hidden="true"></span>
@@ -557,14 +561,17 @@
     overscroll-behavior-y: contain;
     padding-bottom: calc(var(--safe-bottom) + 64px);
   }
+  /* The page switcher: centred alone; beside the + button, on the other side of the same row
+     (both 52 px tall, on one baseline). */
   .pager {
     position: fixed;
     left: 50%;
-    bottom: calc(var(--safe-bottom) + 12px);
+    bottom: calc(var(--safe-bottom) + 14px);
     translate: -50% 0;
     z-index: 20;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    height: 52px;
     padding: 4px;
     border-radius: var(--r-pill);
     background: color-mix(in srgb, var(--raised) 88%, transparent);
@@ -572,13 +579,22 @@
     box-shadow: var(--shadow-2), inset 0 0 0 1px var(--line);
     isolation: isolate;
   }
+  .pager.left {
+    left: calc(var(--safe-left, 0px) + 16px);
+    translate: none;
+  }
+  .pager.right {
+    left: auto;
+    right: calc(var(--safe-right, 0px) + 16px);
+    translate: none;
+  }
   .pager button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     min-width: 104px;
-    height: 40px;
+    height: 44px;
     padding: 0 14px;
     border-radius: var(--r-pill);
     font: 500 var(--t-sm) / 1 var(--font-ui);
@@ -594,7 +610,7 @@
     top: 4px;
     left: 4px;
     width: calc(50% - 4px);
-    height: 40px;
+    height: 44px;
     border-radius: var(--r-pill);
     background: var(--sunken);
     box-shadow: inset 0 0 0 1px var(--line);

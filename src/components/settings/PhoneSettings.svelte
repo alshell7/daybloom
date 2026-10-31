@@ -11,6 +11,13 @@
   import { view } from '../../lib/stores/view.svelte';
   import { layout } from '../../lib/stores/layout.svelte';
   import Segmented from '../Segmented.svelte';
+  import { CATEGORY_BY_ID, categoryColor } from '../../lib/engine/categories';
+  import type { CategoryId } from '../../lib/engine/types';
+  import type { FabStyle } from '../../lib/stores/layout.svelte';
+
+  const FAB_SWATCHES: FabStyle['color'][] = ['accent', 'ink', 'focus', 'care', 'routine', 'social', 'rest', 'learn', 'move'];
+  const fab = $derived(layout.value.fab);
+  const setFab = (p: Partial<FabStyle>) => (layout.value.fab = { ...layout.value.fab, ...p });
 
   interface Access {
     notifications: boolean;
@@ -129,6 +136,58 @@
       onchange={(v) => (layout.value.phone = v)}
     />
   </div>
+
+  <p class="label">The + button</p>
+  <label class="row">
+    <span class="what">
+      <span>Show the + button</span>
+      <span class="why">Tap it to jot something down, hold it to say it.</span>
+    </span>
+    <input type="checkbox" class="switch" checked={fab.on} onchange={(e) => setFab({ on: e.currentTarget.checked })} />
+  </label>
+  {#if fab.on}
+    <div class="row">
+      <span class="what"><span>Shape</span></span>
+      <Segmented
+        label="Shape of the + button"
+        value={fab.shape}
+        options={[
+          { value: 'circle', label: 'Circle' },
+          { value: 'rounded', label: 'Rounded' },
+          { value: 'square', label: 'Square' },
+        ]}
+        onchange={(v) => setFab({ shape: v })}
+      />
+    </div>
+    <div class="row">
+      <span class="what"><span>Side</span></span>
+      <Segmented
+        label="Side of the + button"
+        value={fab.side}
+        options={[
+          { value: 'left', label: 'Left' },
+          { value: 'right', label: 'Right' },
+        ]}
+        onchange={(v) => setFab({ side: v })}
+      />
+    </div>
+    <div class="row colors-row">
+      <span class="what"><span>Colour</span></span>
+      <div class="swatches" role="radiogroup" aria-label="Colour of the + button">
+        {#each FAB_SWATCHES as c (c)}
+          <button
+            role="radio"
+            aria-checked={fab.color === c}
+            aria-label={c === 'accent' ? 'Accent' : c === 'ink' ? 'Ink' : CATEGORY_BY_ID[c as CategoryId].label}
+            class="sw"
+            class:on={fab.color === c}
+            style:--sw={c === 'accent' ? 'var(--signal)' : c === 'ink' ? 'var(--ink)' : categoryColor(c as CategoryId, view.finish.dark)}
+            onclick={() => setFab({ color: c })}
+          ></button>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <p class="label">Reminders and alarms</p>
   {#each rows as r (r.id)}
@@ -254,5 +313,30 @@
     font-size: var(--t-xs);
     color: var(--ink-3);
     line-height: 1.5;
+  }
+  .colors-row {
+    flex-wrap: wrap;
+  }
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .sw {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--sw);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+    transition: transform var(--dur-1) var(--ease-out);
+  }
+  .sw.on {
+    box-shadow:
+      0 0 0 2px var(--raised),
+      0 0 0 4px var(--sw);
+  }
+  .sw:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 4px;
   }
 </style>

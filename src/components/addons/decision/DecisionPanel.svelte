@@ -4,7 +4,8 @@
   // approve), and what it has learned from you, with a way to forget it.
   import { fly, slide } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
-  import { decision, decisionFile, DECISION_BYTES } from '../../../lib/addons/decision/decision.svelte';
+  import { BUILDS, decision, decisionFile } from '../../../lib/addons/decision/decision.svelte';
+  import AiRoute from '../../settings/AiRoute.svelte';
   import { DESTINATIONS, type Suggestion, type TriageMove } from '../../../lib/addons/decision/questions';
   import { itemsIn, PRIORITY_LABEL } from '../../../lib/backlog';
   import { CATEGORY_BY_ID, categoryColor } from '../../../lib/engine/categories';
@@ -17,10 +18,10 @@
 
   const open = $derived(view.sheet?.kind === 'decision');
   const rm = $derived(view.reducedMotion);
-  const mb = (DECISION_BYTES / 1_048_576).toFixed(1);
+  const mb = $derived(BUILDS[decision.build].mb);
 
   $effect(() => {
-    if (open) void decision.ensure().catch(() => {});
+    if (open && !decision.viaAi) void decision.ensure().catch(() => {});
   });
 
   // ── Try it ──
@@ -81,8 +82,10 @@
   }
 
   const statusLine = $derived(
-    decision.status === 'ready'
-      ? `Ready on this device${decision.lastMs ? ` · answers in about ${decision.lastMs < 1000 ? `${Math.max(1, Math.round(decision.lastMs / 100) / 10)} s` : `${Math.round(decision.lastMs / 100) / 10} s`}` : ''}`
+    decision.viaAi
+      ? `${decision.who} decides (Settings › AI). Your lines go to that service.`
+      : decision.status === 'ready'
+      ? `${BUILDS[decision.build].name} is ready on this device${decision.lastMs ? ` · answers in about ${decision.lastMs < 1000 ? `${Math.max(1, Math.round(decision.lastMs / 100) / 10)} s` : `${Math.round(decision.lastMs / 100) / 10} s`}` : ''}`
       : decision.status === 'downloading'
         ? `Downloading the model · ${pct(decision.progress)} of ${mb} MB`
         : decision.status === 'loading'
@@ -96,9 +99,11 @@
 {#if open}
   <Panel title="Decision" onclose={() => (view.sheet = null)} accent="#D99A06">
     <div class="dc">
-      <p class="status" class:ok={decision.status === 'ready'} role="status">
+      <p class="status" class:ok={decision.viaAi || decision.status === 'ready'} role="status">
         <span class="led" aria-hidden="true"></span>{statusLine}
       </p>
+      <!-- What decides: TinyDecide's small or full build, or an AI service — the same choice as Settings › AI. -->
+      <div class="route"><AiRoute feature="decision" skill="think" compact /></div>
       {#if decision.status === 'downloading'}
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(decision.progress * 100)} aria-label="Downloading Decision"><i style:width={pct(decision.progress)}></i></div>
       {:else if decision.status === 'error'}
@@ -127,7 +132,7 @@
         {#if !moves}
           <p class="muted">{inbox.length ? `${inbox.length} ${inbox.length === 1 ? 'item waits' : 'items wait'} in your Inbox. Decision suggests where each could go; you approve the moves.` : 'Your Inbox is clear.'}</p>
           {#if inbox.length}
-            <button class="btn btn-soft" onclick={sortInbox} disabled={sorting || decision.status !== 'ready'}>
+            <button class="btn btn-soft" onclick={sortInbox} disabled={sorting || (!decision.viaAi && decision.status !== 'ready')}>
               <Icon name="route" size={14} /> {sorting ? 'Reading your Inbox…' : 'Suggest moves'}
             </button>
           {/if}
@@ -165,11 +170,11 @@
         </p>
         <div class="row">
           {#if decision.learned}<button class="btn btn-quiet" onclick={() => decision.forgetLessons()}>Forget what it learned</button>{/if}
-          <button class="btn btn-quiet" onclick={() => void decision.forget()}>Remove the model from this device</button>
+          {#if !decision.viaAi}<button class="btn btn-quiet" onclick={() => void decision.forget()}>Remove {BUILDS[decision.build].name} from this device</button>{/if}
         </div>
       </section>
 
-      <p class="credit muted">TinyDecide by REZOR, Apache 2.0. It runs on this device; nothing you write leaves it.</p>
+      <p class="credit muted">TinyDecide by REZOR, Apache 2.0. On this device, nothing you write leaves it.</p>
     </div>
   </Panel>
 {/if}
@@ -290,9 +295,10 @@
   }
   .moves label {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
     min-height: 36px;
+    padding-top: 6px;
   }
   .moves input {
     width: 20px;
@@ -303,8 +309,11 @@
     flex: 1;
     min-width: 0;
     color: var(--ink);
+    overflow-wrap: anywhere;
   }
   .to {
+    flex: none;
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: 4px;

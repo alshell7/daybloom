@@ -1,13 +1,14 @@
-// Decision (addon): TinyDecide (huggingface.co/TheREZOR/TinyDecide, Apache-2.0) on this device.
-// A 6 MB model that reads one line and answers any number of plain-English questions about it
-// — which, yes or no, how much, and "pull out the time" — each with how sure it is. Daybloom
-// asks it where a new line belongs (today, tomorrow, the backlog or someday), how urgent and
-// what kind of thing it is, and whether waiting inbox items can be sorted. It never acts alone:
-// every suggestion is shown first and you confirm it, and what you confirm or change teaches it
-// (TinyDecide's corrections), so it learns your way of writing. Nothing leaves the device.
+// Decision (addon): decides where what you jot down belongs, sorts the Inbox and the Eisenhower
+// matrix. What thinks is chosen in Settings › AI › Decision, like every AI part of Daybloom:
 //
-// The model downloads once when the addon is switched on, pinned to a revision and SHA-256
-// (the same stores as Needle: Rust on a computer or phone, the Cache API in a browser), and runs
+//   this device   TinyDecide (huggingface.co/TheREZOR/TinyDecide, Apache-2.0): reads one line and
+//                 answers many plain-English questions about it at once — which, yes or no, how
+//                 much, and "pull out the person / place / length" — each with how sure it is.
+//                 Two builds: the 6 MB one, or the 10 MB "full" one (more words, a bit sharper).
+//                 Nothing leaves the device, and what you confirm or change teaches it.
+//   a service     any AI service set up in Settings › AI reads the same lines and answers in JSON.
+//
+// The model downloads once (pinned to a revision and SHA-256, the same stores as Needle) and runs
 // in a worker (decide.worker.ts). What it learned syncs with your other devices.
 
 import { platform } from '../../platform';
@@ -15,8 +16,11 @@ import { persisted } from '../../stores/persisted.svelte';
 import { browserStore, nativeStore, type WeightsSpec, type WeightsStore } from '../../assistant/engine.svelte';
 import { isOn } from '../registry';
 import { makeProtos } from './vendor/corrections.js';
-import { CAPTURE_QUESTIONS, KINDS, TRIAGE_QUESTIONS, WHEN, WHEN_OF, interpretCapture, interpretTriage, type Answer, type Destination, type Question, type RuleHints, type Suggestion, type TriageMove } from './questions';
-import type { CategoryId } from '../../engine/types';
+import { CAPTURE_QUESTIONS, KINDS, MATRIX_QUESTIONS, TRIAGE_QUESTIONS, WHEN, WHEN_OF, interpretCapture, interpretTriage, matrixScore, placeByScores, type Answer, type Destination, type Question, type RuleHints, type Suggestion, type TriageMove } from './questions';
+import { ai } from '../../ai/hub.svelte';
+import { chatOnce } from '../../ai/providers';
+import { aiCapture, aiMatrix, aiTriage } from './viaAi';
+import type { CategoryId, Task } from '../../engine/types';
 
 const REV = 'aa745b73a2db9a43bce731f0e8e5c90a6899fe2c';
 const BASE = `https://huggingface.co/TheREZOR/TinyDecide/resolve/${REV}`;
@@ -35,6 +39,26 @@ export const DECISION_META: WeightsSpec = {
 };
 export const DECISION_BYTES = DECISION_MODEL.bytes + DECISION_META.bytes;
 
+/** The larger build: the full 30,534-word vocabulary, 13.8M weights. */
+export const DECISION_FULL_MODEL: WeightsSpec = {
+  url: `${BASE}/full/model.bin`,
+  sha256: 'dcf52490b0505e0cd798713117f448a499ecb142db31fffcdd63e97f79f78d5a',
+  bytes: 9_957_504,
+  file: 'tinydecide-full-model.bin',
+};
+export const DECISION_FULL_META: WeightsSpec = {
+  url: `${BASE}/full/meta.json`,
+  sha256: '75e43116278c670255685522cec392ea45c9931443513f6b14c2c16d000676bd',
+  bytes: 352_277,
+  file: 'tinydecide-full-meta.json',
+};
+
+export type DecisionBuild = 'small' | 'full';
+export const BUILDS: Record<DecisionBuild, { name: string; meta: WeightsSpec; model: WeightsSpec; mb: number; does: string }> = {
+  small: { name: 'TinyDecide', meta: DECISION_META, model: DECISION_MODEL, mb: 6, does: 'Places and sorts what you jot down' },
+  full: { name: 'TinyDecide full', meta: DECISION_FULL_META, model: DECISION_FULL_MODEL, mb: 10, does: 'Knows more words; a little sharper' },
+};
+
 import { MAX_EXAMPLES, migrateDecision, type DecisionFile } from './file';
 export { decisionUnused, mergeDecisionFiles, migrateDecision, type DecisionFile, type Example } from './file';
 
@@ -42,7 +66,7 @@ export const decisionFile = persisted<DecisionFile>('addon-decision', migrateDec
 
 // ── The model ─────────────────────────────────────────────────────────────────
 
-export type DecisionStatus = 'off' | 'absent' | 'downloading' | 'loading' | 'ready' | 'error';
+export type DecisionStatus = 'absent' | 'downloading' | 'loading' | 'ready' | 'error';
 
 interface Meta {
   beta: number[];
@@ -54,16 +78,20 @@ export const MIN_LESSONS = 8;
 
 const round = (xs: ArrayLike<number>) => Array.from(xs, (x) => Math.round(x * 1000) / 1000);
 
+export type MatrixPlace = { taskId: string; urgent: boolean; important: boolean; why: string };
+
 class Decision {
-  status = $state<DecisionStatus>('off');
+  /** The chosen build's state on this device (whether or not the addon is on). */
+  status = $state<DecisionStatus>('absent');
   /** 0–1 while downloading. */
   progress = $state(0);
   error = $state('');
   /** How long the last answer took (ms), for the panel. */
   lastMs = $state(0);
 
-  #stores: [WeightsStore, WeightsStore] | null = null;
+  #stores = new Map<DecisionBuild, [WeightsStore, WeightsStore]>();
   #worker: Worker | null = null;
+  #loaded: DecisionBuild | null = null;
   #meta: Meta | null = null;
   #ready: Promise<void> | null = null;
   #seq = 0;
@@ -74,23 +102,57 @@ class Decision {
     return isOn('decision');
   }
 
-  #storesFor(): [WeightsStore, WeightsStore] {
-    return (this.#stores ??= [DECISION_META, DECISION_MODEL].map((w) => (platform.isNative ? nativeStore(w) : browserStore(w, undefined, 'daybloom-decision'))) as [
-      WeightsStore,
-      WeightsStore,
-    ]);
+  /** Which TinyDecide build Settings › AI chose (when it thinks on this device). */
+  get build(): DecisionBuild {
+    const r = ai.route('decision', 'think');
+    return r.via === 'device' && r.model === 'full' ? 'full' : 'small';
   }
 
-  /** Whether the model is on this device (no download). */
-  async present(): Promise<boolean> {
-    const [m, b] = this.#storesFor();
-    return (await m.has().catch(() => false)) && (await b.has().catch(() => false));
+  /** Thinking with an AI service right now (else TinyDecide on this device). */
+  get viaAi(): boolean {
+    return ai.ready('decision', 'think');
   }
 
-  /** Gets the model ready: downloads it the first time (only while the addon is on), then loads it. */
+  /** Who answers, for the panel and the chips. */
+  get who(): string {
+    if (this.viaAi) {
+      const r = ai.route('decision', 'think');
+      return r.via === 'device' ? 'TinyDecide' : r.via.charAt(0).toUpperCase() + r.via.slice(1);
+    }
+    return BUILDS[this.build].name;
+  }
+
+  #storesFor(b: DecisionBuild = this.build): [WeightsStore, WeightsStore] {
+    let s = this.#stores.get(b);
+    if (!s) {
+      const { meta, model } = BUILDS[b];
+      s = [meta, model].map((w) => (platform.isNative ? nativeStore(w) : browserStore(w, undefined, b === 'full' ? 'daybloom-decision-full' : 'daybloom-decision'))) as [WeightsStore, WeightsStore];
+      this.#stores.set(b, s);
+    }
+    return s;
+  }
+
+  /** Whether a build is on this device (no download). */
+  async present(b: DecisionBuild = this.build): Promise<boolean> {
+    const [m, x] = this.#storesFor(b);
+    return (await m.has().catch(() => false)) && (await x.has().catch(() => false));
+  }
+
+  /** Looks (without downloading) whether the chosen build is here, for the settings page. */
+  async check() {
+    if (this.status === 'downloading' || this.status === 'loading') return;
+    if (this.#loaded === this.build && this.#worker) {
+      this.status = 'ready';
+      return;
+    }
+    this.status = (await this.present()) ? 'ready' : 'absent';
+  }
+
+  /** Gets the chosen build ready: downloads it the first time, then loads it in the worker. */
   ensure(): Promise<void> {
-    if (this.status === 'ready' && this.#worker) return Promise.resolve();
-    return (this.#ready ??= this.#prepare().catch((e) => {
+    if (this.#worker && this.#loaded === this.build) return Promise.resolve();
+    if (this.#loaded && this.#loaded !== this.build) this.stop();
+    return (this.#ready ??= this.#prepare(this.build).catch((e) => {
       this.#ready = null;
       this.status = 'error';
       this.error = e instanceof Error ? e.message : String(e);
@@ -98,15 +160,16 @@ class Decision {
     }));
   }
 
-  async #prepare() {
-    if (!this.on) throw new Error('Decision is off');
-    const [metaStore, binStore] = this.#storesFor();
+  async #prepare(b: DecisionBuild) {
+    const [metaStore, binStore] = this.#storesFor(b);
+    const { meta: m, model } = BUILDS[b];
+    const total = m.bytes + model.bytes;
     this.error = '';
     if (!(await metaStore.has()) || !(await binStore.has())) {
       this.status = 'downloading';
       this.progress = 0;
-      await metaStore.download((r) => (this.progress = (r / DECISION_BYTES) * 0.999));
-      await binStore.download((r) => (this.progress = (DECISION_META.bytes + r) / DECISION_BYTES));
+      await metaStore.download((r) => (this.progress = (r / total) * 0.999));
+      await binStore.download((r) => (this.progress = (m.bytes + r) / total));
     }
     this.status = 'loading';
     const [metaBuf, bin] = await Promise.all([metaStore.read(), binStore.read()]);
@@ -115,51 +178,58 @@ class Decision {
     const w = new Worker(new URL('./decide.worker.ts', import.meta.url), { type: 'module', name: 'decision' });
     await new Promise<void>((resolve, reject) => {
       w.onmessage = (e) => {
-        const m = e.data;
-        if (m.type === 'ready') resolve();
-        else if (m.type === 'answer') {
-          this.#waiting.get(m.id)?.resolve(m.result.answers);
-          this.#waiting.delete(m.id);
-          this.lastMs = Math.round(m.result.ms ?? 0);
-        } else if (m.type === 'error') {
-          if (m.id < 0) reject(new Error(m.message));
-          this.#waiting.get(m.id)?.reject(new Error(m.message));
-          this.#waiting.delete(m.id);
+        const msg = e.data;
+        if (msg.type === 'ready') resolve();
+        else if (msg.type === 'answer') {
+          this.#waiting.get(msg.id)?.resolve(msg.result.answers);
+          this.#waiting.delete(msg.id);
+          this.lastMs = Math.round(msg.result.ms ?? 0);
+        } else if (msg.type === 'error') {
+          if (msg.id < 0) reject(new Error(msg.message));
+          this.#waiting.get(msg.id)?.reject(new Error(msg.message));
+          this.#waiting.delete(msg.id);
         }
       };
       w.onerror = (e) => reject(new Error(e.message || 'Decision could not start'));
       w.postMessage({ type: 'load', meta, bin }, [bin]);
     });
     this.#worker = w;
+    this.#loaded = b;
+    this.#protos = null;
     this.status = 'ready';
     this.progress = 1;
   }
 
-  /** Lets go of the worker (the addon was switched off). */
+  /** Lets go of the worker (the addon was switched off, or another build was chosen). */
   stop() {
     this.#worker?.terminate();
     this.#worker = null;
+    this.#loaded = null;
     this.#ready = null;
     for (const p of this.#waiting.values()) p.reject(new Error('Decision stopped'));
     this.#waiting.clear();
-    this.status = 'off';
   }
 
-  /** Deletes the downloaded model (it downloads again when needed). */
-  async forget() {
-    this.stop();
-    for (const s of this.#storesFor()) await s.forget().catch(() => {});
-    this.status = this.on ? 'absent' : 'off';
+  /** Deletes a downloaded build (it downloads again when needed). */
+  async forget(b: DecisionBuild = this.build) {
+    if (this.#loaded === b) this.stop();
+    for (const s of this.#storesFor(b)) await s.forget().catch(() => {});
+    if (b === this.build) this.status = 'absent';
+  }
+
+  /** Lessons are per build (each has its own way of seeing a line). */
+  #key(qid: string) {
+    return this.build === 'full' ? `full:${qid}` : qid;
   }
 
   /** Corrections for these questions, rebuilt only when what it learned changes. */
   #protosFor(questions: Question[]): unknown[] {
     const ex = decisionFile.value.examples;
-    const sig = questions.map((q) => `${q.id}:${ex[q.id]?.length ?? 0}:${ex[q.id]?.at(-1)?.id ?? ''}`).join('|');
+    const sig = this.build + questions.map((q) => `${q.id}:${ex[this.#key(q.id)]?.length ?? 0}:${ex[this.#key(q.id)]?.at(-1)?.id ?? ''}`).join('|');
     if (this.#protos?.sig === sig) return this.#protos.list;
     const beta = this.#meta?.beta ?? [];
     const list = questions.map((q) => {
-      const items = ex[q.id];
+      const items = ex[this.#key(q.id)];
       // A few lessons, or lessons that all say the same thing, would only tilt every answer
       // towards them: corrections start once there are enough, and of more than one kind.
       if (!items || items.length < MIN_LESSONS || q.type === 'span' || new Set(items.map((e) => e.k)).size < 2) return null;
@@ -176,7 +246,7 @@ class Decision {
     return list;
   }
 
-  /** Asks the model; resolves with one answer per question. */
+  /** Asks TinyDecide; resolves with one answer per question. */
   async ask(state: string, questions: Question[]): Promise<Answer[]> {
     await this.ensure();
     const w = this.#worker;
@@ -189,35 +259,59 @@ class Decision {
     });
   }
 
+  async #service() {
+    const conn = await ai.connection('decision', 'think').catch(() => null);
+    if (!conn) return null;
+    return (system: string, user: string, max = 600) =>
+      chatOnce(conn.config, conn.key, [{ role: 'system', content: system }, { role: 'user', content: user }], null, (u, i) => platform.fetch(u, i), max).then((r) => r.content);
+  }
+
   // ── Uses ────────────────────────────────────────────────────────────────────
 
   /** Where a new line belongs, with the answers kept for teaching when you confirm. */
   async suggest(line: string, rules: RuleHints): Promise<{ suggestion: Suggestion; answers: Answer[] } | null> {
     if (!this.on || !line.trim()) return null;
-    const answers = await this.ask(line, CAPTURE_QUESTIONS);
-    return { suggestion: interpretCapture(answers, rules), answers };
-  }
-
-  /** Where each task sits in the Eisenhower matrix, by its words alone (you confirm each). */
-  async matrix(items: { id: string; title: string }[]): Promise<{ taskId: string; urgent: boolean; important: boolean; why: string }[]> {
-    const qs: Question[] = [
-      { id: 'urgent', type: 'noul', text: 'This is urgent.' },
-      { id: 'important', type: 'noul', text: 'This matters for health, people, work or goals.' },
-    ];
-    const out: { taskId: string; urgent: boolean; important: boolean; why: string }[] = [];
-    for (const it of items) {
-      const [u, i] = await this.ask(it.title, qs);
-      const pu = u?.type === 'noul' ? u.p : 0;
-      const pi = i?.type === 'noul' ? i.p : 0;
-      const urgent = pu >= 0.6;
-      const important = pi >= 0.55;
-      out.push({ taskId: it.id, urgent, important, why: urgent && important ? 'Sounds pressing and meaningful' : important ? 'Sounds like it matters' : urgent ? 'Sounds time-bound' : 'Nothing pressing in it' });
+    if (this.viaAi) {
+      const call = await this.#service();
+      if (call) {
+        const s = await aiCapture(call, line, { ...rules, line }).catch((e) => {
+          console.warn('[daybloom] decision via AI', e);
+          return null;
+        });
+        if (s) return { suggestion: s, answers: [] };
+      }
     }
-    return out;
+    const answers = await this.ask(line, CAPTURE_QUESTIONS);
+    return { suggestion: interpretCapture(answers, { ...rules, line }), answers };
   }
 
-  /** What could move out of the Inbox, and where (you confirm each). */
+  /**
+   * Where each task sits in the Eisenhower matrix. TinyDecide's scores are read against the rest
+   * of the list (placeByScores), and what you moved by hand before teaches it.
+   */
+  async matrix(items: { id: string; title: string; category?: Task['category'] }[]): Promise<MatrixPlace[]> {
+    if (!items.length) return [];
+    if (this.viaAi) {
+      const call = await this.#service();
+      if (call) {
+        const got = await aiMatrix(call, items).catch(() => []);
+        if (got.length) return got;
+      }
+    }
+    const scores = [];
+    for (const it of items) scores.push(matrixScore(it.id, await this.ask(it.title, MATRIX_QUESTIONS), it.category));
+    return placeByScores(scores);
+  }
+
+  /** What could move out of the Inbox, and where. */
   async triage(items: { id: string; title: string }[]): Promise<TriageMove[]> {
+    if (this.viaAi) {
+      const call = await this.#service();
+      if (call) {
+        const got = await aiTriage(call, items).catch(() => []);
+        if (got.length) return got;
+      }
+    }
     const out: TriageMove[] = [];
     for (const it of items) {
       const answers = await this.ask(it.title, TRIAGE_QUESTIONS);
@@ -227,25 +321,40 @@ class Decision {
     return out;
   }
 
+  #lesson(qid: string, a: Answer | undefined, k: number) {
+    if (!a || (a.type !== 'choice' && a.type !== 'noul') || !a.qvec || !a.z0) return;
+    const f = decisionFile.value;
+    const at = Date.now();
+    const key = this.#key(qid);
+    const list = [...(f.examples[key] ?? []), { id: `${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, k, v: round(a.qvec), z: round(a.z0), at }];
+    f.examples = { ...f.examples, [key]: list.slice(-MAX_EXAMPLES) };
+  }
+
   /**
    * You added a line: what you kept (or changed) teaches the model. `dest` and `category` are
-   * what you chose; `answers` are the model's for that line.
+   * what you chose; `answers` are the model's for that line (none when a service answered).
    */
   learn(answers: Answer[], chosen: { dest: Destination; category: CategoryId | null }, changed: boolean) {
     const f = decisionFile.value;
-    const at = Date.now();
-    const add = (qid: string, k: number) => {
-      const i = CAPTURE_QUESTIONS.findIndex((q) => q.id === qid);
-      const a = answers[i];
-      if (!a || (a.type !== 'choice' && a.type !== 'noul') || !a.qvec || !a.z0) return;
-      const list = [...(f.examples[qid] ?? []), { id: `${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`, k, v: round(a.qvec), z: round(a.z0), at }];
-      f.examples = { ...f.examples, [qid]: list.slice(-MAX_EXAMPLES) };
-    };
+    const at = (qid: string) => answers[CAPTURE_QUESTIONS.findIndex((q) => q.id === qid)];
     const when = WHEN_OF[chosen.dest];
-    if (when) add('when', WHEN.indexOf(when));
-    if (chosen.category) add('kind', KINDS.indexOf(chosen.category));
+    if (answers.length && when) this.#lesson('when', at('when'), WHEN.indexOf(when));
+    if (answers.length && chosen.category) this.#lesson('kind', at('kind'), KINDS.indexOf(chosen.category));
     if (changed) f.changed++;
     else f.kept++;
+  }
+
+  /** You moved a task in the matrix yourself: that teaches its urgency and importance. */
+  async learnPlace(title: string, urgent: boolean, important: boolean) {
+    if (!this.on || this.viaAi || this.status !== 'ready') return;
+    try {
+      const a = await this.ask(title, MATRIX_QUESTIONS);
+      this.#lesson('m_urgent', a[0], urgent ? 1 : 0);
+      this.#lesson('m_important', a[4], important ? 1 : 0);
+      this.#lesson('m_matters', a[2], important ? 1 : 0);
+    } catch {
+      /* only a lesson */
+    }
   }
 
   /** How many lessons it has, for the panel. */
@@ -261,13 +370,11 @@ class Decision {
 
 export const decision = new Decision();
 
-/** Main window, while the addon is on: get the model ready in the background. */
+/** Main window, while the addon is on: get the model ready in the background (unless a service thinks). */
 export function startDecision(): () => void {
-  void decision.present().then((has) => {
-    if (!decision.on) return;
-    decision.status = has ? 'loading' : 'absent';
-    // Switching the addon on is the go-ahead to download its 6 MB model.
-    void decision.ensure().catch(() => {});
+  void decision.check().then(() => {
+    // Switching the addon on is the go-ahead to download its model.
+    if (decision.on && !decision.viaAi) void decision.ensure().catch(() => {});
   });
   return () => decision.stop();
 }

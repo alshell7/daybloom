@@ -44,6 +44,7 @@ const METHODS: &[&str] = &[
     "widgets",
     "widgetPending",
     "notifyPending",
+    "capturePending",
     "pinWidget",
     "location",
     "microphone",

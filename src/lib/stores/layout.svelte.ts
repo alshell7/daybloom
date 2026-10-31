@@ -26,9 +26,25 @@ export const NO_FILTER: RailFilter = { hide: [], done: false, free: false, categ
 /** A phone: the dial and the timeline on one scrolling screen, or as two pages you swipe between. */
 export type PhoneLayout = 'stack' | 'pages';
 
-export const layout = persisted<{ railWidth: number; filter: RailFilter; phone: PhoneLayout }>('layout', { railWidth: 0, filter: NO_FILTER, phone: 'stack' }, (raw) => ({
+/** A phone's + button (Jot): its shape, its colour (the accent, a kind's colour, or ink) and side. */
+export interface FabStyle {
+  on: boolean;
+  shape: 'circle' | 'rounded' | 'square';
+  color: 'accent' | 'ink' | CategoryId;
+  side: 'right' | 'left';
+}
+export const DEFAULT_FAB: FabStyle = { on: true, shape: 'rounded', color: 'accent', side: 'right' };
+const FAB_COLORS = ['accent', 'ink', 'focus', 'care', 'routine', 'social', 'rest', 'learn', 'move'];
+
+export const layout = persisted<{ railWidth: number; filter: RailFilter; phone: PhoneLayout; fab: FabStyle }>('layout', { railWidth: 0, filter: NO_FILTER, phone: 'stack', fab: DEFAULT_FAB }, (raw) => ({
   railWidth: Number.isFinite(raw?.railWidth) && raw.railWidth > 0 ? Math.round(raw.railWidth) : 0,
   phone: raw?.phone === 'pages' ? 'pages' : 'stack',
+  fab: {
+    on: raw?.fab?.on !== false,
+    shape: ['circle', 'rounded', 'square'].includes(raw?.fab?.shape) ? raw.fab.shape : DEFAULT_FAB.shape,
+    color: FAB_COLORS.includes(raw?.fab?.color) ? raw.fab.color : DEFAULT_FAB.color,
+    side: raw?.fab?.side === 'left' ? 'left' : 'right',
+  },
   filter: {
     hide: Array.isArray(raw?.filter?.hide) ? raw.filter.hide.filter((x: unknown) => typeof x === 'string') : [],
     done: raw?.filter?.done === true,

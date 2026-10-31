@@ -18,7 +18,7 @@
   import { aiUi } from './ai/ui.svelte';
 
   const still = $derived(view.reducedMotion);
-  const ADDON: Partial<Record<Feature, AddonId>> = { alef: 'alef', smaller: 'smaller', reality: 'reality' };
+  const ADDON: Partial<Record<Feature, AddonId>> = { alef: 'alef', smaller: 'smaller', reality: 'reality', decision: 'decision' };
   const skillsOf = (id: ProviderId) => (['think', 'listen', 'speak'] as Skill[]).filter((k) => can(id, k));
   const stateOf = (id: ProviderId) => serviceState(id, ai.service(id), !!ai.keys[id]);
   const fresh = $derived(!Object.keys(aiFile.value.services).length && !Object.values(ai.keys).some(Boolean));
@@ -115,7 +115,7 @@
   <div class="devs">
     {#each DEVICE_MODELS as m (m.id)}<DeviceRow model={m} />{/each}
   </div>
-  <p class="hint">Each one downloads once, is checked, and stays on {thisDevice}. They work offline, and nothing they hear or read leaves it. Needle and Whistle are by Cactus Compute (Apache-2.0).</p>
+  <p class="hint">Each one downloads once, is checked, and stays on {thisDevice}. They work offline, and nothing they hear or read leaves it. Needle and Whistle are by Cactus Compute, TinyDecide by REZOR (both Apache-2.0).</p>
 </section>
 
 <section>

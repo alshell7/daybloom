@@ -959,6 +959,14 @@
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
+  /* A phone: the tray's choices start at the row's edge and are tall enough to tap. */
+  .row:has(.line.phone) .tray {
+    padding: 0 8px 10px 12px;
+  }
+  .row:has(.line.phone) .pill {
+    height: 36px;
+    padding: 0 13px;
+  }
   /* A touch screen: the title may take two lines rather than cut off at one. */
   @media (hover: none) {
     .tx {

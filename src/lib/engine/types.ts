@@ -82,6 +82,8 @@ export interface Task {
    *  the priority (important). See lib/matrix.ts. */
   urgent?: boolean | null;
   important?: boolean | null;
+  /** 'sort': placed by a matrix sort (a later sort may move it); absent: placed by you. */
+  matrixBy?: 'sort' | null;
   /** Manual order inside its backlog list (ascending). */
   order?: number;
   /** An undated task finished from the backlog (epoch ms). */

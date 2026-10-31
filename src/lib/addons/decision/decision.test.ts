@@ -32,10 +32,12 @@ describe('Decision: where a line goes', () => {
     expect(interpretCapture(answers({ when: [1, 0.5] }), none).dest).toBe('next');
   });
 
-  it('not sure: it waits in the Inbox — unless it sounds urgent', () => {
-    expect(interpretCapture(answers({ when: [0, 0.4] }), none).dest).toBe('inbox');
-    const urgent = interpretCapture(answers({ when: [0, 0.4], urgent: 0.92 }), none);
-    expect(urgent).toMatchObject({ dest: 'next', priority: 1 });
+  it('not sure: it waits in the Inbox — unless it sounds urgent (then today)', () => {
+    expect(interpretCapture(answers({ when: [0, 0.36] }), none).dest).toBe('inbox');
+    // A clear lead counts even when it isn't high.
+    expect(interpretCapture(answers({ when: [0, 0.42] }), none).dest).toBe('today');
+    const urgent = interpretCapture(answers({ when: [0, 0.36], urgent: 0.92 }), none);
+    expect(urgent).toMatchObject({ dest: 'today', priority: 1, why: 'Sounds urgent, so today' });
   });
 
   it('kind and energy only when it is fairly sure, and never over the rules', () => {
@@ -84,5 +86,61 @@ describe('Decision: what it learned, synced', () => {
     expect(m.kept).toBe(5);
     const many = migrateDecision({ examples: { when: Array.from({ length: 90 }, (_, i) => ex(`x${i}`, i)) } });
     expect(many.examples.when).toHaveLength(MAX_EXAMPLES);
+  });
+});
+
+import { findings, placeByScores, minutesIn, matrixScore, MATRIX_QUESTIONS } from './questions';
+import { readCapture } from './viaAi';
+
+describe('Decision: what it pulls out of a line', () => {
+  const span = (text: string, p = 0.9): Answer => ({ type: 'span', text, p_present: p });
+  const by = (o: Record<string, Answer>) => new Map(Object.entries(o)) as Map<string, Answer | undefined>;
+  it('a person who looks like one, a place, a length', () => {
+    expect(findings('reply to Sarah about the contract', by({ person: span('Sarah') }))).toEqual({ person: 'Sarah' });
+    expect(findings('call mom', by({ person: span('mom') }))).toEqual({ person: 'mom' });
+    expect(findings('buy milk', by({ person: span('milk') }))).toEqual({});
+    expect(findings('plan the trip to Lisbon', by({ place: span('Lisbon') }))).toEqual({ place: 'Lisbon' });
+    expect(findings('report, takes about two hours', by({ length: span('2 hours') }))).toEqual({ minutes: 120 });
+    expect(findings('x', by({ person: span('Sarah', 0.3) }))).toEqual({});
+  });
+  it('reads lengths', () => {
+    expect(minutesIn('half an hour')).toBe(30);
+    expect(minutesIn('45 min')).toBe(45);
+    expect(minutesIn('1.5 hours')).toBe(90);
+    expect(minutesIn('an hour')).toBe(60);
+    expect(minutesIn('soon')).toBeNull();
+  });
+});
+
+describe('Decision: the matrix, judged within your list', () => {
+  const noul = (p: number): Answer => ({ type: 'noul', p });
+  const s = (id: string, ps: number[], cat?: 'care' | 'rest') => matrixScore(id, ps.map(noul), cat);
+  it('tells a list apart even when every score is modest', () => {
+    const scores = [
+      s('chest pain', [0.78, 0.26, 0.46, 0.5, 0.57]),
+      s('passport', [0.46, 0.77, 0.06, 0.08, 0.58]),
+      s('tap', [0.42, 0.1, 0.34, 0.39, 0.77]),
+      s('dentist', [0.18, 0.04, 0.41, 0.1, 0.6], 'care'),
+      s('documentary', [0.04, 0.03, 0.06, 0.07, 0.74], 'rest'),
+      s('piano', [0.07, 0.02, 0.07, 0.09, 0.67]),
+      s('milk', [0.05, 0.02, 0.25, 0.11, 0.49]),
+    ];
+    const by = Object.fromEntries(placeByScores(scores).map((p) => [p.taskId, p]));
+    expect(by['chest pain']).toMatchObject({ urgent: true, important: true });
+    expect(by.passport.urgent).toBe(true);
+    expect(by.dentist.important).toBe(true);
+    expect(by.documentary).toMatchObject({ urgent: false, important: false });
+    expect(by.piano.urgent).toBe(false);
+    expect(MATRIX_QUESTIONS).toHaveLength(5);
+  });
+});
+
+describe('Decision with an AI service', () => {
+  const none = { hasTime: false, day: null, later: false, someday: false, priority: null, energy: null, category: null } as const;
+  it('reads its JSON, and plain words still win', () => {
+    const s = readCapture('{"dest":"next","category":"social","priority":2,"energy":null,"minutes":30,"person":"Sarah","place":null,"why":"A reply this week"}', { ...none });
+    expect(s).toMatchObject({ dest: 'next', category: 'social', priority: 2, found: { person: 'Sarah', minutes: 30 } });
+    expect(readCapture('{"dest":"next","category":"focus"}', { ...none, someday: true })?.dest).toBe('someday');
+    expect(readCapture('nonsense', { ...none })).toBeNull();
   });
 });

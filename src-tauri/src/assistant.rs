@@ -31,7 +31,7 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// The model files this store may hold. The first one is the default.
-const MODELS: [&str; 8] = [
+const MODELS: [&str; 10] = [
     "needle3.cact",
     "whistle.cact",
     "tinytts.onnx",
@@ -40,6 +40,8 @@ const MODELS: [&str; 8] = [
     "ort-wasm-simd-threaded.wasm",
     "tinydecide-model.bin",
     "tinydecide-meta.json",
+    "tinydecide-full-model.bin",
+    "tinydecide-full-meta.json",
 ];
 const PROGRESS_EVENT: &str = "daybloom://needle-progress";
 
@@ -50,7 +52,7 @@ fn source_of(name: &str) -> (&'static str, &'static str) {
         "tinytts.onnx" => ("huggingface.co", "/backtracking/tiny-tts/resolve/"),
         "tinytts-cmudict.json" | "tinytts-g2p.json" => ("cdn.jsdelivr.net", "/npm/tiny-tts@5.0.1/"),
         "ort-wasm-simd-threaded.wasm" => ("cdn.jsdelivr.net", "/npm/onnxruntime-web@1.29.0/dist/"),
-        "tinydecide-model.bin" | "tinydecide-meta.json" => ("huggingface.co", "/TheREZOR/TinyDecide/resolve/"),
+        "tinydecide-model.bin" | "tinydecide-meta.json" | "tinydecide-full-model.bin" | "tinydecide-full-meta.json" => ("huggingface.co", "/TheREZOR/TinyDecide/resolve/"),
         _ => ("huggingface.co", "/Cactus-Compute/"),
     }
 }

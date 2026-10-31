@@ -41,8 +41,9 @@
   const open = $derived(aiUi.picker === id);
   const speakUse = $derived(aiFile.value.use.alef.speak);
   const route = $derived(ai.route(feature, skill));
-  /** What's chosen: 'device', a service, or (Alef's voice) chirps · device · system · off. */
-  const via = $derived<string>(isSpeak ? speakUse.via : route.via);
+  /** What's chosen: 'device', a service, or (Alef's voice) chirps · device · system · off. Decision's
+   *  larger TinyDecide build is its own row ('device-full'). */
+  const via = $derived<string>(isSpeak ? speakUse.via : feature === 'decision' && route.via === 'device' && route.model === 'full' ? 'device-full' : route.via);
   /** This feature's own model or voice, if it picked one. */
   const pinned = $derived(isSpeak ? speakUse.voice : route.model);
 
@@ -50,7 +51,7 @@
   const local = $derived.by<DeviceId | null>(() => {
     if (isSpeak) return via === 'device' ? 'voice' : null;
     if (via !== 'device') return null;
-    return feature === 'voice' ? 'whistle' : feature === 'smaller' || feature === 'reality' || feature === 'starter' ? null : 'needle';
+    return feature === 'voice' ? 'whistle' : feature === 'decision' ? 'tinydecide' : feature === 'smaller' || feature === 'reality' || feature === 'starter' ? null : 'needle';
   });
   const localModel = $derived(local ? deviceModel(local) : null);
 
@@ -58,6 +59,11 @@
     if (feature === 'smaller') return 'Ready-made steps; works offline';
     if (feature === 'reality') return 'Medians of your finished blocks; works offline';
     if (feature === 'starter') return 'A ready-made two-minute start; works offline';
+    if (feature === 'decision') {
+      const m = deviceModel('tinydecide');
+      if (m.status === 'downloading') return `Getting ${m.name}… ${Math.round(m.progress * 100)}%`;
+      return m.status === 'ready' ? 'Private; nothing leaves this device' : `${m.mb} MB, downloads once`;
+    }
     const m = deviceModel(feature === 'voice' ? 'whistle' : 'needle');
     if (m.status === 'ready') return 'Private; nothing leaves your computer';
     if (m.status === 'downloading') return `Getting ${m.name}… ${Math.round(m.progress * 100)}%`;
@@ -81,7 +87,12 @@
           { id: 'system', name: 'System voice', sub: "Your computer's own voice", icon: 'volume', ready: true },
           { id: 'off', name: 'Off', sub: 'Silent; you can still read it', icon: 'volume-off', ready: true },
         ]
-      : [{ id: 'device', name: meta.device[skill] ?? 'This device', sub: deviceSub(), icon: feature === 'smaller' || feature === 'starter' ? 'lightbulb' : feature === 'reality' ? 'chart-column' : 'cpu', ready: true }];
+      : feature === 'decision'
+        ? [
+            { id: 'device', name: 'TinyDecide · 6 MB', sub: via === 'device' ? deviceSub() : 'Small and quick, on this device', icon: 'cpu', ready: true },
+            { id: 'device-full', name: 'TinyDecide full · 10 MB', sub: via === 'device-full' ? deviceSub() : 'Knows more words; a little sharper', icon: 'cpu', ready: true },
+          ]
+        : [{ id: 'device', name: meta.device[skill] ?? 'This device', sub: deviceSub(), icon: feature === 'smaller' || feature === 'starter' ? 'lightbulb' : feature === 'reality' ? 'chart-column' : 'cpu', ready: true }];
     const svc = (p: (typeof PROVIDERS)[number], ready: boolean): Opt => ({
       id: p.id,
       name: p.name,
@@ -125,11 +136,17 @@
     clearTimeout(foldTimer);
     if (o.id !== via) {
       if (isSpeak) aiFile.value.use.alef.speak = { via: o.id as SpeakVia };
+      else if (o.id === 'device-full') ai.setRoute(feature, skill, { via: 'device', model: 'full' });
       else ai.setRoute(feature, skill, { via: o.id as Source });
+      if (feature === 'decision') void import('../../lib/addons/decision/decision.svelte').then(({ decision }) => decision.check());
       confirm(o.id);
     }
     // Nothing more to pick: fold away once the tick has landed.
-    const needsGet = (isSpeak ? o.id === 'device' && tinyTts.status !== 'ready' : o.id === 'device' && feature !== 'smaller' && feature !== 'reality' && feature !== 'starter' && deviceModel(feature === 'voice' ? 'whistle' : 'needle').status !== 'ready');
+    const needsGet = isSpeak
+      ? o.id === 'device' && tinyTts.status !== 'ready'
+      : feature === 'decision'
+        ? o.id.startsWith('device')
+        : o.id === 'device' && feature !== 'smaller' && feature !== 'reality' && feature !== 'starter' && deviceModel(feature === 'voice' ? 'whistle' : 'needle').status !== 'ready';
     if (!o.service && !needsGet) foldTimer = setTimeout(() => aiUi.picker === id && (aiUi.picker = null), 720);
   }
 

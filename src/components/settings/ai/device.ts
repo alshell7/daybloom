@@ -3,8 +3,9 @@
 
 import { needle, whistle } from '../../../lib/assistant/engine.svelte';
 import { tinyTts, VOICE_BYTES } from '../../../lib/addons/alef/tts/tts.svelte';
+import { BUILDS, decision } from '../../../lib/addons/decision/decision.svelte';
 
-export type DeviceId = 'needle' | 'whistle' | 'voice';
+export type DeviceId = 'needle' | 'whistle' | 'voice' | 'tinydecide';
 export type DeviceStatus = 'absent' | 'downloading' | 'loading' | 'ready' | 'error';
 
 export interface DeviceModel {
@@ -71,9 +72,39 @@ export const DEVICE_MODELS: DeviceModel[] = [
     get: () => tinyTts.download(),
     remove: () => tinyTts.forget(),
   },
+  {
+    id: 'tinydecide',
+    // The build chosen for Decision (Settings › AI › Decision): 6 MB, or the 10 MB full one.
+    get name() {
+      return BUILDS[decision.build].name;
+    },
+    get does() {
+      return `Decision: ${BUILDS[decision.build].does.toLowerCase()}`;
+    },
+    icon: 'route',
+    get mb() {
+      return BUILDS[decision.build].mb;
+    },
+    until: 'Until then, Decision uses the plain rules.',
+    get status() {
+      return decision.status;
+    },
+    get progress() {
+      return decision.progress;
+    },
+    get error() {
+      return decision.error || null;
+    },
+    memory: 0,
+    get: () => decision.ensure(),
+    remove: () => decision.forget(),
+  },
 ];
 
 export const deviceModel = (id: DeviceId) => DEVICE_MODELS.find((m) => m.id === id)!;
 
-/** Look once whether Alef's voice is here (Needle and Whistle look on their own). */
-export const checkDevice = () => void tinyTts.check();
+/** Look once whether Alef's voice and TinyDecide are here (Needle and Whistle look on their own). */
+export const checkDevice = () => {
+  void tinyTts.check();
+  void decision.check();
+};

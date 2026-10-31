@@ -11,10 +11,10 @@ import { platform } from './platform';
 import { tasks } from './stores/tasks.svelte';
 import { view } from './stores/view.svelte';
 
-/** Who can suggest places right now: 'ai', 'decision' or nobody. */
+/** Who can sort right now: Decision (TinyDecide or its AI service), an AI service, or nobody. */
 export function suggester(): 'ai' | 'decision' | null {
-  if (ai.ready('starter', 'think')) return 'ai';
   if (isOn('decision')) return 'decision';
+  if (ai.ready('starter', 'think')) return 'ai';
   return null;
 }
 
@@ -42,6 +42,10 @@ async function guesses(items: Task[]): Promise<MatrixGuess[]> {
   const open = items.filter((t) => !placedByYou(t)).slice(0, 30);
   if (!open.length) return [];
   const who = suggester();
+  if (who === 'decision') {
+    const { decision } = await import('./addons/decision/decision.svelte');
+    return decision.matrix(open.map((t) => ({ id: t.id, title: t.title, category: t.category })));
+  }
   if (who === 'ai') {
     const conn = await ai.connection('starter', 'think');
     if (conn) {
@@ -55,18 +59,17 @@ async function guesses(items: Task[]): Promise<MatrixGuess[]> {
       }
     }
   }
-  if (who === 'decision' || (who === 'ai' && isOn('decision'))) {
-    const { decision } = await import('./addons/decision/decision.svelte');
-    return decision.matrix(open.map((t) => ({ id: t.id, title: t.title })));
-  }
   return [];
 }
 
 /** Places tasks (yours to undo). */
 export function place(guesses: { taskId: string; urgent: boolean; important: boolean }[]) {
-  const before = guesses.map((g) => ({ id: g.taskId, urgent: tasks.get(g.taskId)?.urgent ?? null, important: tasks.get(g.taskId)?.important ?? null }));
-  for (const g of guesses) tasks.update(g.taskId, { urgent: g.urgent, important: g.important });
+  const before = guesses.map((g) => {
+    const t = tasks.get(g.taskId);
+    return { id: g.taskId, urgent: t?.urgent ?? null, important: t?.important ?? null, matrixBy: t?.matrixBy ?? null };
+  });
+  for (const g of guesses) tasks.update(g.taskId, { urgent: g.urgent, important: g.important, matrixBy: 'sort' });
   return () => {
-    for (const b of before) tasks.update(b.id, { urgent: b.urgent, important: b.important });
+    for (const b of before) tasks.update(b.id, { urgent: b.urgent, important: b.important, matrixBy: b.matrixBy });
   };
 }

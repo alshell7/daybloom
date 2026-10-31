@@ -315,6 +315,9 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
   override fun load(webView: WebView) {
     this.webView = webView
     // A button pressed in the shade while the planner runs: it takes it at once.
+    QuickCaptures.listener = {
+      activity.runOnUiThread { this.webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybloom:quick-added'))", null) }
+    }
     NotifyActions.listener = {
       activity.runOnUiThread { this.webView?.evaluateJavascript("window.dispatchEvent(new CustomEvent('daybloom:notify-action'))", null) }
     }
@@ -560,6 +563,12 @@ class DevicePlugin(private val activity: Activity) : Plugin(activity) {
     pendingAction?.let { r.put("intent", it) }
     pendingAction = null
     invoke.resolve(r)
+  }
+
+  /** Lines added from the widget's quick-add card since the planner last asked. */
+  @Command
+  fun capturePending(invoke: Invoke) {
+    invoke.resolve(JSObject().put("items", QuickCaptures.take(activity)))
   }
 
   /** Buttons pressed on reminders since the planner last asked (oldest first). */

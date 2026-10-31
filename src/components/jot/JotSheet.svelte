@@ -66,7 +66,7 @@
       ta?.focus();
       if (talk) void voice.start('jot', { handsFree: true });
     });
-    if (isOn('decision')) void decision.ensure().catch(() => {});
+    if (isOn('decision') && !decision.viaAi) void decision.ensure().catch(() => {});
   });
 
   // Dictation: live words flow in as a new line; the final words stay for a look before adding.
@@ -121,6 +121,7 @@
       category: e?.sug?.category ?? l.hints.category,
       priority: e?.sug?.priority ?? l.hints.priority,
       energy: e?.sug?.energy ?? l.hints.energy,
+      minutes: e?.sug?.found?.minutes ?? null,
     };
   };
   const slot = (date: string, minutes: number) => freeSlot(date, minutes, clock.now, { days: 1 });
@@ -236,7 +237,7 @@
       </div>
       <p class="hint" id="jot-hint">
         {#if isOn('decision')}
-          <Icon name="route" size={13} /> Decision suggests where each line goes. Tap another place to change it.
+          <Icon name="route" size={13} /> {decision.who} suggests where each line goes, and who, where and how long. Tap another place to change it.
         {:else}
           Times, days, “by fri”, “!!” and “someday” are understood.
           <button class="link" onclick={() => setOn('decision', true)}>Let Decision place them</button>
@@ -265,6 +266,8 @@
                 {#if v.t.duration}<span class="chip tnum">{formatDuration(v.t.duration * MINUTE)}</span>{/if}
                 {#if v.t.due}<span class="chip"><Icon name="calendar-clock" size={11} /> {dueLabel(v.t.due, view.today)}</span>{/if}
                 {#if v.t.priority}<span class="chip" class:must={v.t.priority === 1}><Icon name="flag" size={11} /> {PRIORITY_LABEL[v.t.priority]}</span>{/if}
+                {#if e?.sug?.found?.person}<span class="chip found" title="Who it involves"><Icon name="user" size={11} /> {e.sug.found.person}</span>{/if}
+                {#if e?.sug?.found?.place}<span class="chip found" title="Where"><Icon name="map-pin" size={11} /> {e.sug.found.place}</span>{/if}
               </div>
               <div class="dests" role="radiogroup" aria-label={`Where “${v.t.title}” goes`}>
                 {#each DESTINATIONS as d (d.id)}
@@ -479,9 +482,18 @@
   .chip.must {
     color: var(--signal);
   }
+  .chip.found {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: color-mix(in srgb, #d99a06 70%, var(--ink-2));
+    background: color-mix(in srgb, #d99a06 12%, transparent);
+  }
+  /* Five places in a row; on a narrow screen or with a large font they wrap rather than cut. */
   .dests {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
     gap: 4px;
   }
   .dests button {

@@ -703,4 +703,10 @@
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
   }
+  /* A phone: rows stay inside the panel's own margins, so nothing at their ends is cut off. */
+  @container backlog (max-width: 420px) {
+    .rows {
+      margin: 0 -4px;
+    }
+  }
 </style>

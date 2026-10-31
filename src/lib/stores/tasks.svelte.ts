@@ -48,6 +48,7 @@ function normalize(t: Partial<Task>): Task {
     energy: t.energy ?? null,
     ...(typeof t.urgent === 'boolean' ? { urgent: t.urgent } : {}),
     ...(typeof t.important === 'boolean' ? { important: t.important } : {}),
+    ...(t.matrixBy === 'sort' ? { matrixBy: 'sort' as const } : {}),
     order: t.order ?? now,
     doneAt: t.doneAt ?? null,
     acks: t.acks ?? [],

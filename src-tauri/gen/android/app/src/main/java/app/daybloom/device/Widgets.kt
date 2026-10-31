@@ -94,9 +94,46 @@ object WidgetData {
   }
 
   fun color(s: String?, fallback: Int): Int = try {
-    if (s.isNullOrEmpty()) fallback else Color.parseColor(s)
+    if (s.isNullOrEmpty()) fallback else Color.parseColor(s.trim())
   } catch (e: Exception) {
     fallback
+  }
+
+  /** A widget's colours: the theme's ground and ink, with text that always reads on that ground. */
+  data class Look(val dark: Boolean, val ground: Int, val ink: Int, val ink2: Int)
+
+  private fun lum(c: Int): Double {
+    fun ch(x: Int): Double {
+      val v = x / 255.0
+      return if (v <= 0.03928) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * ch(Color.red(c)) + 0.7152 * ch(Color.green(c)) + 0.0722 * ch(Color.blue(c))
+  }
+
+  private fun contrast(a: Int, b: Int): Double {
+    val x = lum(a)
+    val y = lum(b)
+    return (maxOf(x, y) + 0.05) / (minOf(x, y) + 0.05)
+  }
+
+  private const val INK_LIGHT = 0xFFE9EDF3.toInt()
+  private const val INK_DARK = 0xFF151C2A.toInt()
+
+  fun look(ctx: Context, d: JSONObject?): Look {
+    val ground = color(d?.optString("ground"), Appearance.ground(ctx))
+    val dark = lum(ground) < 0.18
+    var ink = color(d?.optString("ink"), if (dark) INK_LIGHT else INK_DARK)
+    if (contrast(ink, ground) < 4.5) ink = if (dark) INK_LIGHT else INK_DARK
+    var ink2 = color(d?.optString("ink2"), ink)
+    if (contrast(ink2, ground) < 3.0) ink2 = Color.argb(200, Color.red(ink), Color.green(ink), Color.blue(ink))
+    return Look(dark, ground, ink, ink2)
+  }
+
+  /** The card behind a widget: a light or dark base (so it's right even untinted), tinted exactly. */
+  fun paintCard(ctx: Context, v: RemoteViews, viewId: Int, l: Look) {
+    val res = ctx.resources.getIdentifier(if (l.dark) "widget_bg_dark" else "widget_bg", "drawable", ctx.packageName)
+    v.setImageViewResource(viewId, res)
+    v.setInt(viewId, "setColorFilter", l.ground)
   }
 
   fun updateAll(ctx: Context) {
@@ -167,12 +204,13 @@ class DialWidget : AppWidgetProvider() {
       val cur = blocks.firstOrNull { !it.done && it.start <= now && now < it.end }
       val next = blocks.firstOrNull { !it.done && it.start > now }
       val f = d?.optJSONObject("finish")
-      v.setInt(id(ctx, "bg"), "setColorFilter", WidgetData.color(d?.optString("ground"), Color.parseColor("#EEF1F5")))
+      val look = WidgetData.look(ctx, d)
+      WidgetData.paintCard(ctx, v, id(ctx, "bg"), look)
       v.setImageViewBitmap(id(ctx, "dial"), dialBitmap(size, now, blocks, cur, f))
 
-      val ink = WidgetData.color(f?.optString("ink"), Color.parseColor("#1A2230"))
-      v.setTextColor(id(ctx, "count"), ink)
-      v.setTextColor(id(ctx, "title"), ink)
+      // Text on the card takes the card's colours (the dial's own finish can be dark on a light card).
+      v.setTextColor(id(ctx, "count"), look.ink)
+      v.setTextColor(id(ctx, "title"), look.ink)
       if (cur != null) {
         v.setViewVisibility(id(ctx, "count"), View.VISIBLE)
         v.setChronometer(id(ctx, "count"), SystemClock.elapsedRealtime() + (cur.end - now), null, true)
@@ -187,8 +225,9 @@ class DialWidget : AppWidgetProvider() {
         d == null -> "Your day, as a dial"
         else -> "Nothing else planned"
       })
-      v.setTextColor(id(ctx, "next"), WidgetData.color(d?.optString("ink2"), Color.parseColor("#5B6678")))
+      v.setTextColor(id(ctx, "next"), look.ink2)
       val doneId = id(ctx, "done")
+      v.setTextColor(doneId, look.ink)
       if (cur != null && cur.own) {
         v.setViewVisibility(doneId, View.VISIBLE)
         val i = Intent(ctx, WidgetReceiver::class.java).setAction(WidgetData.DONE).putExtra("key", cur.key)
@@ -294,7 +333,8 @@ class AlefWidget : AppWidgetProvider() {
       val asleep = hour >= 23 || hour < 6
       val file = java.io.File(ctx.filesDir, if (asleep) "widget-alef-sleep.png" else "widget-alef-face.png")
       if (file.exists()) v.setImageViewBitmap(id(ctx, "face"), BitmapFactory.decodeFile(file.path))
-      v.setInt(id(ctx, "bg"), "setColorFilter", WidgetData.color(d?.optString("ground"), Color.parseColor("#EEF1F5")))
+      val look = WidgetData.look(ctx, d)
+      WidgetData.paintCard(ctx, v, id(ctx, "bg"), look)
       v.setInt(id(ctx, "screen"), "setColorFilter", WidgetData.color(a?.optString("well"), Color.parseColor("#0E141C")))
       val blocks = d?.let { WidgetData.blocks(ctx, it) } ?: emptyList()
       val cur = blocks.firstOrNull { !it.done && it.own && it.start <= now && now < it.end }
@@ -305,8 +345,9 @@ class AlefWidget : AppWidgetProvider() {
         else -> a.optString("idle").ifEmpty { "I'm here when you need a hand." }
       }
       v.setTextViewText(id(ctx, "line"), line)
-      v.setTextColor(id(ctx, "line"), WidgetData.color(d?.optString("ink"), Color.parseColor("#1A2230")))
+      v.setTextColor(id(ctx, "line"), look.ink)
       val start = id(ctx, "start")
+      v.setTextColor(start, look.ink)
       if (cur != null && !asleep) {
         v.setViewVisibility(start, View.VISIBLE)
         v.setOnClickPendingIntent(start, WidgetData.launch(ctx, "start2", cur.key))
@@ -326,22 +367,35 @@ class BacklogWidget : AppWidgetProvider() {
   companion object {
     private fun id(ctx: Context, name: String) = ctx.resources.getIdentifier(name, "id", ctx.packageName)
 
+    /** The quick-add card over the home screen (QuickAdd.kt), not the planner. */
+    private fun quickAdd(ctx: Context, voice: Boolean): PendingIntent {
+      val i = Intent(ctx, QuickAddActivity::class.java)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        .putExtra("voice", voice)
+      return PendingIntent.getActivity(ctx, if (voice) 7302 else 7301, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     fun draw(ctx: Context, m: AppWidgetManager, wid: Int) {
       val v = RemoteViews(ctx.packageName, ctx.resources.getIdentifier("widget_backlog", "layout", ctx.packageName))
       val d = WidgetData.data(ctx)
       val b = d?.optJSONObject("backlog")
-      val ink = WidgetData.color(d?.optString("ink"), Color.parseColor("#1A2230"))
-      val ink2 = WidgetData.color(d?.optString("ink2"), Color.parseColor("#4A5568"))
-      v.setInt(id(ctx, "bg"), "setColorFilter", WidgetData.color(d?.optString("ground"), Color.parseColor("#EEF1F5")))
+      val look = WidgetData.look(ctx, d)
+      val ink = look.ink
+      val ink2 = look.ink2
+      WidgetData.paintCard(ctx, v, id(ctx, "bg"), look)
       val n = b?.optInt("n", 0) ?: 0
-      v.setTextViewText(id(ctx, "head"), if (n > 0) "Backlog · $n" else "Backlog")
       v.setTextColor(id(ctx, "head"), ink)
       v.setTextColor(id(ctx, "jot"), ink)
       v.setTextColor(id(ctx, "voice"), ink)
-      val items = b?.optJSONArray("items")
+      // What was just added from quick add shows at once, before the planner has filed it.
+      val fresh = QuickCaptures.pending(ctx)
+      val items = org.json.JSONArray()
+      for (i in fresh.length() - 1 downTo 0) fresh.optJSONObject(i)?.let { items.put(JSONObject().put("t", it.optString("text").lineSequence().first()).put("l", "Inbox")) }
+      b?.optJSONArray("items")?.let { for (i in 0 until it.length()) items.put(it.get(i)) }
+      v.setTextViewText(id(ctx, "head"), if (n + fresh.length() > 0) "Backlog · ${n + fresh.length()}" else "Backlog")
       for (i in 0 until 4) {
         val tv = id(ctx, "item$i")
-        val o = items?.optJSONObject(i)
+        val o = items.optJSONObject(i)
         if (o == null) {
           v.setViewVisibility(tv, View.GONE)
           continue
@@ -353,10 +407,10 @@ class BacklogWidget : AppWidgetProvider() {
         v.setViewVisibility(tv, View.VISIBLE)
         v.setOnClickPendingIntent(tv, WidgetData.launch(ctx, "backlog", null))
       }
-      v.setViewVisibility(id(ctx, "empty"), if (items == null || items.length() == 0) View.VISIBLE else View.GONE)
+      v.setViewVisibility(id(ctx, "empty"), if (items.length() == 0) View.VISIBLE else View.GONE)
       v.setTextColor(id(ctx, "empty"), ink2)
-      v.setOnClickPendingIntent(id(ctx, "jot"), WidgetData.launch(ctx, "jot", null))
-      v.setOnClickPendingIntent(id(ctx, "voice"), WidgetData.launch(ctx, "jotVoice", null))
+      v.setOnClickPendingIntent(id(ctx, "jot"), quickAdd(ctx, false))
+      v.setOnClickPendingIntent(id(ctx, "voice"), quickAdd(ctx, true))
       v.setOnClickPendingIntent(id(ctx, "head"), WidgetData.launch(ctx, "backlog", null))
       v.setOnClickPendingIntent(id(ctx, "root"), WidgetData.launch(ctx, "backlog", null))
       m.updateAppWidget(wid, v)

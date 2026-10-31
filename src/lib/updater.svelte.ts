@@ -10,7 +10,8 @@ import { countLine, notesFor } from './releaseNotes';
 import { settings } from './stores/settings.svelte';
 import { view } from './stores/view.svelte';
 
-type Status = 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'installing' | 'error';
+/** 'permission': a phone waits for Android's "Install unknown apps" switch for Daybloom. */
+type Status = 'idle' | 'checking' | 'none' | 'available' | 'downloading' | 'installing' | 'permission' | 'error';
 
 export const updates = $state<{
   status: Status;
@@ -30,6 +31,16 @@ let pending: { version: string; body?: string; downloadAndInstall: (cb: (e: any)
 let applyWeb = applyWebUpdate;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Android opened its "Install unknown apps" screen for Daybloom: the update waits for that switch. */
+class NeedsPermission extends Error {
+  constructor() {
+    super('Allow installs from Daybloom, then come back.');
+  }
+}
+
+/** When Android's installer was opened (a phone), to notice if it was closed without installing. */
+let installerAt = 0;
 
 /** The version that runs: a web update's, else the app's. Returns the web update status. */
 export async function loadVersion(): Promise<OtaStatus | null> {
@@ -68,7 +79,7 @@ async function checkApp(): Promise<typeof pending> {
     async downloadAndInstall(cb) {
       cb({ event: 'Started', data: { contentLength: 0 } });
       const res = await deviceCall<{ needsPermission: boolean }>('apkUpdate', { url: r.url, sha256: r.sha256 });
-      if (res?.needsPermission) throw new Error('Allow Daybloom to install updates in the screen that just opened, then tap Install again.');
+      if (res?.needsPermission) throw new NeedsPermission();
       cb({ event: 'Finished' });
     },
   };
@@ -149,15 +160,42 @@ export async function installUpdate() {
         updates.status = 'installing';
       }
     });
-    // A phone: Android's installer has taken over and replaces the app itself.
-    if (platform.isMobile) return;
+    // A phone: Android's installer has taken over and replaces the app itself. If you come back
+    // without installing, the offer is there again (watchInstaller).
+    if (platform.isMobile) {
+      installerAt = Date.now();
+      return;
+    }
     // Windows' installer closes the app itself; macOS swaps the bundle and we restart.
     const { relaunch } = await import('@tauri-apps/plugin-process');
     await relaunch();
   } catch (e) {
+    if (e instanceof NeedsPermission) {
+      updates.status = 'permission';
+      updates.error = '';
+      return;
+    }
     updates.status = 'error';
     updates.error = message(e);
   }
+}
+
+/**
+ * A phone, back in Daybloom: after the permission screen, carry on with the update by itself;
+ * after the installer was closed without installing, offer it again.
+ */
+export function watchInstaller(): () => void {
+  if (!platform.isMobile) return () => {};
+  const back = () => {
+    if (document.visibilityState !== 'visible') return;
+    if (updates.status === 'permission') void installUpdate();
+    else if (updates.status === 'installing' && updates.kind === 'app' && installerAt && Date.now() - installerAt > 1500) {
+      installerAt = 0;
+      updates.status = 'available';
+    }
+  };
+  document.addEventListener('visibilitychange', back);
+  return () => document.removeEventListener('visibilitychange', back);
 }
 
 /** Once after an update: a note with what this version brought, a tap from the full list. */
@@ -183,9 +221,11 @@ export function startUpdateChecks(): () => void {
   const run = () => settings.value.autoUpdate && checkForUpdates();
   const first = setTimeout(run, 8_000);
   const every = setInterval(run, 6 * 60 * 60_000);
+  const unwatch = watchInstaller();
   return () => {
     clearTimeout(first);
     clearInterval(every);
+    unwatch();
   };
 }
 

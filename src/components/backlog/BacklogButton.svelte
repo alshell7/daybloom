@@ -23,6 +23,11 @@
   const recent = $derived(added.map((id) => taskFile.value.tasks.find((t) => t.id === id)).filter((t) => !!t).slice(0, 4));
 
   async function toggle() {
+    // A phone jots with its + button: here the backlog itself opens.
+    if (platform.isMobile && !open) {
+      view.sheet = view.sheet?.kind === 'backlog' ? null : { kind: 'backlog' };
+      return;
+    }
     open = !open;
     if (!open) return;
     added = [];

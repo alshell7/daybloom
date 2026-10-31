@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Quick add (QuickAddActivity): over whatever is on screen, a card at the bottom with one field
+     that already has the keyboard. Tap outside to close. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#66000000">
+
+    <LinearLayout
+        android:id="@+id/card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/quick_add_card"
+        android:clickable="true"
+        android:focusable="false"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginBottom="10dp"
+            android:fontFamily="sans-serif-medium"
+            android:text="@string/quick_add_title"
+            android:textColor="#151C2A"
+            android:textSize="15sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/field"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/quick_add_field"
+                android:hint="@string/quick_add_hint"
+                android:imeOptions="actionSend|flagNoExtractUi"
+                android:importantForAutofill="no"
+                android:inputType="textCapSentences|textAutoCorrect"
+                android:maxLines="4"
+                android:minHeight="52dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:textColor="#151C2A"
+                android:textColorHint="#7A8597"
+                android:textSize="17sp" />
+
+            <ImageButton
+                android:id="@+id/mic"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/quick_add_field"
+                android:contentDescription="@string/widget_jot_voice"
+                android:src="@drawable/ic_mic" />
+
+            <ImageButton
+                android:id="@+id/send"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/quick_add_round"
+                android:contentDescription="@string/quick_add_send"
+                android:src="@drawable/ic_send" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/quick_add_note"
+            android:textColor="#5B6678"
+            android:textSize="13sp" />
+    </LinearLayout>
+</FrameLayout>

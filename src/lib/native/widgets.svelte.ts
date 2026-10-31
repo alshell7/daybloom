@@ -43,8 +43,22 @@ function faces(): { face: string; sleep: string; well: string } | null {
   return { face: draw(restPose(alef.affect)), sleep: draw(asleep), well: pal.well };
 }
 
+/** A theme colour as #rrggbb (Android reads only that): any CSS colour goes through a canvas. */
 function css(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  if (!raw || /^#[0-9a-f]{6}$/i.test(raw)) return raw;
+  try {
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return '';
+    ctx.fillStyle = '#000000';
+    ctx.fillStyle = raw;
+    const v = String(ctx.fillStyle);
+    if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(v);
+    return m ? `#${[m[1], m[2], m[3]].map((x) => Number(x).toString(16).padStart(2, '0')).join('')}` : '';
+  } catch {
+    return '';
+  }
 }
 
 async function snapshot(): Promise<string> {
@@ -89,8 +103,20 @@ function blockFor(key: string): Block | null {
   return view.todayBlocks.find((b) => b.key === key) ?? null;
 }
 
+/** Lines added from the Backlog widget's quick-add card: into the backlog (Inbox, or as written). */
+async function takeCaptures() {
+  const r = await deviceCall<{ items: { text: string; at: number }[] }>('capturePending').catch(() => null);
+  const items = r?.items ?? [];
+  if (!items.length) return;
+  const { backlog } = await import('../backlog');
+  let n = 0;
+  for (const it of items.sort((a, z) => a.at - z.at)) n += backlog.capture(String(it.text ?? ''), 'inbox').length;
+  if (n) view.say(n === 1 ? 'Added from your home screen to the backlog' : `${n} added from your home screen to the backlog`);
+}
+
 /** Ticks and button presses from the widgets, done while the planner was closed. */
 async function takePending() {
+  void takeCaptures();
   const p = await deviceCall<{ done: string[]; intent?: { action: string; key: string; text?: string } }>('widgetPending').catch(() => null);
   for (const key of p?.done ?? []) {
     const b = blockFor(key);
@@ -152,6 +178,8 @@ export function startWidgets(): () => void {
     if (document.visibilityState === 'visible') void takePending();
   };
   addEventListener('daybloom:intent', onIntent);
+  const onQuick = () => void takeCaptures().then(() => soon());
+  addEventListener('daybloom:quick-added', onQuick);
   document.addEventListener('visibilitychange', onVisible);
 
   const stop = $effect.root(() => {
@@ -178,6 +206,7 @@ export function startWidgets(): () => void {
   return () => {
     if (pending) clearTimeout(pending);
     removeEventListener('daybloom:intent', onIntent);
+    removeEventListener('daybloom:quick-added', onQuick);
     document.removeEventListener('visibilitychange', onVisible);
     stop();
   };

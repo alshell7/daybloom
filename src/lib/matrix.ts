@@ -40,13 +40,13 @@ export function quadrantOf(t: Pick<Task, 'urgent' | 'important' | 'due' | 'prior
   return u && i ? 'do' : i ? 'plan' : u ? 'quick' : 'drop';
 }
 
-/** Whether you placed it yourself (so a suggestion never moves it). */
-export const placedByYou = (t: Pick<Task, 'urgent' | 'important'>) => typeof t.urgent === 'boolean' || typeof t.important === 'boolean';
+/** Whether you placed it yourself (so a sort never moves it). A sort's own placing doesn't count. */
+export const placedByYou = (t: Pick<Task, 'urgent' | 'important' | 'matrixBy'>) => (typeof t.urgent === 'boolean' || typeof t.important === 'boolean') && t.matrixBy !== 'sort';
 
-/** The fields that put a task in a quadrant. */
-export function patchFor(q: Quadrant): Pick<Task, 'urgent' | 'important'> {
+/** The fields that put a task in a quadrant (by your hand). */
+export function patchFor(q: Quadrant): Pick<Task, 'urgent' | 'important' | 'matrixBy'> {
   const d = QUADRANTS.find((x) => x.id === q)!;
-  return { urgent: d.urgent, important: d.important };
+  return { urgent: d.urgent, important: d.important, matrixBy: null };
 }
 
 /** Open backlog tasks by quadrant, each sorted by what's most pressing first. */

@@ -10,7 +10,7 @@ import { platform } from '../platform';
 import { persisted } from '../stores/persisted.svelte';
 import { baseUrl, can, providerOf, PROVIDERS, type LlmConfig, type ProviderId, type Skill } from './providers';
 
-export type Feature = 'alef' | 'assistant' | 'starter' | 'smaller' | 'reality' | 'voice';
+export type Feature = 'alef' | 'assistant' | 'starter' | 'smaller' | 'reality' | 'decision' | 'voice';
 /** 'device': Daybloom's own on-device models (Needle, Whistle, Alef's voice) or built-in rules. */
 export type Source = 'device' | ProviderId;
 
@@ -48,6 +48,8 @@ export interface AiFile {
     starter: { think: Use };
     smaller: { think: Use };
     reality: { think: Use };
+    /** The Decision addon: TinyDecide on this device (`model: 'full'` for its larger build) or a service. */
+    decision: { think: Use };
     voice: { listen: Use };
   };
   /** Alef's own brain settings were moved here. */
@@ -61,6 +63,7 @@ export const FEATURES: { id: Feature; name: string; icon: string; skills: Skill[
   { id: 'starter', name: 'Getting started', icon: 'rocket', skills: ['think'], blurb: 'A tiny first step and a kind nudge when a block hasn’t started', device: { think: 'Built-in first steps' } },
   { id: 'smaller', name: 'Make it smaller', icon: 'layers', skills: ['think'], blurb: 'Splits a big task into small first steps', device: { think: 'Built-in ideas' } },
   { id: 'reality', name: 'Reality check', icon: 'hourglass', skills: ['think'], blurb: 'Plans real lengths from your own track record, with practical tips', device: { think: 'Your own numbers' } },
+  { id: 'decision', name: 'Decision', icon: 'route', skills: ['think'], blurb: 'Places what you jot down, sorts the Inbox and the matrix', device: { think: 'TinyDecide, on this device' } },
   { id: 'voice', name: 'Voice input', icon: 'mic', skills: ['listen'], blurb: 'Turns your voice into words', device: { listen: 'Whistle, on this device' } },
 ];
 
@@ -68,7 +71,7 @@ const DEVICE: Use = { via: 'device' };
 export const DEFAULT_AI: AiFile = {
   version: 1,
   services: {},
-  use: { alef: { think: DEVICE, speak: { via: 'chirps' } }, assistant: { think: DEVICE }, starter: { think: DEVICE }, smaller: { think: DEVICE }, reality: { think: DEVICE }, voice: { listen: DEVICE } },
+  use: { alef: { think: DEVICE, speak: { via: 'chirps' } }, assistant: { think: DEVICE }, starter: { think: DEVICE }, smaller: { think: DEVICE }, reality: { think: DEVICE }, decision: { think: DEVICE }, voice: { listen: DEVICE } },
 };
 
 const IDS = PROVIDERS.map((p) => p.id);
@@ -106,6 +109,7 @@ export function migrateAi(raw: any): AiFile {
       starter: { think: use(u.starter?.think) },
       smaller: { think: use(u.smaller?.think) },
       reality: { think: use(u.reality?.think) },
+      decision: { think: use(u.decision?.think) },
       voice: { listen: use(u.voice?.listen) },
     },
     ...(raw?.moved ? { moved: true } : {}),
@@ -166,7 +170,7 @@ class Ai {
     const u = aiFile.value.use;
     if (f === 'alef' && skill === 'think') u.alef.think = next;
     else if (f === 'voice') u.voice.listen = next;
-    else if (f === 'assistant' || f === 'starter' || f === 'smaller' || f === 'reality') u[f].think = next;
+    else if (f === 'assistant' || f === 'starter' || f === 'smaller' || f === 'reality' || f === 'decision') u[f].think = next;
   }
 
   /** Is this feature's skill going to a service that is ready right now? */
@@ -209,7 +213,7 @@ class Ai {
     const { [id]: _, ...rest } = aiFile.value.services;
     aiFile.value.services = rest;
     const u = aiFile.value.use;
-    for (const f of ['assistant', 'starter', 'smaller', 'reality'] as const) if (u[f].think.via === id) u[f].think = DEVICE;
+    for (const f of ['assistant', 'starter', 'smaller', 'reality', 'decision'] as const) if (u[f].think.via === id) u[f].think = DEVICE;
     if (u.alef.think.via === id) u.alef.think = DEVICE;
     if (u.alef.speak.via === id) u.alef.speak = { via: 'chirps' };
     if (u.voice.listen.via === id) u.voice.listen = DEVICE;

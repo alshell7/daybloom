@@ -116,6 +116,9 @@
     const to = tabs.findIndex((t) => t.id === id);
     dir = to >= from ? 1 : -1;
     tab = remembered = id;
+    // A new tab starts at its top, just under the tabs.
+    const scroller = navEl?.closest('.content');
+    if (scroller && scroller.scrollTop > 0) scroller.scrollTop = 0;
   }
 
   // A sheet opened on a section (e.g. { kind: 'settings', section: 'calendars' }) shows its tab.
@@ -126,11 +129,15 @@
   });
 
   // The new tab's settings glide in from the side you moved toward; the old ones step aside.
+  // A phone swaps panes at once: two panes crossing in one scrolling sheet leave stale
+  // drawing behind in Android's web view (old tabs showing through the new one).
+  const still = $derived(rm || platform.isMobile);
+  let navEl = $state<HTMLElement>();
   function paneIn(_node: Element) {
-    return { duration: rm ? 0 : 300, easing: cubicOut, css: (t: number) => `opacity:${t};transform:translateX(${(1 - t) * 14 * dir}px)` };
+    return { duration: still ? 0 : 300, easing: cubicOut, css: (t: number) => `opacity:${t};transform:translateX(${(1 - t) * 14 * dir}px)` };
   }
   function paneOut(_node: Element) {
-    return { duration: rm ? 0 : 140, css: (t: number) => `opacity:${t};transform:translateX(${(1 - t) * -10 * dir}px)` };
+    return { duration: still ? 0 : 140, css: (t: number) => `opacity:${t};transform:translateX(${(1 - t) * -10 * dir}px)` };
   }
   $effect(() => {
     if (open && !updates.current) loadVersion().catch(() => {});
@@ -185,6 +192,8 @@
 
 {#if open}
   <Panel title="Settings" onclose={() => (view.sheet = null)}>
+    <!-- Search and the tabs stay at the top while the settings scroll under them. -->
+    <div class="nav" bind:this={navEl}>
     <div class="find">
       <Icon name="search" size={15} />
       <input
@@ -199,9 +208,10 @@
     {#if !query}
       <div class="tabs-wrap">
         <SettingsTabs {tabs} value={tab} onchange={pick} />
-        {#key tab}<p class="blurb" in:fade={{ duration: rm ? 0 : 260 }}>{current.blurb}</p>{/key}
+        {#key tab}<p class="blurb" in:fade={{ duration: still ? 0 : 260 }}>{current.blurb}</p>{/key}
       </div>
     {/if}
+    </div>
     <div class="panes">
       {#key query ? 'find' : tab}
         <div class="pane" id="settings-pane" role={query ? 'region' : 'tabpanel'} aria-labelledby={query ? undefined : `settings-tab-${tab}`} in:paneIn out:paneOut>
@@ -584,11 +594,20 @@
           {:else if updates.status === 'available'}
             <div class="row">
               <span>Version {updates.version} is ready.</span>
-              <button class="btn btn-primary" onclick={() => installUpdate()}>{updates.kind === 'web' ? 'Refresh to update' : 'Update & restart'}</button>
+              <button class="btn btn-primary" onclick={() => installUpdate()}>{updates.kind === 'web' ? 'Refresh to update' : platform.isMobile ? 'Install' : 'Update & restart'}</button>
+            </div>
+          {:else if updates.status === 'downloading'}
+            <p class="hint">Downloading {updates.version}…</p>
+          {:else if updates.status === 'installing' && platform.isMobile}
+            <p class="hint">Android's installer is open. Tap Update there.</p>
+          {:else if updates.status === 'permission'}
+            <div class="row">
+              <span>Allow installs from Daybloom, then come back.</span>
+              <button class="btn btn-primary" onclick={() => installUpdate()}>Allow installs</button>
             </div>
 
           {:else if updates.status === 'error'}
-            <p class="hint">Couldn't reach the update feed. {updates.error}</p>
+            <p class="hint">{updates.version ? "Couldn't update." : "Couldn't reach the update feed."} {updates.error}</p>
           {/if}
           <label class="row">
             <span>Check for updates automatically</span>
@@ -694,6 +713,21 @@
   }
   .tabs-wrap {
     margin-bottom: var(--s-2);
+  }
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    margin: 0 calc(var(--s-5) * -1);
+    padding: 2px var(--s-5) var(--s-1);
+    background: var(--raised);
+    box-shadow: 0 8px 10px -10px rgb(0 0 0 / 0.25);
+  }
+  @media (max-width: 480px) {
+    .nav {
+      margin: 0 calc(var(--s-4) * -1);
+      padding: 2px var(--s-4) var(--s-1);
+    }
   }
   .blurb {
     margin: var(--s-2) 4px 0;

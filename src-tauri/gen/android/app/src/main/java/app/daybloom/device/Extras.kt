@@ -200,34 +200,62 @@ object Usage {
 }
 
 object ApkUpdate {
-  /** Downloads `url`, checks it against `sha256`, then asks Android to install it. */
-  fun run(ctx: Context, url: String, sha256: String): String? {
-    if (!url.startsWith("https://")) return "The update must come over HTTPS."
-    val file = File(ctx.cacheDir, "daybloom-update.apk")
+  /** May Daybloom open Android's installer (Settings › Install unknown apps)? */
+  fun allowed(ctx: Context): Boolean = Build.VERSION.SDK_INT < 26 || ctx.packageManager.canRequestPackageInstalls()
+
+  /** Opens Android's switch for that. */
+  fun askToAllow(ctx: Context) {
+    ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+  }
+
+  private fun hashOf(file: File): String {
     val md = MessageDigest.getInstance("SHA-256")
-    val conn = URL(url).openConnection() as HttpURLConnection
-    conn.instanceFollowRedirects = true
-    conn.connectTimeout = 20_000
-    conn.readTimeout = 60_000
-    conn.inputStream.use { input ->
-      file.outputStream().use { out ->
-        val buf = ByteArray(64 * 1024)
-        while (true) {
-          val n = input.read(buf)
-          if (n < 0) break
-          md.update(buf, 0, n)
-          out.write(buf, 0, n)
-        }
+    file.inputStream().use { input ->
+      val buf = ByteArray(64 * 1024)
+      while (true) {
+        val n = input.read(buf)
+        if (n < 0) break
+        md.update(buf, 0, n)
       }
     }
-    val got = md.digest().joinToString("") { "%02x".format(it) }
-    if (!got.equals(sha256.trim(), ignoreCase = true)) {
-      file.delete()
-      return "The download didn't match its checksum, so Daybloom didn't install it."
-    }
-    if (Build.VERSION.SDK_INT >= 26 && !ctx.packageManager.canRequestPackageInstalls()) {
-      ctx.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    return md.digest().joinToString("") { "%02x".format(it) }
+  }
+
+  /**
+   * Asks for the permission first (nothing is downloaded until Android allows the install), then
+   * downloads `url` — or reuses a copy already here with the same SHA-256 — checks it, and opens
+   * Android's installer. "allow-install" means the permission screen was opened.
+   */
+  fun run(ctx: Context, url: String, sha256: String): String? {
+    if (!url.startsWith("https://")) return "The update must come over HTTPS."
+    if (!allowed(ctx)) {
+      askToAllow(ctx)
       return "allow-install"
+    }
+    val file = File(ctx.cacheDir, "daybloom-update.apk")
+    val want = sha256.trim().lowercase()
+    if (!(file.exists() && hashOf(file) == want)) {
+      val md = MessageDigest.getInstance("SHA-256")
+      val conn = URL(url).openConnection() as HttpURLConnection
+      conn.instanceFollowRedirects = true
+      conn.connectTimeout = 20_000
+      conn.readTimeout = 60_000
+      conn.inputStream.use { input ->
+        file.outputStream().use { out ->
+          val buf = ByteArray(64 * 1024)
+          while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            md.update(buf, 0, n)
+            out.write(buf, 0, n)
+          }
+        }
+      }
+      val got = md.digest().joinToString("") { "%02x".format(it) }
+      if (got != want) {
+        file.delete()
+        return "The download didn't match its checksum, so Daybloom didn't install it."
+      }
     }
     val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
     ctx.startActivity(

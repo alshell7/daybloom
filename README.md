@@ -295,7 +295,9 @@ Get the newest installers from [**Releases**](https://github.com/alshell7/dayblo
 
 To add the widgets, open **Settings › Phone** and tap **Add the dial**, **Add the backlog** or **Add Alef**.
 
-In **Settings › Phone › Layout**, choose **One screen** (the timeline follows the dial as you scroll) or **Two pages** (swipe sideways between the dial and the timeline).
+In **Settings › Phone › Layout**, choose **One screen** (the timeline follows the dial as you scroll) or **Two pages** (swipe sideways between the dial and the timeline). Under **The + button**, choose its shape, colour and side, or hide it.
+
+On the Backlog widget, tap **+ Jot**. A field opens over your home screen with the keyboard ready. Type and tap the arrow; add more, or tap outside to finish. Tap the mic to say it. Daybloom files each line in your backlog.
 
 Reminders on a phone have buttons that fit the moment: **Done**, **10 more min**, **Start now**, **Remind in 5 min**, **Not today**, **Start 2 min** for a block with steps, **Track time** or **Bill time** with the Time Tracker, **Skip it** for calendar events, and **Prayed** or **In jamaat** for salah. They work when Daybloom is closed. Daybloom applies them the next time it opens.
 
@@ -439,7 +441,7 @@ In the backlog, tap **Matrix**. Your open tasks sort into four quadrants (Eisenh
 
 - A task is urgent when its due date is within two days, and important when its priority is **Must** or **Should**. To place a task yourself, drag it to another quadrant, or tap it and pick one. Your choice stays.
 - Each quadrant has a next move: **Pick one to start**, **Give them a day**, **Pick a quick one** or **Move to Someday**.
-- With an AI service for Getting started, or the Decision addon, tap **Suggest places**. Check the suggestions, then tap **Place**.
+- To sort, tap **Sort … into the matrix**. Decision (or the AI service for Getting started) moves your unsorted tasks at once. Tap **Undo** to put them back. When you move a task yourself, Decision learns from it.
 
 **Add a task quickly:**
 
@@ -667,11 +669,12 @@ Reality check never changes your plans by itself.
 
 ### Let Decision place what you jot
 
-Decision reads each line you jot down and suggests where it belongs. It runs [TinyDecide](https://huggingface.co/TheREZOR/TinyDecide) (Apache-2.0, 6 MB) on your device. Nothing you write leaves the device.
+Decision reads each line you jot down and suggests where it belongs. By default it runs [TinyDecide](https://huggingface.co/TheREZOR/TinyDecide) (Apache-2.0) on your device, and nothing you write leaves it. If you choose an AI service for Decision, your lines go to that service.
 
 1. Open **Addons** and switch on **Decision**. The model downloads one time.
-2. Jot something down. Each line shows Decision's suggestion and the reason, for example “Sounds like a someday idea”.
-3. Tap **Add** to keep the suggestions, or tap another place first. Each choice teaches Decision. After a few choices, its suggestions follow your way of writing. What it learns syncs with your other devices.
+2. To choose what decides, open **Settings › AI › Decision**: **TinyDecide · 6 MB**, **TinyDecide full · 10 MB** (knows more words), or an AI service you set up. Download or remove TinyDecide under **On this device**.
+3. Jot something down. Each line shows Decision's suggestion and the reason, for example “Sounds like a someday idea”, and what it found: who, where and how long.
+4. Tap **Add** to keep the suggestions, or tap another place first. Each choice teaches Decision. After a few choices, its suggestions follow your way of writing. What it learns syncs with your other devices.
 
 To sort the Inbox, open the backlog and tap **Sort the Inbox with Decision**, or open the Decision panel and tap **Suggest moves**. Check the moves that you want, then tap **Move**. In the Decision panel, you can also try any line, see how sure it is, forget what it learned, or remove the model.
 
